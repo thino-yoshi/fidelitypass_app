@@ -20,7 +20,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   int currentTab = 0;
   Map? merchantInfo;
   bool loading = true;
-  static const gold = Color(0xFFC8822A);
+  static const gold = Color(0xFF2C7BE5);
 
   final Map<String, Map<String, dynamic>> styles = {
     'Café':        {'emoji': '☕', 'color': Color(0xFFC8822A)},

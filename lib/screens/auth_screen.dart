@@ -21,7 +21,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final passCtrl = TextEditingController();
   final nameCtrl = TextEditingController();
 
-  static const gold = Color(0xFFC8822A);
+  static const gold = Color(0xFF2C7BE5);
 
   Future<void> submit() async {
     setState(() { loading = true; error = ''; });
@@ -76,18 +76,19 @@ class _AuthScreenState extends State<AuthScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 32),
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [gold, Color(0xFFE09A42)],
+                          colors: [Colors.white, Colors.blue],
                         ),
                       ),
                       child: Column(
                         children: [
-                          const Text('🎯', style: TextStyle(fontSize: 48)),
+
                           const SizedBox(height: 8),
-                          Text('FidelityPass', style: GoogleFonts.dmSerifDisplay(fontSize: 28, color: Colors.white)),
+                          Text('Qarta', style: GoogleFonts.dmSerifDisplay(fontSize: 100
+                              , color: Colors.indigoAccent)),
                           const SizedBox(height: 4),
                           Text(
                             isLogin ? 'Content de te revoir !' : 'Rejoins la plateforme',
-                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+                            style: TextStyle(color: Colors.indigoAccent.withOpacity(0.8), fontSize: 20),
                           ),
                         ],
                       ),

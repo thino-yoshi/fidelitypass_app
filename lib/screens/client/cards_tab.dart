@@ -18,7 +18,7 @@ class _CardsTabState extends State<CardsTab> {
   bool loading = true;
 
   final List<Color> cardColors = const [
-    Color(0xFF2C7BE5), Color(0xFFC8822A), Color(0xFF2A9D5C),
+    Color(0xFF2C7BE5), Color(0xFF2C7BE5), Color(0xFF2A9D5C),
     Color(0xFFD42B2B), Color(0xFF7B4FBF), Color(0xFF0097A7),
   ];
 

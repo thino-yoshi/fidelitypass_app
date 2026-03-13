@@ -16,7 +16,7 @@ class ClientHome extends StatefulWidget {
 
 class _ClientHomeState extends State<ClientHome> {
   int currentTab = 0;
-  static const gold = Color(0xFFC8822A);
+  static const gold = Color(0xFF2C7BE5);
 
   void logout() async {
     await AuthService.logout();

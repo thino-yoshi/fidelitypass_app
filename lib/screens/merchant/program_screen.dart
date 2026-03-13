@@ -19,7 +19,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
   late TextEditingController categoryCtrl;
   late int stampsRequired;
   bool saving = false;
-  static const gold = Color(0xFFC8822A);
+  static const gold = Color(0xFF2C7BE5);
 
   @override
   void initState() {
