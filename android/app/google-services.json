@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1097051657980",
+    "project_id": "fidelitypass-c4a88",
+    "storage_bucket": "fidelitypass-c4a88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097051657980:android:73f833c86e5117788d6979",
+        "android_client_info": {
+          "package_name": "com.example.fidelitypass_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrXud2go-vz0kBP9P4USlARIkC7qh0q20"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
