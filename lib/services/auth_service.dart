@@ -19,7 +19,7 @@ class AuthService {
         data['user_type'] ?? 'client',
         data['name'] ?? email,
       );
-      await saveFCMToken(data['access_token'] ?? '');
+      await saveFCMToken(data['token'] ?? data['access_token'] ?? '');
       return data;
     }
     final error = jsonDecode(res.body);
@@ -50,7 +50,7 @@ class AuthService {
         data['user_type'] ?? userType,
         data['name'] ?? name,
       );
-      await saveFCMToken(data['access_token'] ?? '');
+      await saveFCMToken(data['token'] ?? data['access_token'] ?? '');
       return data;
     }
     final error = jsonDecode(res.body);
@@ -65,6 +65,7 @@ class AuthService {
       final fcmToken = await messaging.getToken();
       print('📱 FCM Token: $fcmToken');
       if (fcmToken != null && authToken.isNotEmpty) {
+        print('🚀 Envoi FCM token vers API...');
         final res = await http.put(
           Uri.parse('$apiUrl/users/fcm-token'),
           headers: {
@@ -74,6 +75,9 @@ class AuthService {
           body: jsonEncode({'fcm_token': fcmToken}),
         );
         print('✅ FCM Token envoyé: ${res.statusCode}');
+        print('📨 Réponse body: ${res.body}');
+      } else {
+        print('⚠️ FCM Token null ou authToken vide — token: $fcmToken, auth: $authToken');
       }
     } catch (e) {
       print('❌ Erreur FCM: $e');

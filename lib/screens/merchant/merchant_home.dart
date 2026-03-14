@@ -6,6 +6,8 @@ import '../../services/auth_service.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
 import 'program_screen.dart';
+import 'history_screen.dart';
+import 'notifications_screen.dart';
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -20,10 +22,10 @@ class _MerchantHomeState extends State<MerchantHome> {
   int currentTab = 0;
   Map? merchantInfo;
   bool loading = true;
-  static const gold = Color(0xFF2C7BE5);
+  static const blue = Color(0xFF2C7BE5);
 
   final Map<String, Map<String, dynamic>> styles = {
-    'Café':        {'emoji': '☕', 'color': Color(0xFFC8822A)},
+    'Café':        {'emoji': '☕', 'color': Color(0xFF2C7BE5)},
     'Boulangerie': {'emoji': '🥐', 'color': Color(0xFFD4A017)},
     'Restaurant':  {'emoji': '🍽', 'color': Color(0xFFC0392B)},
     'Healthy':     {'emoji': '🥗', 'color': Color(0xFF27AE60)},
@@ -32,7 +34,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   };
 
   Map<String, dynamic> getStyle(String category) {
-    return styles[category] ?? {'emoji': '🏪', 'color': gold};
+    return styles[category] ?? {'emoji': '🏪', 'color': blue};
   }
 
   @override
@@ -47,32 +49,18 @@ class _MerchantHomeState extends State<MerchantHome> {
         Uri.parse('$apiUrl/merchants/'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
-
       final data = jsonDecode(res.body) as List;
-      print('🏪 Tous les merchants: ${data.length}');
-
-      // Décoder le JWT pour récupérer le user_id
       final parts = widget.token.split('.');
       final payload = parts[1];
       final normalized = base64Url.normalize(payload);
       final decoded = jsonDecode(utf8.decode(base64Url.decode(normalized)));
       final myId = decoded['sub'];
-      print('👤 Mon ID: $myId');
-
-      // Trouver MON commerce par ID
-      final me = data.firstWhere(
-            (m) => m['id'] == myId,
-        orElse: () => null,
-      );
-
-      print('✅ Mon commerce: $me');
-
+      final me = data.firstWhere((m) => m['id'] == myId, orElse: () => null);
       setState(() {
         merchantInfo = me;
         loading = false;
       });
     } catch (e) {
-      print('❌ Erreur: $e');
       setState(() => loading = false);
     }
   }
@@ -85,14 +73,15 @@ class _MerchantHomeState extends State<MerchantHome> {
 
   @override
   Widget build(BuildContext context) {
-    final s = merchantInfo != null ? getStyle(merchantInfo!['category']) : {'emoji': '🏪', 'color': gold};
+    final s = merchantInfo != null ? getStyle(merchantInfo!['category']) : {'emoji': '🏪', 'color': blue};
     final color = s['color'] as Color;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F2),
       body: Column(
         children: [
-          // Top bar
+
+          // ── Top bar ──────────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: EdgeInsets.only(
@@ -155,23 +144,35 @@ class _MerchantHomeState extends State<MerchantHome> {
             ),
           ),
 
-          // Tabs
+          // ── Tabs ─────────────────────────────────────────────────
           Container(
             color: Colors.white,
             child: Row(
               children: [
                 _tab('📊', 'Tableau de bord', 0, color),
-                _tab('⚙️', 'Programme', 1, color),
+                _tab('🕐', 'Historique', 1, color),
+                _tab('🔔', 'Notifs', 2, color),
+                _tab('⚙️', 'Programme', 3, color),
               ],
             ),
           ),
 
-          // Content
+          // ── Content ──────────────────────────────────────────────
           Expanded(
             child: loading
                 ? Center(child: CircularProgressIndicator(color: color))
                 : currentTab == 0
                 ? _dashboard(color, s)
+                : currentTab == 1
+                ? HistoryScreen(
+              token: widget.token,
+              merchantInfo: merchantInfo,
+            )
+                : currentTab == 2
+                ? NotificationsScreen(
+              token: widget.token,
+              merchantInfo: merchantInfo,
+            )
                 : ProgramScreen(
               token: widget.token,
               merchantInfo: merchantInfo,
@@ -202,8 +203,11 @@ class _MerchantHomeState extends State<MerchantHome> {
             const Text('Va dans Programme pour configurer ton commerce.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => setState(() => currentTab = 1),
-              style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              onPressed: () => setState(() => currentTab = 2),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               child: const Text('Configurer →'),
             ),
           ],
@@ -226,10 +230,10 @@ class _MerchantHomeState extends State<MerchantHome> {
               ),
               child: Row(
                 children: [
-                  Expanded(
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text('Action principale', style: TextStyle(color: Colors.white70, fontSize: 13)),
                         SizedBox(height: 4),
                         Text('Scanner un client', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -268,7 +272,8 @@ class _MerchantHomeState extends State<MerchantHome> {
                         decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
                         child: Column(
                           children: [
-                            Text('${merchantInfo!['stamps_required']}', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: color)),
+                            Text('${merchantInfo!['stamps_required']}',
+                                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: color)),
                             const SizedBox(height: 4),
                             const Text('tampons requis', style: TextStyle(fontSize: 13, color: Colors.grey)),
                           ],
@@ -286,7 +291,8 @@ class _MerchantHomeState extends State<MerchantHome> {
                           children: [
                             const Text('Récompense', style: TextStyle(fontSize: 12, color: Colors.grey)),
                             const SizedBox(height: 4),
-                            Text('🎁 ${merchantInfo!['reward_description']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1828))),
+                            Text('🎁 ${merchantInfo!['reward_description']}',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1828))),
                           ],
                         ),
                       ),

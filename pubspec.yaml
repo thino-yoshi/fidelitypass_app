@@ -17,6 +17,8 @@ dependencies:
   firebase_core: ^2.27.0
   firebase_messaging: ^14.9.0
   mobile_scanner: ^5.0.0
+  flutter_local_notifications: ^17.0.0
+  flutter_launcher_icons: "^0.13.1"
 
 dev_dependencies:
   flutter_test:
@@ -25,3 +27,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/89.png"
+  # Optionnel pour Android (couleur de fond si l'icône est transparente)
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/images/89.png"
