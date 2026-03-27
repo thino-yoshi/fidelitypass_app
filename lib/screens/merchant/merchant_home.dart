@@ -11,6 +11,7 @@ import 'history_screen.dart';
 import 'notifications_screen.dart';
 import 'clients_screen.dart';
 import 'static_qr_screen.dart';
+import 'chart_widget.dart';
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -410,6 +411,12 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
               _statTile(Icons.qr_code_scanner_rounded, 'Scans total', '${stats?['total_scans'] ?? 0}', const Color(0xFF27AE60)),
             ],
           ),
+          const SizedBox(height: 14),
+
+          // ── Graphique 30 jours ──
+          _sectionTitle('Activité'),
+          const SizedBox(height: 10),
+          StatsChartWidget(token: widget.token, accentColor: _accentColor),
           const SizedBox(height: 14),
 
           // ── Programme actuel ──
