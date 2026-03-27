@@ -212,25 +212,6 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
                     ),
                   ),
                   const Spacer(),
-                  // Bouton scanner rapide
-                  GestureDetector(
-                    onTap: _openScanner,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _accentColor,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: _accentColor.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 16),
-                          SizedBox(width: 6),
-                          Text('Scanner', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 14),
@@ -376,72 +357,6 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.of(context).padding.bottom),
         children: [
-
-          // ── Carte scanner principale ──
-          GestureDetector(
-            onTap: _openScanner,
-            child: Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [_accentColor, _accentColor.withOpacity(0.75)],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: _accentColor.withOpacity(0.35), blurRadius: 24, offset: const Offset(0, 8))],
-              ),
-              child: Stack(
-                children: [
-                  // Décors
-                  Positioned(top: -20, right: -10,
-                      child: Container(width: 100, height: 100, decoration: BoxDecoration(
-                          shape: BoxShape.circle, color: Colors.white.withOpacity(0.07)))),
-                  Positioned(bottom: -30, left: -10,
-                      child: Container(width: 80, height: 80, decoration: BoxDecoration(
-                          shape: BoxShape.circle, color: Colors.white.withOpacity(0.05)))),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text('ACTION PRINCIPALE',
-                                  style: TextStyle(color: Colors.white, fontSize: 9,
-                                      fontWeight: FontWeight.w800, letterSpacing: 0.1)),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text('Scanner un client',
-                                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                            const SizedBox(height: 4),
-                            Text('Valider un tampon de fidélité',
-                                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 64, height: 64,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 30),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
 
           // ── Actions rapides ──
           Row(
