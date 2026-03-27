@@ -1,0 +1,44 @@
+name: fidelitypass_app
+description: Cartes de fidélité digitales
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+  qr_flutter: ^4.1.0
+  google_fonts: ^6.1.0
+  flutter_secure_storage: ^9.0.0
+  firebase_core: ^2.27.0
+  firebase_messaging: ^14.9.0
+  mobile_scanner: ^5.0.0
+  flutter_local_notifications: ^17.0.0
+  flutter_launcher_icons: "^0.13.1"
+  google_sign_in: ^6.2.1
+  flutter_native_splash: ^2.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/89.png"
+  # Optionnel pour Android (couleur de fond si l'icône est transparente)
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/images/89.png"
+
+flutter_native_splash:
+  color: "#0B1220"
+  android: true
+  ios: true

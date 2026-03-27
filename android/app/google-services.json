@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1097051657980",
+    "project_id": "fidelitypass-c4a88",
+    "storage_bucket": "fidelitypass-c4a88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097051657980:android:73f833c86e5117788d6979",
+        "android_client_info": {
+          "package_name": "com.example.fidelitypass_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1097051657980-1v299oqmdibdfqirke26v72ab0c3g0cn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fidelitypass_app",
+            "certificate_hash": "76240fe749e995f58d9d64d57daca0233c4f173d"
+          }
+        },
+        {
+          "client_id": "1097051657980-rm2slbqt9atg9og0qdjc45nat5qe3jkj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrXud2go-vz0kBP9P4USlARIkC7qh0q20"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1097051657980-rm2slbqt9atg9og0qdjc45nat5qe3jkj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
