@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
+import '../../services/widget_service.dart';
 import '../../config/api.dart';
 import '../../main.dart';
 import '../auth_screen.dart';
@@ -31,19 +32,61 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   bool _notifOpen = false;
   late AnimationController _notifAnim;
 
-  // Notifications fictives (à remplacer par API plus tard)
-  final List<Map> _notifs = [
-    {'icon': '⭐', 'commerce': 'Bio & Green', 'title': 'Récompense débloquée !', 'body': 'Bravo ! Tu as gagné ta salade offerte.', 'time': '14:32', 'color': 0xFFFBBF24, 'read': false, 'type': 'recompense'},
-    {'icon': '✓', 'commerce': 'Café Lumière', 'title': 'Tampon ajouté !', 'body': '7/10 tampons. Plus que 3 pour ton café offert !', 'time': '11:15', 'color': 0xFF2C7BE5, 'read': false, 'type': 'tampon'},
-    {'icon': '→', 'commerce': 'Black & White', 'title': 'Promo ce soir -20%', 'body': '-20% sur tout le menu ce soir. On t\'attend !', 'time': '09:30', 'color': 0xFF27AE60, 'read': false, 'type': 'promo'},
-  ];
+  List<Map> _notifs = [];
+  bool _notifsLoaded = false;
   String _notifFilter = 'tout'; // 'tout' | 'tampon' | 'recompense' | 'promo'
+
+  static const Map<String, Map<String, dynamic>> _notifStyle = {
+    'recompense': {'icon': '⭐', 'color': 0xFFFBBF24},
+    'tampon':     {'icon': '✓',  'color': 0xFF2C7BE5},
+    'promo':      {'icon': '→',  'color': 0xFF27AE60},
+    'targeted':   {'icon': '→',  'color': 0xFF27AE60},
+    'scheduled':  {'icon': '→',  'color': 0xFF27AE60},
+  };
 
   @override
   void initState() {
     super.initState();
     _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
     _loadStats();
+    _loadNotifs();
+  }
+
+  Future<void> _loadNotifs() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/notifications/client'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body) as List;
+        final mapped = data.map((n) {
+          final type = n['type'] as String? ?? 'promo';
+          final style = _notifStyle[type] ?? _notifStyle['promo']!;
+          final dt = DateTime.tryParse(n['created_at'] as String? ?? '')?.toLocal();
+          final time = dt != null
+              ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
+              : '';
+          return {
+            'id': n['id'],
+            'icon': style['icon'],
+            'commerce': n['merchant_name'] ?? '',
+            'title': n['title'] ?? '',
+            'body': n['body'] ?? '',
+            'time': time,
+            'color': style['color'],
+            'read': n['read'] ?? false,
+            'type': type,
+          };
+        }).toList();
+        setState(() { _notifs = mapped; _notifsLoaded = true; });
+        _updateNotifCount();
+      }
+    } catch (_) {}
+  }
+
+  void _updateNotifCount() {
+    setState(() => _notifCount = _notifs.where((n) => !(n['read'] as bool)).length);
   }
 
   @override
@@ -88,6 +131,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
           _rewardCount = rewards;
           _statsLoaded = true;
         });
+        WidgetService.updateFromCards(data);
       }
     } catch (_) {}
   }
@@ -114,6 +158,10 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       for (var n in _notifs) n['read'] = true;
       _notifCount = 0;
     });
+    http.put(
+      Uri.parse('$apiUrl/notifications/client/read-all'),
+      headers: {'Authorization': 'Bearer ${widget.token}'},
+    );
   }
 
   String get _firstName {
@@ -567,10 +615,12 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     final color = Color(n['color'] as int);
     final unread = !(n['read'] as bool);
     return GestureDetector(
-      onTap: () => setState(() {
-        n['read'] = true;
-        _notifCount = _notifs.where((x) => !x['read']).length;
-      }),
+      onTap: () {
+        setState(() {
+          n['read'] = true;
+          _notifCount = _notifs.where((x) => !(x['read'] as bool)).length;
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         decoration: BoxDecoration(

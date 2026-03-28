@@ -15,6 +15,7 @@ import 'clients_screen.dart';
 import 'static_qr_screen.dart';
 import 'chart_widget.dart';
 import 'card_preview_screen.dart';
+import 'merchant_onboarding.dart';
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -30,6 +31,7 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
   Map? merchantInfo;
   Map? stats;
   bool loading = true;
+  bool _showOnboarding = false;
 
   // Styles par catégorie
   static const Map<String, Map<String, dynamic>> _categoryStyles = {
@@ -62,6 +64,13 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
   void initState() {
     super.initState();
     _loadData();
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    final done = prefs.getBool('merchant_onboarding_done') ?? false;
+    if (!done && mounted) setState(() => _showOnboarding = true);
   }
 
   Future<void> _loadData() async {
@@ -130,6 +139,15 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
               ],
             ),
             _buildBottomNav(),
+            if (_showOnboarding) MerchantOnboardingScreen(
+              onDone: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('merchant_onboarding_done', true);
+                if (mounted) {
+                  setState(() { _showOnboarding = false; _tab = 4; });
+                }
+              },
+            ),
           ],
         ),
       ),

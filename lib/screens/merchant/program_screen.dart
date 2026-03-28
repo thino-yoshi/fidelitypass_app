@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
+import 'package:flutter/services.dart';
 
 class ProgramScreen extends StatefulWidget {
   final String token;
@@ -21,6 +22,10 @@ class _ProgramScreenState extends State<ProgramScreen> {
   bool saving = false;
   static const gold = Color(0xFF2C7BE5);
 
+  // Multi-récompenses
+  List<Map<String, dynamic>> _bonusRewards = [];
+  bool _rewardsLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +33,78 @@ class _ProgramScreenState extends State<ProgramScreen> {
     nameCtrl = TextEditingController(text: widget.merchantInfo?['business_name'] ?? '');
     categoryCtrl = TextEditingController(text: widget.merchantInfo?['category'] ?? '');
     stampsRequired = widget.merchantInfo?['stamps_required'] ?? 10;
+    _loadBonusRewards();
+  }
+
+  Future<void> _loadBonusRewards() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/merchants/me/rewards'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (res.statusCode == 200 && mounted) {
+        setState(() { _bonusRewards = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>(); _rewardsLoaded = true; });
+      }
+    } catch (_) { setState(() => _rewardsLoaded = true); }
+  }
+
+  Future<void> _addBonusReward() async {
+    int newStamps = 5;
+    final descCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Ajouter une récompense bonus', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Tampons requis', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              Row(
+                children: [
+                  IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () { if (newStamps > 1) setD(() => newStamps--); }, color: gold),
+                  Container(
+                    width: 60, padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFEDEAE4), width: 2), borderRadius: BorderRadius.circular(10)),
+                    child: Text('$newStamps', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  ),
+                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () { setD(() => newStamps++); }, color: gold),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Récompense', hintText: 'Ex: Croissant offert', border: OutlineInputBorder())),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: gold, foregroundColor: Colors.white),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || descCtrl.text.isEmpty) return;
+    try {
+      final res = await http.post(
+        Uri.parse('$apiUrl/merchants/me/rewards'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'stamps_required': newStamps, 'description': descCtrl.text}),
+      );
+      if (res.statusCode == 200 && mounted) _loadBonusRewards();
+    } catch (_) {}
+  }
+
+  Future<void> _deleteBonusReward(String id) async {
+    try {
+      await http.delete(
+        Uri.parse('$apiUrl/merchants/me/rewards/$id'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (mounted) _loadBonusRewards();
+    } catch (_) {}
   }
 
   Future<void> saveProgram() async {
@@ -182,6 +259,79 @@ class _ProgramScreenState extends State<ProgramScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+
+            // ── Récompenses bonus ──────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Récompenses bonus', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1828))),
+                GestureDetector(
+                  onTap: _addBonusReward,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: gold.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                    child: Row(children: [
+                      const Icon(Icons.add, color: gold, size: 14),
+                      const SizedBox(width: 4),
+                      const Text('Ajouter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: gold)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text('Récompenses débloquées en cours de cycle (sans réinitialiser les tampons)',
+                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+            const SizedBox(height: 12),
+            if (!_rewardsLoaded)
+              const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+            else if (_bonusRewards.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFFF8F8F8), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEDEAE4))),
+                child: Row(children: [
+                  const Icon(Icons.card_giftcard_outlined, color: Color(0xFFCCCCCC), size: 20),
+                  const SizedBox(width: 10),
+                  Text('Aucune récompense bonus', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                ]),
+              )
+            else
+              ..._bonusRewards.map((r) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: gold.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: gold.withOpacity(0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(color: gold.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                        child: Center(child: Text('${r['stamps_required']}', style: const TextStyle(color: gold, fontWeight: FontWeight.w900, fontSize: 14))),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('🎁 ${r['description']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF1A1828))),
+                          Text('À ${r['stamps_required']} tampons', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                        ]),
+                      ),
+                      GestureDetector(
+                        onTap: () => _deleteBonusReward(r['id'].toString()),
+                        child: Container(
+                          width: 28, height: 28,
+                          decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.close_rounded, color: Color(0xFFE24B4A), size: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
             const SizedBox(height: 20),
 
             // Bouton
