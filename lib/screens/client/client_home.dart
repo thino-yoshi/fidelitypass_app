@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../../config/api.dart';
+import '../../main.dart';
 import '../auth_screen.dart';
 import 'cards_tab.dart';
 import 'stores_tab.dart';
@@ -31,10 +33,11 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
 
   // Notifications fictives (à remplacer par API plus tard)
   final List<Map> _notifs = [
-    {'icon': '⭐', 'commerce': 'Bio & Green', 'title': 'Récompense débloquée !', 'body': 'Bravo ! Tu as gagné ta salade offerte.', 'time': '14:32', 'color': 0xFFFBBF24, 'read': false},
-    {'icon': '✓', 'commerce': 'Café Lumière', 'title': 'Tampon ajouté !', 'body': '7/10 tampons. Plus que 3 pour ton café offert !', 'time': '11:15', 'color': 0xFF2C7BE5, 'read': false},
-    {'icon': '→', 'commerce': 'Black & White', 'title': 'Promo ce soir -20%', 'body': '-20% sur tout le menu ce soir. On t\'attend !', 'time': '09:30', 'color': 0xFF27AE60, 'read': false},
+    {'icon': '⭐', 'commerce': 'Bio & Green', 'title': 'Récompense débloquée !', 'body': 'Bravo ! Tu as gagné ta salade offerte.', 'time': '14:32', 'color': 0xFFFBBF24, 'read': false, 'type': 'recompense'},
+    {'icon': '✓', 'commerce': 'Café Lumière', 'title': 'Tampon ajouté !', 'body': '7/10 tampons. Plus que 3 pour ton café offert !', 'time': '11:15', 'color': 0xFF2C7BE5, 'read': false, 'type': 'tampon'},
+    {'icon': '→', 'commerce': 'Black & White', 'title': 'Promo ce soir -20%', 'body': '-20% sur tout le menu ce soir. On t\'attend !', 'time': '09:30', 'color': 0xFF27AE60, 'read': false, 'type': 'promo'},
   ];
+  String _notifFilter = 'tout'; // 'tout' | 'tampon' | 'recompense' | 'promo'
 
   @override
   void initState() {
@@ -499,16 +502,53 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
+                    // Filtres
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final f in [
+                              {'key': 'tout', 'label': 'Tout'},
+                              {'key': 'tampon', 'label': '✓ Tampons'},
+                              {'key': 'recompense', 'label': '⭐ Récompenses'},
+                              {'key': 'promo', 'label': '→ Promos'},
+                            ]) ...[
+                              GestureDetector(
+                                onTap: () => setState(() => _notifFilter = f['key']!),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: _notifFilter == f['key'] ? const Color(0xFF2C7BE5) : const Color(0xFFF4F2EE),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    f['label']!,
+                                    style: TextStyle(
+                                      fontSize: 12, fontWeight: FontWeight.w600,
+                                      color: _notifFilter == f['key'] ? Colors.white : const Color(0xFF888888),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                     Flexible(
                       child: SingleChildScrollView(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 10, 16, 4),
+                              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
                               child: Text("Aujourd'hui", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFBBBBBB), letterSpacing: 0.06)),
                             ),
-                            ..._notifs.map((n) => _notifItem(n)),
+                            ...(_notifFilter == 'tout' ? _notifs : _notifs.where((n) => n['type'] == _notifFilter).toList()).map((n) => _notifItem(n)),
                           ],
                         ),
                       ),
@@ -758,6 +798,7 @@ class _ProfilSheetState extends State<_ProfilSheet> {
                 _profSection([
                   _profRow(Icons.lock_outline_rounded, const Color(0xFFE8F1FD), blue, 'Changer le mot de passe', 'Modifier ton mot de passe', onTap: _showChangePassword),
                   _profRow(Icons.notifications_outlined, const Color(0xFFFEF3C7), const Color(0xFFF59E0B), 'Notifications', 'Préférences de notifications', onTap: null),
+                  _darkModeRow(),
                   _profRow(Icons.help_outline, const Color(0xFFF4F2EE), const Color(0xFF888888), 'Aide & Support', 'FAQ, nous contacter', onTap: null),
                 ]),
                 const SizedBox(height: 16),
@@ -790,6 +831,44 @@ class _ProfilSheetState extends State<_ProfilSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _darkModeRow() {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, mode, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF4F2EE)))),
+        child: Row(
+          children: [
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(color: const Color(0xFFEEEBFF), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF7C5CBF), size: 18),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mode sombre', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1828))),
+                  Text('Thème de l\'application', style: TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
+                ],
+              ),
+            ),
+            Switch(
+              value: mode == ThemeMode.dark,
+              onChanged: (val) async {
+                themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                final p = await SharedPreferences.getInstance();
+                await p.setBool('dark_mode', val);
+              },
+              activeColor: blue,
+            ),
+          ],
+        ),
       ),
     );
   }

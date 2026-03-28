@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../config/api.dart';
 
 class CardsTab extends StatefulWidget {
@@ -307,21 +309,32 @@ class QRModal extends StatefulWidget {
   State<QRModal> createState() => _QRModalState();
 }
 
-class _QRModalState extends State<QRModal> {
+class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   String? dynamicToken;
   int timeLeft = 60;
   bool loadingQR = true;
   Timer? _timer;
+  late AnimationController _confettiCtrl;
+  bool _showConfetti = false;
 
   @override
   void initState() {
     super.initState();
+    _confettiCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2500));
     fetchDynamicQR();
+    final stamps = widget.card['stamps_count'] as int? ?? 0;
+    final required = widget.card['merchants']?['stamps_required'] as int? ?? 10;
+    if (stamps >= required) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) { setState(() => _showConfetti = true); _confettiCtrl.forward(); }
+      });
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _confettiCtrl.dispose();
     super.dispose();
   }
 
@@ -366,7 +379,10 @@ class _QRModalState extends State<QRModal> {
     final businessName = widget.card['merchants']?['business_name'] as String? ?? '';
     final color = widget.color;
 
-    return Container(
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -481,20 +497,111 @@ class _QRModalState extends State<QRModal> {
           ),
           const SizedBox(height: 16),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[100], foregroundColor: Colors.grey[700],
-                elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[100], foregroundColor: Colors.grey[700],
+                    elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Fermer', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
               ),
-              child: const Text('Fermer', style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Share.share(
+                      'Rejoins le programme de fidélité de $businessName sur l\'app Qarta !',
+                      subject: 'Carte fidélité $businessName',
+                    );
+                  },
+                  icon: const Icon(Icons.share_rounded, size: 16),
+                  label: const Text('Partager', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: color,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
+        ),
+        if (_showConfetti)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _confettiCtrl,
+                builder: (_, __) => CustomPaint(
+                  painter: _ConfettiPainter(_confettiCtrl.value, color),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
+}
+
+class _ConfettiPainter extends CustomPainter {
+  final double progress;
+  final Color baseColor;
+  static final _rng = Random(42);
+  static final _particles = List.generate(60, (_) => _Particle(_rng));
+
+  _ConfettiPainter(this.progress, this.baseColor);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress >= 1.0) return;
+    for (final p in _particles) {
+      final t = (progress * 1.3 - p.delay).clamp(0.0, 1.0);
+      if (t <= 0) continue;
+      final x = p.x * size.width;
+      final y = p.startY * size.height - t * size.height * p.speed;
+      final opacity = (1.0 - t * 0.8).clamp(0.0, 1.0);
+      final paint = Paint()..color = p.color.withOpacity(opacity);
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(t * p.spin * pi * 4);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset.zero, width: p.w, height: p.h), const Radius.circular(2)),
+        paint,
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ConfettiPainter old) => old.progress != progress;
+}
+
+class _Particle {
+  final double x, startY, speed, delay, spin, w, h;
+  final Color color;
+
+  _Particle(Random rng)
+      : x = rng.nextDouble(),
+        startY = rng.nextDouble() * 0.3 + 0.8,
+        speed = rng.nextDouble() * 0.8 + 0.5,
+        delay = rng.nextDouble() * 0.4,
+        spin = (rng.nextBool() ? 1 : -1) * (rng.nextDouble() + 0.5),
+        w = rng.nextDouble() * 8 + 4,
+        h = rng.nextDouble() * 6 + 3,
+        color = [
+          const Color(0xFFFBBF24),
+          const Color(0xFF2C7BE5),
+          const Color(0xFF27AE60),
+          const Color(0xFFE24B4A),
+          const Color(0xFF7B4FBF),
+          Colors.white,
+        ][rng.nextInt(6)];
 }

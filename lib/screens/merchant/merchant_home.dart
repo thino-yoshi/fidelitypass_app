@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/api.dart';
 import '../../services/auth_service.dart';
+import '../../main.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
 import 'program_screen.dart';
@@ -12,6 +14,7 @@ import 'notifications_screen.dart';
 import 'clients_screen.dart';
 import 'static_qr_screen.dart';
 import 'chart_widget.dart';
+import 'card_preview_screen.dart';
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -539,9 +542,37 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
           const SizedBox(height: 14),
 
           // ── Aperçu carte client ──
-          _sectionTitle('Aperçu carte client'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _sectionTitle('Aperçu carte client'),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => CardPreviewScreen(
+                    merchantInfo: merchantInfo!,
+                    accentColor: _accentColor,
+                    emoji: _style['emoji'] as String,
+                    businessName: _businessName,
+                    initials: _initials,
+                  ),
+                )),
+                child: Text('Voir en plein écran',
+                    style: TextStyle(fontSize: 11, color: _accentColor, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
-          Container(
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => CardPreviewScreen(
+                merchantInfo: merchantInfo!,
+                accentColor: _accentColor,
+                emoji: _style['emoji'] as String,
+                businessName: _businessName,
+                initials: _initials,
+              ),
+            )),
+            child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: _accentColor,
@@ -626,6 +657,7 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
                 ),
               ],
             ),
+          ),
           ),
         ],
       ),
@@ -866,6 +898,7 @@ class _MerchantProfilSheet extends StatelessWidget {
                 _profSection([
                   _profRow(Icons.store_outlined, const Color(0xFFE8F1FD), const Color(0xFF2C7BE5), 'Informations du commerce', 'Nom, catégorie, description'),
                   _profRow(Icons.bar_chart_outlined, const Color(0xFFE4F5EB), const Color(0xFF27AE60), 'Statistiques avancées', 'Voir les détails complets'),
+                  _darkModeRow(),
                   _profRow(Icons.support_outlined, const Color(0xFFFEF3C7), const Color(0xFFF59E0B), 'Aide & Support', 'FAQ, nous contacter'),
                 ]),
                 const SizedBox(height: 16),
@@ -893,6 +926,44 @@ class _MerchantProfilSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  static Widget _darkModeRow() {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, mode, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF4F2EE)))),
+        child: Row(
+          children: [
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(color: const Color(0xFFEEEBFF), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF7C5CBF), size: 18),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mode sombre', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1828))),
+                  Text('Thème de l\'application', style: TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
+                ],
+              ),
+            ),
+            Switch(
+              value: mode == ThemeMode.dark,
+              onChanged: (val) async {
+                themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                final p = await SharedPreferences.getInstance();
+                await p.setBool('dark_mode', val);
+              },
+              activeColor: const Color(0xFF7C5CBF),
+            ),
+          ],
+        ),
       ),
     );
   }
