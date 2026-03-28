@@ -187,7 +187,12 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
               children: [
                 _buildHeader(),
                 _buildSummaryStrip(),
-                Expanded(child: _buildTabContent()),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 76 + MediaQuery.of(context).padding.bottom),
+                    child: _buildTabContent(),
+                  ),
+                ),
               ],
             ),
             _buildBottomNav(),

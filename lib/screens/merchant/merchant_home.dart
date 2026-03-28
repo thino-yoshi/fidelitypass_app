@@ -132,9 +132,12 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
                 _buildHeader(),
                 _buildSummaryStrip(),
                 Expanded(
-                  child: loading
-                      ? Center(child: CircularProgressIndicator(color: _accentColor))
-                      : _buildTabContent(),
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 76 + MediaQuery.of(context).padding.bottom),
+                    child: loading
+                        ? Center(child: CircularProgressIndicator(color: _accentColor))
+                        : _buildTabContent(),
+                  ),
                 ),
               ],
             ),
