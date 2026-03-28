@@ -129,7 +129,8 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
               ),
             )
           else
-            SizedBox(
+            ClipRect(
+              child: SizedBox(
               height: 140,
               child: BarChart(
                 BarChartData(
@@ -195,7 +196,7 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
                   }).toList(),
                 ),
               ),
-            ),
+            )),
 
           if (!loading && _maxScans > 0) ...[
             const SizedBox(height: 10),

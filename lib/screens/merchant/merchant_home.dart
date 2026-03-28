@@ -395,7 +395,7 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
               const SizedBox(width: 10),
               _quickAction(
                 icon: Icons.notifications_outlined,
-                label: 'Notification',
+                label: 'Notifs',
                 color: const Color(0xFF7B4FBF),
                 onTap: () => setState(() => _tab = 3),
               ),
@@ -409,7 +409,7 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
               const SizedBox(width: 10),
               _quickAction(
                 icon: Icons.tune_rounded,
-                label: 'Programme',
+                label: 'Config',
                 color: const Color(0xFFF59E0B),
                 onTap: () => setState(() => _tab = 4),
               ),
@@ -697,7 +697,7 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          height: 80,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -705,14 +705,21 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
           ),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 38, height: 38,
+                width: 36, height: 36,
                 decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
                 child: Icon(icon, color: color, size: 18),
               ),
               const SizedBox(height: 6),
-              Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1828))),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1828)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
