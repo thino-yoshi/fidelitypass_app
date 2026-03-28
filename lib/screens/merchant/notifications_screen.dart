@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/api.dart';
 
@@ -62,7 +61,389 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   }
 }
 
-// ── Onglet broadcast (existant) ────────────────────────────────────────────────
+// ── Preview widget ─────────────────────────────────────────────────────────────
+
+class _NotifPreview extends StatelessWidget {
+  final String title;
+  final String message;
+  const _NotifPreview({required this.title, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasContent = title.isNotEmpty || message.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.smartphone_outlined, size: 14, color: Color(0xFF888888)),
+            const SizedBox(width: 6),
+            const Text('Aperçu de la notification',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1A1828))),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C7BE5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(child: Text('Q', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Qarta', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                        Text('maintenant', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasContent ? (title.isEmpty ? 'Titre de la notification' : title) : 'Titre de la notification',
+                      style: TextStyle(
+                        color: hasContent && title.isNotEmpty ? Colors.white : Colors.white.withOpacity(0.3),
+                        fontSize: 13, fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasContent ? (message.isEmpty ? 'Votre message s\'affichera ici…' : message) : 'Votre message s\'affichera ici…',
+                      style: TextStyle(
+                        color: hasContent && message.isNotEmpty ? Colors.white.withOpacity(0.75) : Colors.white.withOpacity(0.25),
+                        fontSize: 12, height: 1.4,
+                      ),
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Schedule picker ────────────────────────────────────────────────────────────
+
+class _ScheduleSection extends StatefulWidget {
+  final bool enabled;
+  final DateTime? scheduled;
+  final ValueChanged<bool> onToggle;
+  final ValueChanged<DateTime> onDateTimeChanged;
+  const _ScheduleSection({
+    required this.enabled,
+    required this.scheduled,
+    required this.onToggle,
+    required this.onDateTimeChanged,
+  });
+
+  @override
+  State<_ScheduleSection> createState() => _ScheduleSectionState();
+}
+
+class _ScheduleSectionState extends State<_ScheduleSection> {
+  static const blue = Color(0xFF2C7BE5);
+
+  Future<void> _pickDateTime() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: widget.scheduled ?? now.add(const Duration(hours: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: blue),
+        ),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(widget.scheduled ?? now.add(const Duration(hours: 1))),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: blue),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null) return;
+
+    widget.onDateTimeChanged(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+  }
+
+  String _formatDt(DateTime dt) {
+    final months = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year} à $h:$m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: widget.enabled ? const Color(0xFFE8F1FD) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: widget.enabled ? blue : const Color(0xFFEDE9E3), width: widget.enabled ? 2 : 1),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: widget.enabled ? blue.withOpacity(0.15) : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.schedule_rounded, color: widget.enabled ? blue : Colors.grey, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Programmer pour plus tard',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14,
+                            color: widget.enabled ? blue : const Color(0xFF1A1828))),
+                    Text('Choisir une date et heure d\'envoi',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: widget.enabled,
+                onChanged: widget.onToggle,
+                activeColor: blue,
+              ),
+            ],
+          ),
+          if (widget.enabled) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _pickDateTime,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: blue.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined, color: blue, size: 16),
+                    const SizedBox(width: 10),
+                    Text(
+                      widget.scheduled != null
+                          ? _formatDt(widget.scheduled!)
+                          : 'Choisir date et heure…',
+                      style: TextStyle(
+                        color: widget.scheduled != null ? const Color(0xFF1A1828) : Colors.grey[400],
+                        fontWeight: FontWeight.w600, fontSize: 13,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Campagnes planifiées ───────────────────────────────────────────────────────
+
+class _ScheduledList extends StatefulWidget {
+  final String token;
+  final int refreshKey;
+  const _ScheduledList({required this.token, required this.refreshKey});
+
+  @override
+  State<_ScheduledList> createState() => _ScheduledListState();
+}
+
+class _ScheduledListState extends State<_ScheduledList> {
+  static const blue = Color(0xFF2C7BE5);
+  List<dynamic> _items = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_ScheduledList old) {
+    super.didUpdateWidget(old);
+    if (old.refreshKey != widget.refreshKey) _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/notifications/scheduled'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (res.statusCode == 200 && mounted) {
+        setState(() { _items = jsonDecode(res.body); _loading = false; });
+      } else {
+        setState(() => _loading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _cancel(String id) async {
+    await http.delete(
+      Uri.parse('$apiUrl/notifications/scheduled/$id'),
+      headers: {'Authorization': 'Bearer ${widget.token}'},
+    );
+    _load();
+  }
+
+  String _formatDt(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final months = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '${dt.day} ${months[dt.month - 1]} à $h:$m';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  String _filterLabel(String type, int? value) {
+    switch (type) {
+      case 'stamps': return 'Proches récompense (≤$value tampons)';
+      case 'inactive': return 'Inactifs depuis $value j.';
+      default: return 'Tous les clients';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    if (_items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        const Text('Campagnes planifiées', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
+        const SizedBox(height: 10),
+        ..._items.map((item) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFEDE9E3)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.schedule_rounded, color: blue, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item['title'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1A1828))),
+                      const SizedBox(height: 2),
+                      Text(item['message'] as String? ?? '', style: TextStyle(color: Colors.grey[500], fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today_outlined, size: 11, color: Colors.grey[400]),
+                          const SizedBox(width: 4),
+                          Text(_formatDt(item['scheduled_at'] as String? ?? ''), style: TextStyle(fontSize: 11, color: blue, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 8),
+                          Icon(Icons.people_outline, size: 11, color: Colors.grey[400]),
+                          const SizedBox(width: 4),
+                          Text(_filterLabel(item['filter_type'] as String? ?? 'broadcast', item['filter_value'] as int?),
+                              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Annuler la campagne', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      content: const Text('Cette campagne programmée sera supprimée.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Garder')),
+                        ElevatedButton(
+                          onPressed: () { Navigator.pop(context); _cancel(item['id'] as String); },
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE24B4A), foregroundColor: Colors.white),
+                          child: const Text('Annuler'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  child: Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.close_rounded, color: Color(0xFFE24B4A), size: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )),
+      ],
+    );
+  }
+}
+
+// ── Onglet broadcast ───────────────────────────────────────────────────────────
 
 class _BroadcastTab extends StatefulWidget {
   final String token;
@@ -78,6 +459,9 @@ class _BroadcastTabState extends State<_BroadcastTab> {
   bool sending = false;
   String? feedback;
   bool editMode = false;
+  bool _scheduleEnabled = false;
+  DateTime? _scheduledAt;
+  int _refreshKey = 0;
   static const blue = Color(0xFF2C7BE5);
 
   List<Map<String, String>> templates = [
@@ -91,6 +475,8 @@ class _BroadcastTabState extends State<_BroadcastTab> {
   void initState() {
     super.initState();
     _loadTemplates();
+    titleCtrl.addListener(() => setState(() {}));
+    messageCtrl.addListener(() => setState(() {}));
   }
 
   Future<void> _loadTemplates() async {
@@ -115,6 +501,41 @@ class _BroadcastTabState extends State<_BroadcastTab> {
 
   Future<void> _send() async {
     if (titleCtrl.text.isEmpty || messageCtrl.text.isEmpty) return;
+
+    // Mode planifié
+    if (_scheduleEnabled) {
+      if (_scheduledAt == null) {
+        setState(() => feedback = '⚠️ Choisis une date et heure d\'envoi');
+        return;
+      }
+      setState(() { sending = true; feedback = null; });
+      try {
+        final res = await http.post(
+          Uri.parse('$apiUrl/notifications/schedule'),
+          headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'title': titleCtrl.text,
+            'message': messageCtrl.text,
+            'scheduled_at': _scheduledAt!.toUtc().toIso8601String(),
+            'filter_type': 'broadcast',
+          }),
+        );
+        if (res.statusCode == 200) {
+          setState(() { feedback = '📅 Campagne planifiée !'; _refreshKey++; });
+          titleCtrl.clear(); messageCtrl.clear();
+          setState(() { _scheduleEnabled = false; _scheduledAt = null; });
+        } else {
+          setState(() => feedback = '❌ ${jsonDecode(res.body)['detail'] ?? 'Erreur'}');
+        }
+      } catch (_) {
+        setState(() => feedback = '❌ Erreur réseau');
+      } finally {
+        setState(() => sending = false);
+      }
+      return;
+    }
+
+    // Envoi immédiat
     setState(() { sending = true; feedback = null; });
     try {
       final res = await http.post(
@@ -138,6 +559,7 @@ class _BroadcastTabState extends State<_BroadcastTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Templates
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -196,6 +618,12 @@ class _BroadcastTabState extends State<_BroadcastTab> {
             }).toList(),
           ),
           const SizedBox(height: 20),
+
+          // Preview
+          _NotifPreview(title: titleCtrl.text, message: messageCtrl.text),
+          const SizedBox(height: 20),
+
+          // Message
           const Text('Message', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
           const SizedBox(height: 10),
           Container(
@@ -223,30 +651,54 @@ class _BroadcastTabState extends State<_BroadcastTab> {
                         padding: const EdgeInsets.symmetric(vertical: 12)),
                   )),
                 ]),
-                const SizedBox(height: 10),
-                SizedBox(width: double.infinity, child: ElevatedButton(
-                  onPressed: sending ? null : _send,
-                  style: ElevatedButton.styleFrom(backgroundColor: blue, foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0),
-                  child: sending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('🔔 Envoyer à tous mes clients', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                )),
               ],
             ),
           ),
+          const SizedBox(height: 14),
+
+          // Planification
+          _ScheduleSection(
+            enabled: _scheduleEnabled,
+            scheduled: _scheduledAt,
+            onToggle: (v) => setState(() => _scheduleEnabled = v),
+            onDateTimeChanged: (dt) => setState(() => _scheduledAt = dt),
+          ),
+          const SizedBox(height: 14),
+
+          // Bouton envoi
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: sending ? null : _send,
+            style: ElevatedButton.styleFrom(backgroundColor: blue, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0),
+            child: sending
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text(
+                    _scheduleEnabled ? '📅 Programmer la campagne' : '🔔 Envoyer à tous mes clients',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+          )),
+
           if (feedback != null) ...[
             const SizedBox(height: 14),
             Container(
               width: double.infinity, padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: feedback!.contains('✅') ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                color: feedback!.contains('✅') || feedback!.contains('📅')
+                    ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(feedback!, style: TextStyle(color: feedback!.contains('✅') ? Colors.green[700] : Colors.red[700], fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+              child: Text(feedback!, style: TextStyle(
+                color: feedback!.contains('✅') || feedback!.contains('📅')
+                    ? Colors.green[700] : Colors.red[700],
+                fontWeight: FontWeight.w700,
+              ), textAlign: TextAlign.center),
             ),
           ],
+
+          // Liste campagnes planifiées
+          _ScheduledList(token: widget.token, refreshKey: _refreshKey),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -256,11 +708,13 @@ class _BroadcastTabState extends State<_BroadcastTab> {
     labelText: label,
     labelStyle: TextStyle(color: Colors.grey[500]),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: blue, width: 2)),
+    focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: blue, width: 2)),
   );
 }
 
-// ── Onglet push ciblé ─────────────────────────────────────────────────────────
+// ── Onglet push ciblé ──────────────────────────────────────────────────────────
 
 class _TargetedTab extends StatefulWidget {
   final String token;
@@ -277,13 +731,22 @@ class _TargetedTabState extends State<_TargetedTab> {
   static const blue = Color(0xFF2C7BE5);
   static const purple = Color(0xFF7B4FBF);
 
-  // Filtres
-  String _filterType = 'none'; // 'none' | 'stamps' | 'inactive'
+  String _filterType = 'none';
   int _stampsRemaining = 3;
   int _inactiveDays = 30;
+  bool _scheduleEnabled = false;
+  DateTime? _scheduledAt;
+  int _refreshKey = 0;
 
   bool sending = false;
   String? feedback;
+
+  @override
+  void initState() {
+    super.initState();
+    titleCtrl.addListener(() => setState(() {}));
+    messageCtrl.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -292,11 +755,52 @@ class _TargetedTabState extends State<_TargetedTab> {
     super.dispose();
   }
 
-  Future<void> _sendTargeted() async {
+  String get _apiFilterType {
+    if (_filterType == 'stamps') return 'stamps';
+    if (_filterType == 'inactive') return 'inactive';
+    return 'broadcast';
+  }
+
+  Future<void> _send() async {
     if (titleCtrl.text.isEmpty || messageCtrl.text.isEmpty) {
       setState(() => feedback = '⚠️ Remplis le titre et le message');
       return;
     }
+
+    if (_scheduleEnabled) {
+      if (_scheduledAt == null) {
+        setState(() => feedback = '⚠️ Choisis une date et heure d\'envoi');
+        return;
+      }
+      setState(() { sending = true; feedback = null; });
+      try {
+        final res = await http.post(
+          Uri.parse('$apiUrl/notifications/schedule'),
+          headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'title': titleCtrl.text,
+            'message': messageCtrl.text,
+            'scheduled_at': _scheduledAt!.toUtc().toIso8601String(),
+            'filter_type': _apiFilterType,
+            if (_filterType == 'stamps') 'filter_value': _stampsRemaining,
+            if (_filterType == 'inactive') 'filter_value': _inactiveDays,
+          }),
+        );
+        if (res.statusCode == 200) {
+          setState(() { feedback = '📅 Campagne planifiée !'; _refreshKey++; });
+          titleCtrl.clear(); messageCtrl.clear();
+          setState(() { _scheduleEnabled = false; _scheduledAt = null; });
+        } else {
+          setState(() => feedback = '❌ ${jsonDecode(res.body)['detail'] ?? 'Erreur'}');
+        }
+      } catch (_) {
+        setState(() => feedback = '❌ Erreur réseau');
+      } finally {
+        setState(() => sending = false);
+      }
+      return;
+    }
+
     setState(() { sending = true; feedback = null; });
     try {
       final body = {
@@ -333,12 +837,11 @@ class _TargetedTabState extends State<_TargetedTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Filtres ──
+          // Filtres
           const Text('Cibler les clients', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
           const SizedBox(height: 12),
           _filterCard(
-            icon: Icons.star_half_rounded,
-            color: blue,
+            icon: Icons.star_half_rounded, color: blue,
             title: 'Proche de la récompense',
             subtitle: 'Clients avec peu de tampons restants',
             selected: _filterType == 'stamps',
@@ -359,8 +862,7 @@ class _TargetedTabState extends State<_TargetedTab> {
           ),
           const SizedBox(height: 10),
           _filterCard(
-            icon: Icons.schedule_rounded,
-            color: purple,
+            icon: Icons.schedule_rounded, color: purple,
             title: 'Clients inactifs',
             subtitle: 'Pas de visite depuis un certain temps',
             selected: _filterType == 'inactive',
@@ -371,8 +873,7 @@ class _TargetedTabState extends State<_TargetedTab> {
                 Text('Inactifs depuis $_inactiveDays jours', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                 Slider(
                   value: _inactiveDays.toDouble(),
-                  min: 7, max: 90,
-                  divisions: 11,
+                  min: 7, max: 90, divisions: 11,
                   activeColor: purple,
                   onChanged: (v) => setState(() => _inactiveDays = v.round()),
                 ),
@@ -381,7 +882,11 @@ class _TargetedTabState extends State<_TargetedTab> {
           ),
           const SizedBox(height: 20),
 
-          // ── Message ──
+          // Preview
+          _NotifPreview(title: titleCtrl.text, message: messageCtrl.text),
+          const SizedBox(height: 20),
+
+          // Message
           const Text('Message', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
           const SizedBox(height: 10),
           Container(
@@ -393,44 +898,63 @@ class _TargetedTabState extends State<_TargetedTab> {
                 TextField(controller: titleCtrl, decoration: _inputDeco('Titre')),
                 const SizedBox(height: 10),
                 TextField(controller: messageCtrl, maxLines: 3, decoration: _inputDeco('Message')),
-                const SizedBox(height: 14),
-                SizedBox(width: double.infinity, child: ElevatedButton(
-                  onPressed: sending ? null : _sendTargeted,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _filterType == 'inactive' ? purple : blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0,
-                  ),
-                  child: sending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Planification
+          _ScheduleSection(
+            enabled: _scheduleEnabled,
+            scheduled: _scheduledAt,
+            onToggle: (v) => setState(() => _scheduleEnabled = v),
+            onDateTimeChanged: (dt) => setState(() => _scheduledAt = dt),
+          ),
+          const SizedBox(height: 14),
+
+          // Bouton envoi
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: sending ? null : _send,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _scheduleEnabled ? blue : (_filterType == 'inactive' ? purple : blue),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0,
+            ),
+            child: sending
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text(
+                    _scheduleEnabled ? '📅 Programmer la campagne' :
                     _filterType == 'none' ? '🎯 Envoyer (sans filtre)' :
                     _filterType == 'stamps' ? '🎯 Envoyer aux clients proches' :
                     '🎯 Envoyer aux clients inactifs',
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                   ),
-                )),
-              ],
-            ),
-          ),
+          )),
+
           if (feedback != null) ...[
             const SizedBox(height: 14),
             Container(
               width: double.infinity, padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: feedback!.contains('✅') ? Colors.green.withOpacity(0.1) :
-                feedback!.contains('⚠️') ? Colors.orange.withOpacity(0.1) :
-                Colors.red.withOpacity(0.1),
+                color: feedback!.contains('✅') || feedback!.contains('📅')
+                    ? Colors.green.withOpacity(0.1)
+                    : feedback!.contains('⚠️') ? Colors.orange.withOpacity(0.1)
+                    : Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(feedback!, style: TextStyle(
-                color: feedback!.contains('✅') ? Colors.green[700] :
-                feedback!.contains('⚠️') ? Colors.orange[700] : Colors.red[700],
+                color: feedback!.contains('✅') || feedback!.contains('📅')
+                    ? Colors.green[700]
+                    : feedback!.contains('⚠️') ? Colors.orange[700] : Colors.red[700],
                 fontWeight: FontWeight.w700,
               ), textAlign: TextAlign.center),
             ),
           ],
+
+          // Liste campagnes planifiées
+          _ScheduledList(token: widget.token, refreshKey: _refreshKey),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -468,7 +992,8 @@ class _TargetedTabState extends State<_TargetedTab> {
                     ],
                   ),
                 ),
-                Icon(selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: selected ? color : Colors.grey[300], size: 22),
+                Icon(selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                    color: selected ? color : Colors.grey[300], size: 22),
               ],
             ),
             if (child != null) ...[const SizedBox(height: 12), child],
@@ -482,6 +1007,8 @@ class _TargetedTabState extends State<_TargetedTab> {
     labelText: label,
     labelStyle: TextStyle(color: Colors.grey[500]),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: blue, width: 2)),
+    focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: blue, width: 2)),
   );
 }
