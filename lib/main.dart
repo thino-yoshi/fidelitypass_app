@@ -13,6 +13,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +64,7 @@ class MyApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (_, mode, __) => MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Qarta',
         debugShowCheckedModeBanner: false,
         themeMode: mode,

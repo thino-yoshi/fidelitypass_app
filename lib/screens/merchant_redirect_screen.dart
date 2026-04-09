@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MerchantRedirectScreen extends StatelessWidget {
   const MerchantRedirectScreen({super.key});
@@ -89,8 +90,11 @@ class MerchantRedirectScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: ouvrir URL
+                  onPressed: () async {
+                    final uri = Uri.parse('https://qarta.app');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
                   },
                   icon: const Icon(
                     Icons.open_in_new,

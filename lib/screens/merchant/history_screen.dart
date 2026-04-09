@@ -76,7 +76,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         itemCount: history.length,
         itemBuilder: (_, i) {
           final scan = history[i];
-          final client = scan['users'];
+          final client = scan['client'];
           final clientName = client?['name'] ?? client?['email'] ?? 'Client inconnu';
           final stamps = scan['stamps_count'] ?? 0;
           final reward = scan['reward_reached'] == true;

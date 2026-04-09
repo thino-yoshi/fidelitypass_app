@@ -114,7 +114,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
         itemCount: clients.length,
         itemBuilder: (_, i) {
           final card = clients[i];
-          final user = card['users'] as Map? ?? {};
+          final user = card['client'] as Map? ?? {};
           final name = user['name'] ?? user['email'] ?? 'Client inconnu';
           final stamps = card['stamps_count'] as int? ?? 0;
           final stampsRequired = widget.merchantInfo?['stamps_required'] as int? ?? 10;
@@ -191,7 +191,7 @@ class _ClientSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = client['users'] as Map? ?? {};
+    final user = client['client'] as Map? ?? {};
     final name = user['name'] ?? user['email'] ?? 'Client inconnu';
     final email = user['email'] ?? '';
     final stamps = client['stamps_count'] as int? ?? 0;
