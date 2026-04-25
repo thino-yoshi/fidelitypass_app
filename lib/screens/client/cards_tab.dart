@@ -664,10 +664,10 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                           tag: 'qr-${widget.card['id']}',
                           child: Container(
                             padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12)]),
+                            decoration: BoxDecoration(color: const Color(0xFF0B1220), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12)]),
                             child: loadingQR
                                 ? SizedBox(width: 120, height: 120, child: Center(child: CircularProgressIndicator(color: color, strokeWidth: 2)))
-                                : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 120, foregroundColor: const Color(0xFF0B1220)),
+                                : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 120, foregroundColor: Colors.white),
                           ),
                         ),
                       ),
