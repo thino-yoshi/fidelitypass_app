@@ -75,12 +75,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   void _navigate(Map<String, dynamic> data) {
     if (!mounted) return;
+    final token = data['token'] ?? data['access_token'] ?? '';
+    final name  = data['name'] ?? '';
     if (data['user_type'] == 'merchant') {
       Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => MerchantHome(token: data['token'], merchantName: data['name'])));
+          builder: (_) => MerchantHome(token: token, merchantName: name)));
     } else {
       Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => ClientHome(token: data['token'], userName: data['name'])));
+          builder: (_) => ClientHome(token: token, userName: name)));
     }
   }
 
@@ -116,9 +118,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Future<void> _doLogin() async {
     setState(() { loading = true; error = ''; });
     try {
-      final data = await AuthService.login(loginEmailCtrl.text.trim(), loginPassCtrl.text);
-      await AuthService.saveSession(data['token'], data['user_type'], data['name'],
-          email: loginEmailCtrl.text.trim());
+      final data  = await AuthService.login(loginEmailCtrl.text.trim(), loginPassCtrl.text);
+      final token = data['token'] ?? data['access_token'] ?? '';
+      // Récupère email + is_google depuis la BDD et sauvegarde en local
+      await AuthService.fetchAndSaveProfile(token);
       _navigate(data);
     } catch (e) {
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
@@ -130,14 +133,15 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Future<void> _doRegister() async {
     setState(() { loading = true; error = ''; });
     try {
-      final data = await AuthService.register(
+      final data  = await AuthService.register(
         emailCtrl.text.trim(), passCtrl.text,
         prenomCtrl.text.trim(),
         regType == 'merchant' ? 'merchant' : 'client',
         merchantCode: regType == 'merchant' ? codeCtrl.text.trim() : null,
       );
-      await AuthService.saveSession(data['token'], data['user_type'], data['name'],
-          email: emailCtrl.text.trim());
+      final token = data['token'] ?? data['access_token'] ?? '';
+      // Récupère email + is_google depuis la BDD et sauvegarde en local
+      await AuthService.fetchAndSaveProfile(token);
       _navigate(data);
     } catch (e) {
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
@@ -158,10 +162,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'id_token': idToken}));
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        await AuthService.saveSession(data['token'], data['user_type'], data['name'],
+        final data  = jsonDecode(res.body);
+        final token = data['token'] ?? data['access_token'] ?? '';
+        // isGoogle: true sauvegardé immédiatement (fiable même si /users/me échoue)
+        await AuthService.saveSession(token, data['user_type'] ?? 'client', data['name'] ?? '',
             email: data['email'] ?? googleUser.email, isGoogle: true);
-        await AuthService.saveFCMToken(data['token']);
+        await AuthService.saveFCMToken(token);
+        // Récupère email + is_google depuis la BDD et sauvegarde en local
+        await AuthService.fetchAndSaveProfile(token);
         _navigate(data);
       } else {
         setState(() => error = jsonDecode(res.body)['detail'] ?? 'Erreur Google');

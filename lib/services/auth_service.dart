@@ -112,6 +112,28 @@ class AuthService {
     await prefs.setBool('is_google', isGoogle);
   }
 
+  /// Récupère email + is_google depuis /users/me et les persiste en local.
+  /// À appeler juste après chaque connexion/inscription réussie.
+  static Future<void> fetchAndSaveProfile(String token) async {
+    if (token.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/users/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(_kTimeout);
+      if (res.statusCode == 200) {
+        final body     = jsonDecode(res.body) as Map<String, dynamic>;
+        final email    = (body['email'] as String?)?.trim() ?? '';
+        final isGoogle = body['is_google'] as bool? ?? false;
+        final prefs    = await SharedPreferences.getInstance();
+        if (email.isNotEmpty) await prefs.setString('email', email);
+        // is_google : ne jamais rétrograder (OR avec la valeur locale existante)
+        final localIsGoogle = prefs.getBool('is_google') ?? false;
+        await prefs.setBool('is_google', isGoogle || localIsGoogle);
+      }
+    } catch (_) {}
+  }
+
   static Future<Map<String, String>?> getSession() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
