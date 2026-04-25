@@ -67,13 +67,17 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   }
 
   Future<void> _loadProfileImage() async {
-    // 1. Charger l'image locale en cache (affichage immédiat)
+    // 1. Charger depuis SharedPreferences (affichage immédiat même sans réseau)
     final prefs = await SharedPreferences.getInstance();
-    final path = prefs.getString('profile_image_path');
-    if (path != null && File(path).existsSync() && mounted) {
-      setState(() => _profileImagePath = path);
+    final cachedUrl  = prefs.getString('profile_image_url');
+    final cachedPath = prefs.getString('profile_image_path');
+    if (mounted) {
+      setState(() {
+        if (cachedUrl != null && cachedUrl.isNotEmpty) _profileImageUrl = cachedUrl;
+        if (cachedPath != null && File(cachedPath).existsSync()) _profileImagePath = cachedPath;
+      });
     }
-    // 2. Charger l'URL distante + email depuis /users/me
+    // 2. Charger l'URL distante + email depuis /users/me (mise à jour réseau)
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/users/me'),
@@ -84,12 +88,10 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
         final url      = body['profile_picture_url'] as String?;
         final email    = body['email'] as String? ?? '';
         final isGoogle = body['is_google'] as bool? ?? false;
-        // Persister email + is_google en local pour les prochaines sessions
-        if (email.isNotEmpty) {
-          final p = await SharedPreferences.getInstance();
-          await p.setString('email', email);
-          await p.setBool('is_google', isGoogle);
-        }
+        // Persister tout en local
+        if (url != null && url.isNotEmpty) await prefs.setString('profile_image_url', url);
+        if (email.isNotEmpty) await prefs.setString('email', email);
+        await prefs.setBool('is_google', isGoogle);
         setState(() {
           if (url != null && url.isNotEmpty) _profileImageUrl = url;
           if (email.isNotEmpty) _userEmail = email;
@@ -394,7 +396,11 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       final res = await http.Response.fromStream(streamed);
       if (res.statusCode == 200 && mounted) {
         final url = jsonDecode(res.body)['profile_picture_url'] as String?;
-        if (url != null) setState(() => _profileImageUrl = url);
+        if (url != null) {
+          final p = await SharedPreferences.getInstance();
+          await p.setString('profile_image_url', url);
+          setState(() => _profileImageUrl = url);
+        }
       }
     } catch (_) {}
   }
