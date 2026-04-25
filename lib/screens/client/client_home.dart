@@ -15,6 +15,7 @@ import '../auth_screen.dart';
 import 'cards_tab.dart';
 import 'history_tab.dart';
 import 'rewards_tab.dart';
+import 'manage_cards_screen.dart';
 import '../../config/app_colors.dart';
 
 class ClientHome extends StatefulWidget {
@@ -1014,7 +1015,16 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
               iconColor: const Color(0xFF27AE60),
               label: 'Mes cartes',
               sub: 'Gérer et supprimer',
-              onTap: () => setState(() => _tab = 0),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ManageCardsScreen(
+                    token: widget.token,
+                    cards: _cards,
+                    onRefresh: _loadStats,
+                  ),
+                ),
+              ),
             ),
           ]),
           const SizedBox(height: 10),
