@@ -7,7 +7,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
-import '../../services/program_config_service.dart';
 
 class CardsTab extends StatefulWidget {
   final String token;
