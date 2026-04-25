@@ -149,14 +149,16 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
     final allSelected = cards.isNotEmpty && _selected.length == cards.length;
 
     return Scaffold(
-      backgroundColor: context.qBg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _buildHeader(allSelected, cards),
-            _buildSortRow(),
-            Expanded(
+      backgroundColor: context.qNavy, // navy derrière la status bar
+      body: Column(
+        children: [
+          // Remplir la zone status bar en navy
+          SizedBox(height: MediaQuery.of(context).padding.top),
+          _buildHeader(allSelected, cards),
+          _buildSortRow(),
+          Expanded(
+            child: Container(
+              color: context.qBg,
               child: cards.isEmpty
                   ? _buildEmpty()
                   : GridView.builder(
@@ -174,8 +176,8 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                           _buildMiniCard(cards[i] as Map),
                     ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       bottomNavigationBar: _selected.isNotEmpty ? _buildDeleteBar() : null,
     );
