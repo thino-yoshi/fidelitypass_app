@@ -1197,11 +1197,11 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
             Container(
               width: 56, height: 56,
               decoration: BoxDecoration(
-                color: active ? const Color(0xFF1A5FBF) : const Color(0xFF2C7BE5),
+                color: active ? const Color(0xFF060D18) : const Color(0xFF0B1220),
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: const Color(0xFF2C7BE5).withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: const Color(0xFF0B1220).withOpacity(0.5), blurRadius: 14, offset: const Offset(0, 4))],
               ),
-              child: const Icon(Icons.qr_code_2_rounded, color: Colors.black, size: 26),
+              child: const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 26),
             ),
           ],
         ),
