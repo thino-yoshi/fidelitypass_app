@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
+import '../../config/app_colors.dart';
 import 'package:flutter/services.dart';
 
 class ProgramScreen extends StatefulWidget {
@@ -20,7 +21,17 @@ class _ProgramScreenState extends State<ProgramScreen> {
   late TextEditingController categoryCtrl;
   late int stampsRequired;
   bool saving = false;
-  static const gold = Color(0xFF2C7BE5);
+
+  static const _blue          = Color(0xFF2C7BE5);
+  static const _errorColor    = Color(0xFFE24B4A);
+  static const _successColor  = Color(0xFF27AE60);
+
+  Color get _kBg     => context.cBg;
+  Color get _kWhite  => context.cSurface;
+  Color get _kBorder => context.cBorder;
+  Color get _kText   => context.cText;
+  Color get _kSub    => context.cSub;
+  Color get _kFill   => context.cFill;
 
   // Multi-récompenses
   List<Map<String, dynamic>> _bonusRewards = [];
@@ -43,9 +54,14 @@ class _ProgramScreenState extends State<ProgramScreen> {
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() { _bonusRewards = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>(); _rewardsLoaded = true; });
+        setState(() {
+          _bonusRewards = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+          _rewardsLoaded = true;
+        });
       }
-    } catch (_) { setState(() => _rewardsLoaded = true); }
+    } catch (_) {
+      setState(() => _rewardsLoaded = true);
+    }
   }
 
   Future<void> _addBonusReward() async {
@@ -55,31 +71,78 @@ class _ProgramScreenState extends State<ProgramScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          title: const Text('Ajouter une récompense bonus', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          backgroundColor: ctx.cSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(
+            'Ajouter une récompense bonus',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ctx.cText),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Tampons requis', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              Text(
+                'TAMPONS REQUIS',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: ctx.cSub, letterSpacing: 0.7),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () { if (newStamps > 1) setD(() => newStamps--); }, color: gold),
+                  GestureDetector(
+                    onTap: () { if (newStamps > 1) setD(() => newStamps--); },
+                    child: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.remove_rounded, color: _blue, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Container(
                     width: 60, padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFEDEAE4), width: 2), borderRadius: BorderRadius.circular(10)),
-                    child: Text('$newStamps', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    decoration: BoxDecoration(color: ctx.cFill, borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      '$newStamps',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ctx.cText),
+                    ),
                   ),
-                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () { setD(() => newStamps++); }, color: gold),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: () { setD(() => newStamps++); },
+                    child: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.add_rounded, color: _blue, size: 18),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Récompense', hintText: 'Ex: Croissant offert', border: OutlineInputBorder())),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descCtrl,
+                style: TextStyle(color: ctx.cText),
+                decoration: InputDecoration(
+                  hintText: 'Ex: Croissant offert',
+                  hintStyle: TextStyle(color: ctx.cSub, fontSize: 14),
+                  filled: true,
+                  fillColor: ctx.cFill,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _blue, width: 2)),
+                ),
+              ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Annuler', style: TextStyle(color: ctx.cSub)),
+            ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: gold, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _blue, foregroundColor: Colors.white, elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
               child: const Text('Ajouter'),
             ),
           ],
@@ -117,46 +180,33 @@ class _ProgramScreenState extends State<ProgramScreen> {
         'reward_description': rewardCtrl.text,
       });
 
-      print('📤 Envoi: $body');
-
       final res = await http.post(
         Uri.parse('$apiUrl/merchants/setup'),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
         body: body,
       );
 
-      print('📥 Status: ${res.statusCode}');
-      print('📥 Response: ${res.body}');
-
       if (!mounted) return;
       if (res.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Programme mis à jour ! ✓'),
-            backgroundColor: const Color(0xFF2ECC71),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Programme mis à jour ! ✓'),
+          backgroundColor: _successColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          behavior: SnackBarBehavior.floating,
+        ));
         widget.onSaved?.call();
       } else {
         final data = jsonDecode(res.body);
         throw Exception(data['detail'] ?? 'Erreur');
       }
     } catch (e) {
-      print('❌ Erreur: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur : ${e.toString().replaceAll("Exception: ", "")}'),
-          backgroundColor: const Color(0xFFE74C3C),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Erreur : ${e.toString().replaceAll("Exception: ", "")}'),
+        backgroundColor: _errorColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        behavior: SnackBarBehavior.floating,
+      ));
     } finally {
       setState(() => saving = false);
     }
@@ -165,207 +215,255 @@ class _ProgramScreenState extends State<ProgramScreen> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12)],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('⚙️ Configuration du programme',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF1A1828))),
-            const SizedBox(height: 20),
-
-            // Nom du commerce
-            const Text('Nom du commerce',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1A1828))),
-            const SizedBox(height: 8),
-            TextField(controller: nameCtrl, decoration: _inputDeco('Ex: Café Lumière')),
-            const SizedBox(height: 16),
-
-            // Catégorie
-            const Text('Catégorie',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1A1828))),
-            const SizedBox(height: 8),
-            TextField(controller: categoryCtrl, decoration: _inputDeco('Ex: Café, Restaurant, Boulangerie...')),
-            const SizedBox(height: 16),
-
-            // Nombre de tampons
-            const Text('Nombre de tampons requis',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1A1828))),
-            const SizedBox(height: 8),
-            Row(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Section: Configuration ──────────────────────────────────────
+          _sectionLabel('CONFIGURATION'),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _kWhite,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: () { if (stampsRequired > 2) setState(() => stampsRequired--); },
-                  icon: const Icon(Icons.remove_circle_outline),
-                  color: gold, iconSize: 28,
+                _fieldLabel('Nom du commerce'),
+                const SizedBox(height: 8),
+                TextField(controller: nameCtrl, decoration: _inputDeco('Ex: Café Lumière'), style: TextStyle(color: _kText)),
+                const SizedBox(height: 16),
+
+                _fieldLabel('Catégorie'),
+                const SizedBox(height: 8),
+                TextField(controller: categoryCtrl, decoration: _inputDeco('Ex: Café, Restaurant, Boulangerie...'), style: TextStyle(color: _kText)),
+                const SizedBox(height: 16),
+
+                Divider(color: _kBorder, thickness: 1),
+                const SizedBox(height: 16),
+
+                _fieldLabel('Nombre de tampons requis'),
+                const SizedBox(height: 4),
+                Text('Nombre de visites pour obtenir la récompense',
+                    style: TextStyle(fontSize: 12, color: _kSub)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () { if (stampsRequired > 2) setState(() => stampsRequired--); },
+                      child: Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.remove_rounded, color: _blue, size: 22),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      width: 80,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(color: _kFill, borderRadius: BorderRadius.circular(12)),
+                      child: Text(
+                        '$stampsRequired',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _blue),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: () { if (stampsRequired < 50) setState(() => stampsRequired++); },
+                      child: Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.add_rounded, color: _blue, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 20),
+
+                Divider(color: _kBorder, thickness: 1),
+                const SizedBox(height: 16),
+
+                _fieldLabel('Description de la récompense'),
+                const SizedBox(height: 8),
+                TextField(controller: rewardCtrl, decoration: _inputDeco('Ex: 1 café offert'), style: TextStyle(color: _kText)),
+                const SizedBox(height: 20),
+
+                // Aperçu
                 Container(
-                  width: 80,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFEDEAE4), width: 2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text('$stampsRequired',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1A1828))),
-                ),
-                IconButton(
-                  onPressed: () { if (stampsRequired < 50) setState(() => stampsRequired++); },
-                  icon: const Icon(Icons.add_circle_outline),
-                  color: gold, iconSize: 28,
-                ),
-              ],
-            ),
-            const Text('Nombre de visites pour obtenir la récompense',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 16),
-
-            // Récompense
-            const Text('Description de la récompense',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1A1828))),
-            const SizedBox(height: 8),
-            TextField(controller: rewardCtrl, decoration: _inputDeco('Ex: 1 café offert')),
-            const SizedBox(height: 20),
-
-            // Aperçu
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: gold.withOpacity(0.08),
-                border: Border.all(color: gold.withOpacity(0.2)),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Après $stampsRequired visites',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1828))),
-                      const SizedBox(height: 2),
-                      Text('🎁 ${rewardCtrl.text}',
-                          style: const TextStyle(fontSize: 13, color: gold, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  const Text('🏪', style: TextStyle(fontSize: 32)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Récompenses bonus ──────────────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Récompenses bonus', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1828))),
-                GestureDetector(
-                  onTap: _addBonusReward,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: gold.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Row(children: [
-                      const Icon(Icons.add, color: gold, size: 14),
-                      const SizedBox(width: 4),
-                      const Text('Ajouter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: gold)),
-                    ]),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text('Récompenses débloquées en cours de cycle (sans réinitialiser les tampons)',
-                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-            const SizedBox(height: 12),
-            if (!_rewardsLoaded)
-              const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-            else if (_bonusRewards.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: const Color(0xFFF8F8F8), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEDEAE4))),
-                child: Row(children: [
-                  const Icon(Icons.card_giftcard_outlined, color: Color(0xFFCCCCCC), size: 20),
-                  const SizedBox(width: 10),
-                  Text('Aucune récompense bonus', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-                ]),
-              )
-            else
-              ..._bonusRewards.map((r) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: gold.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: gold.withOpacity(0.15)),
+                    color: _blue.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: gold.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                        child: Center(child: Text('${r['stamps_required']}', style: const TextStyle(color: gold, fontWeight: FontWeight.w900, fontSize: 14))),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('🎁 ${r['description']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF1A1828))),
-                          Text('À ${r['stamps_required']} tampons', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                        ]),
-                      ),
-                      GestureDetector(
-                        onTap: () => _deleteBonusReward(r['id'].toString()),
-                        child: Container(
-                          width: 28, height: 28,
-                          decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.close_rounded, color: Color(0xFFE24B4A), size: 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Après $stampsRequired visites',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _kText)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '🎁 ${rewardCtrl.text.isEmpty ? "Votre récompense" : rewardCtrl.text}',
+                              style: const TextStyle(fontSize: 13, color: _blue, fontWeight: FontWeight.w600),
+                            ),
+                          ],
                         ),
                       ),
+                      const Text('🏪', style: TextStyle(fontSize: 32)),
                     ],
                   ),
                 ),
-              )),
-            const SizedBox(height: 20),
-
-            // Bouton
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: saving ? null : saveProgram,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: gold,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: saving
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Enregistrer les modifications',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Section: Récompenses bonus ──────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _sectionLabel('RÉCOMPENSES BONUS'),
+              GestureDetector(
+                onTap: _addBonusReward,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(10)),
+                  child: const Row(children: [
+                    Icon(Icons.add, color: Colors.white, size: 14),
+                    SizedBox(width: 4),
+                    Text('Ajouter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ]),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Récompenses débloquées en cours de cycle (sans réinitialiser les tampons)',
+            style: TextStyle(fontSize: 11, color: _kSub),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _kWhite,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _kBorder),
+            ),
+            child: !_rewardsLoaded
+                ? const Center(child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: _blue)),
+                  ))
+                : _bonusRewards.isEmpty
+                    ? Row(children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: _kFill, borderRadius: BorderRadius.circular(10)),
+                          child: Icon(Icons.card_giftcard_outlined, color: _kSub, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Text('Aucune récompense bonus', style: TextStyle(color: _kSub, fontSize: 13)),
+                      ])
+                    : Column(
+                        children: _bonusRewards.map((r) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _kFill,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 38, height: 38,
+                                  decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                                  child: Center(child: Text(
+                                    '${r['stamps_required']}',
+                                    style: const TextStyle(color: _blue, fontWeight: FontWeight.w900, fontSize: 14),
+                                  )),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text('🎁 ${r['description']}',
+                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: _kText)),
+                                    Text('À ${r['stamps_required']} tampons',
+                                        style: TextStyle(fontSize: 11, color: _kSub)),
+                                  ]),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _deleteBonusReward(r['id'].toString()),
+                                  child: Container(
+                                    width: 30, height: 30,
+                                    decoration: BoxDecoration(
+                                      color: _errorColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.close_rounded, color: _errorColor, size: 15),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )).toList(),
+                      ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Save button ────────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: saving ? null : saveProgram,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: saving
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Enregistrer les modifications',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(text,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _kSub, letterSpacing: 0.7));
+  }
+
+  Widget _fieldLabel(String text) {
+    return Text(text, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _kText));
   }
 
   InputDecoration _inputDeco(String hint) {
     return InputDecoration(
       hintText: hint,
+      hintStyle: TextStyle(color: _kSub, fontSize: 14),
       filled: true,
-      fillColor: const Color(0xFFFAFAFA),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFEDEAE4), width: 2)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFEDEAE4), width: 2)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: gold, width: 2)),
+      fillColor: _kFill,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _blue, width: 2)),
     );
   }
 }

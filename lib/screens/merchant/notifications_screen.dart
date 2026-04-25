@@ -3,6 +3,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/api.dart';
+import '../../config/app_colors.dart';
+
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const _blue        = Color(0xFF2C7BE5);
+const _errorColor  = Color(0xFFE24B4A);
+const _successColor = Color(0xFF27AE60);
+const _purple      = Color(0xFF7C3AED);
 
 class NotificationsScreen extends StatefulWidget {
   final String token;
@@ -15,12 +22,12 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
-  static const blue = Color(0xFF2C7BE5);
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl.addListener(() => setState(() {}));
   }
 
   @override
@@ -33,18 +40,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // ── Pill tab bar ──
         Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabCtrl,
-            labelColor: blue,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: blue,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            tabs: const [
-              Tab(text: 'Envoyer à tous'),
-              Tab(text: 'Push ciblé'),
-            ],
+          color: context.cBg,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: context.cBorder,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                _tabPill(0, 'Diffusion'),
+                _tabPill(1, 'Ciblée'),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -57,6 +68,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           ),
         ),
       ],
+    );
+  }
+
+  Widget _tabPill(int index, String label) {
+    final active = _tabCtrl.index == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _tabCtrl.animateTo(index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? context.cSurface : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: active ? Border.all(color: _blue, width: 1.5) : null,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: active ? _blue : context.cSub,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -76,10 +114,15 @@ class _NotifPreview extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.smartphone_outlined, size: 14, color: Color(0xFF888888)),
+            Icon(Icons.smartphone_outlined, size: 14, color: Colors.white.withOpacity(0.55)),
             const SizedBox(width: 6),
-            const Text('Aperçu de la notification',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1A1828))),
+            Text(
+              'Aperçu de la notification',
+              style: TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 13,
+                color: Colors.white.withOpacity(0.85),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -87,9 +130,9 @@ class _NotifPreview extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF1C1C1E),
+            color: const Color(0xFF1A2A4A),
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 4))],
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,7 +140,7 @@ class _NotifPreview extends StatelessWidget {
               Container(
                 width: 38, height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C7BE5),
+                  color: _blue,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Center(child: Text('Q', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))),
@@ -162,8 +205,6 @@ class _ScheduleSection extends StatefulWidget {
 }
 
 class _ScheduleSectionState extends State<_ScheduleSection> {
-  static const blue = Color(0xFF2C7BE5);
-
   Future<void> _pickDateTime() async {
     final now = DateTime.now();
     final date = await showDatePicker(
@@ -173,7 +214,7 @@ class _ScheduleSectionState extends State<_ScheduleSection> {
       lastDate: now.add(const Duration(days: 365)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: blue),
+          colorScheme: const ColorScheme.light(primary: _blue),
         ),
         child: child!,
       ),
@@ -185,7 +226,7 @@ class _ScheduleSectionState extends State<_ScheduleSection> {
       initialTime: TimeOfDay.fromDateTime(widget.scheduled ?? now.add(const Duration(hours: 1))),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: blue),
+          colorScheme: const ColorScheme.light(primary: _blue),
         ),
         child: child!,
       ),
@@ -206,43 +247,47 @@ class _ScheduleSectionState extends State<_ScheduleSection> {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: widget.enabled ? const Color(0xFFE8F1FD) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: widget.enabled ? blue : const Color(0xFFEDE9E3), width: widget.enabled ? 2 : 1),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        color: context.cSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: widget.enabled ? Border.all(color: _blue, width: 2) : Border.all(color: context.cBorder),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                width: 36, height: 36,
+                width: 38, height: 38,
                 decoration: BoxDecoration(
-                  color: widget.enabled ? blue.withOpacity(0.15) : Colors.grey.withOpacity(0.1),
+                  color: widget.enabled ? _blue.withOpacity(0.1) : context.cFill,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.schedule_rounded, color: widget.enabled ? blue : Colors.grey, size: 18),
+                child: Icon(Icons.schedule_rounded, color: widget.enabled ? _blue : context.cSub, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Programmer pour plus tard',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14,
-                            color: widget.enabled ? blue : const Color(0xFF1A1828))),
-                    Text('Choisir une date et heure d\'envoi',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    Text(
+                      'Programmer pour plus tard',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14,
+                        color: widget.enabled ? _blue : context.cText,
+                      ),
+                    ),
+                    Text(
+                      'Choisir une date et heure d\'envoi',
+                      style: TextStyle(color: context.cSub, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
               Switch(
                 value: widget.enabled,
                 onChanged: widget.onToggle,
-                activeColor: blue,
+                activeColor: _blue,
               ),
             ],
           ),
@@ -254,25 +299,24 @@ class _ScheduleSectionState extends State<_ScheduleSection> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.cFill,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: blue.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today_outlined, color: blue, size: 16),
+                    const Icon(Icons.calendar_today_outlined, color: _blue, size: 16),
                     const SizedBox(width: 10),
                     Text(
                       widget.scheduled != null
                           ? _formatDt(widget.scheduled!)
                           : 'Choisir date et heure…',
                       style: TextStyle(
-                        color: widget.scheduled != null ? const Color(0xFF1A1828) : Colors.grey[400],
+                        color: widget.scheduled != null ? context.cText : context.cSub,
                         fontWeight: FontWeight.w600, fontSize: 13,
                       ),
                     ),
                     const Spacer(),
-                    Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
+                    Icon(Icons.chevron_right, color: context.cSub, size: 18),
                   ],
                 ),
               ),
@@ -296,7 +340,6 @@ class _ScheduledList extends StatefulWidget {
 }
 
 class _ScheduledListState extends State<_ScheduledList> {
-  static const blue = Color(0xFF2C7BE5);
   List<dynamic> _items = [];
   bool _loading = true;
 
@@ -359,54 +402,58 @@ class _ScheduledListState extends State<_ScheduledList> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    if (_loading) return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: _blue)));
     if (_items.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const Text('Campagnes planifiées', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
+        Text(
+          'CAMPAGNES PLANIFIÉES',
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cSub, letterSpacing: 0.7),
+        ),
         const SizedBox(height: 10),
         ..._items.map((item) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFEDE9E3)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+              color: context.cSurface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.cBorder),
             ),
             child: Row(
               children: [
                 Container(
                   width: 40, height: 40,
                   decoration: BoxDecoration(
-                    color: blue.withOpacity(0.1),
+                    color: _blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.schedule_rounded, color: blue, size: 20),
+                  child: const Icon(Icons.schedule_rounded, color: _blue, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item['title'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1A1828))),
+                      Text(item['title'] as String? ?? '', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: context.cText)),
                       const SizedBox(height: 2),
-                      Text(item['message'] as String? ?? '', style: TextStyle(color: Colors.grey[500], fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(item['message'] as String? ?? '', style: TextStyle(color: context.cSub, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.calendar_today_outlined, size: 11, color: Colors.grey[400]),
+                          Icon(Icons.calendar_today_outlined, size: 11, color: context.cSub),
                           const SizedBox(width: 4),
-                          Text(_formatDt(item['scheduled_at'] as String? ?? ''), style: TextStyle(fontSize: 11, color: blue, fontWeight: FontWeight.w600)),
+                          Text(_formatDt(item['scheduled_at'] as String? ?? ''), style: const TextStyle(fontSize: 11, color: _blue, fontWeight: FontWeight.w600)),
                           const SizedBox(width: 8),
-                          Icon(Icons.people_outline, size: 11, color: Colors.grey[400]),
+                          Icon(Icons.people_outline, size: 11, color: context.cSub),
                           const SizedBox(width: 4),
-                          Text(_filterLabel(item['filter_type'] as String? ?? 'broadcast', item['filter_value'] as int?),
-                              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                          Text(
+                            _filterLabel(item['filter_type'] as String? ?? 'broadcast', item['filter_value'] as int?),
+                            style: TextStyle(fontSize: 11, color: context.cSub),
+                          ),
                         ],
                       ),
                     ],
@@ -415,14 +462,16 @@ class _ScheduledListState extends State<_ScheduledList> {
                 GestureDetector(
                   onTap: () => showDialog(
                     context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Annuler la campagne', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                      content: const Text('Cette campagne programmée sera supprimée.'),
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: ctx.cSurface,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      title: Text('Annuler la campagne', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ctx.cText)),
+                      content: Text('Cette campagne programmée sera supprimée.', style: TextStyle(color: ctx.cSub)),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Garder')),
+                        TextButton(onPressed: () => Navigator.pop(context), child: Text('Garder', style: TextStyle(color: ctx.cSub))),
                         ElevatedButton(
                           onPressed: () { Navigator.pop(context); _cancel(item['id'] as String); },
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE24B4A), foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(backgroundColor: _errorColor, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                           child: const Text('Annuler'),
                         ),
                       ],
@@ -430,8 +479,8 @@ class _ScheduledListState extends State<_ScheduledList> {
                   ),
                   child: Container(
                     width: 32, height: 32,
-                    decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.close_rounded, color: Color(0xFFE24B4A), size: 16),
+                    decoration: BoxDecoration(color: _errorColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.close_rounded, color: _errorColor, size: 16),
                   ),
                 ),
               ],
@@ -440,6 +489,62 @@ class _ScheduledListState extends State<_ScheduledList> {
         )),
       ],
     );
+  }
+}
+
+// ── Template selector ──────────────────────────────────────────────────────────
+
+class _TemplateSelector extends StatelessWidget {
+  final Function(String title, String body) onSelect;
+  const _TemplateSelector({required this.onSelect});
+
+  static const _templates = [
+    {'emoji': '🍔', 'label': 'Offre spéciale', 'title': '🍔 Offre spéciale ce soir !', 'body': '-20% sur tout le menu ce soir. On t\'attend !'},
+    {'emoji': '⏰', 'label': 'Rappel tampon', 'title': '⏰ Tu es proche d\'une récompense !', 'body': 'Plus que quelques tampons pour décrocher ta récompense !'},
+    {'emoji': '🎉', 'label': 'Merci & fidélité', 'title': '🎉 Merci pour ta fidélité !', 'body': 'Tu fais partie de nos meilleurs clients. Merci !'},
+    {'emoji': '✏️', 'label': 'Message libre', 'title': '', 'body': ''},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        'MODÈLES RAPIDES',
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cSub, letterSpacing: 0.7),
+      ),
+      const SizedBox(height: 10),
+      ..._templates.map((t) => GestureDetector(
+        onTap: () => onSelect(t['title']!, t['body']!),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.cSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: context.cBorder),
+          ),
+          child: Row(children: [
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: Center(child: Text(t['emoji']!, style: const TextStyle(fontSize: 18))),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t['label']!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.cText)),
+                if (t['body']!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(t['body']!, style: TextStyle(fontSize: 12, color: context.cSub), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ]),
+            ),
+            Icon(Icons.chevron_right_rounded, color: context.cSub, size: 18),
+          ]),
+        ),
+      )),
+      const SizedBox(height: 8),
+    ]);
   }
 }
 
@@ -462,7 +567,6 @@ class _BroadcastTabState extends State<_BroadcastTab> {
   bool _scheduleEnabled = false;
   DateTime? _scheduledAt;
   int _refreshKey = 0;
-  static const blue = Color(0xFF2C7BE5);
 
   List<Map<String, String>> templates = [
     {'title': '🎁 Offre spéciale', 'message': 'Profitez de notre offre du jour ! Venez nous rendre visite.'},
@@ -555,163 +659,203 @@ class _BroadcastTabState extends State<_BroadcastTab> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Templates
+          // Templates rapides
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Templates rapides', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
+              Text(
+                'TEMPLATES RAPIDES',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cSub, letterSpacing: 0.7),
+              ),
               GestureDetector(
                 onTap: () => setState(() => editMode = !editMode),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: editMode ? Colors.red.withOpacity(0.1) : blue.withOpacity(0.1),
+                    color: editMode ? _errorColor.withOpacity(0.1) : _blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(editMode ? '✅ Terminer' : '✏️ Modifier',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: editMode ? Colors.red : blue)),
+                  child: Text(
+                    editMode ? '✅ Terminer' : '✏️ Modifier',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: editMode ? _errorColor : _blue),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.2,
-            children: templates.asMap().entries.map((entry) {
-              final i = entry.key;
-              final t = entry.value;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  GestureDetector(
-                    onTap: editMode ? null : () { titleCtrl.text = t['title']!; messageCtrl.text = t['message']!; },
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: blue.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: blue.withOpacity(0.2)),
-                      ),
-                      child: Center(child: Text(t['title']!, style: TextStyle(color: blue, fontWeight: FontWeight.w700, fontSize: 12), textAlign: TextAlign.center)),
-                    ),
-                  ),
-                  if (editMode)
-                    Positioned(
-                      top: -8, right: -8,
-                      child: GestureDetector(
-                        onTap: () { setState(() => templates.removeAt(i)); _saveTemplates(); },
-                        child: Container(
-                          width: 22, height: 22,
-                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                          child: const Center(child: Text('✕', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))),
+            const SizedBox(height: 10),
+            GridView.count(
+              crossAxisCount: 2, shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.2,
+              children: templates.asMap().entries.map((entry) {
+                final i = entry.key;
+                final t = entry.value;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    GestureDetector(
+                      onTap: editMode ? null : () { titleCtrl.text = t['title']!; messageCtrl.text = t['message']!; },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: context.cSurface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _blue.withOpacity(0.25), width: 1.5),
+                        ),
+                        child: Center(
+                          child: Text(
+                            t['title']!,
+                            style: const TextStyle(color: _blue, fontWeight: FontWeight.w700, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ),
                     ),
-                ],
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 20),
-
-          // Preview
-          _NotifPreview(title: titleCtrl.text, message: messageCtrl.text),
-          const SizedBox(height: 20),
-
-          // Message
-          const Text('Message', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
-            child: Column(
-              children: [
-                TextField(controller: titleCtrl, decoration: _inputDeco('Titre')),
-                const SizedBox(height: 10),
-                TextField(controller: messageCtrl, maxLines: 3, decoration: _inputDeco('Message')),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(child: OutlinedButton.icon(
-                    onPressed: () {
-                      if (titleCtrl.text.isEmpty || messageCtrl.text.isEmpty) return;
-                      setState(() => templates.add({'title': titleCtrl.text, 'message': messageCtrl.text}));
-                      _saveTemplates();
-                      titleCtrl.clear(); messageCtrl.clear();
-                    },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Ajouter template', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                    style: OutlinedButton.styleFrom(foregroundColor: blue, side: const BorderSide(color: blue),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12)),
-                  )),
-                ]),
-              ],
+                    if (editMode)
+                      Positioned(
+                        top: -8, right: -8,
+                        child: GestureDetector(
+                          onTap: () { setState(() => templates.removeAt(i)); _saveTemplates(); },
+                          child: Container(
+                            width: 22, height: 22,
+                            decoration: const BoxDecoration(color: _errorColor, shape: BoxShape.circle),
+                            child: const Center(child: Text('✕', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              }).toList(),
             ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 20),
 
-          // Planification
-          _ScheduleSection(
-            enabled: _scheduleEnabled,
-            scheduled: _scheduledAt,
-            onToggle: (v) => setState(() => _scheduleEnabled = v),
-            onDateTimeChanged: (dt) => setState(() => _scheduledAt = dt),
-          ),
-          const SizedBox(height: 14),
+            // Preview
+            _NotifPreview(title: titleCtrl.text, message: messageCtrl.text),
+            const SizedBox(height: 20),
 
-          // Bouton envoi
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: sending ? null : _send,
-            style: ElevatedButton.styleFrom(backgroundColor: blue, foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0),
-            child: sending
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(
-                    _scheduleEnabled ? '📅 Programmer la campagne' : '🔔 Envoyer à tous mes clients',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-          )),
+            // Template selector
+            _TemplateSelector(
+              onSelect: (title, body) {
+                if (title.isNotEmpty) titleCtrl.text = title;
+                if (body.isNotEmpty) messageCtrl.text = body;
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 4),
 
-          if (feedback != null) ...[
-            const SizedBox(height: 14),
+            // Message section
+            Text(
+              'MESSAGE',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cSub, letterSpacing: 0.7),
+            ),
+            const SizedBox(height: 10),
             Container(
-              width: double.infinity, padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: feedback!.contains('✅') || feedback!.contains('📅')
-                    ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: context.cSurface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: context.cBorder),
               ),
-              child: Text(feedback!, style: TextStyle(
-                color: feedback!.contains('✅') || feedback!.contains('📅')
-                    ? Colors.green[700] : Colors.red[700],
-                fontWeight: FontWeight.w700,
-              ), textAlign: TextAlign.center),
+              child: Column(
+                children: [
+                  TextField(controller: titleCtrl, decoration: _inputDeco(context, 'Titre'), style: TextStyle(color: context.cText)),
+                  const SizedBox(height: 10),
+                  TextField(controller: messageCtrl, maxLines: 3, decoration: _inputDeco(context, 'Message'), style: TextStyle(color: context.cText)),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (titleCtrl.text.isEmpty || messageCtrl.text.isEmpty) return;
+                        setState(() => templates.add({'title': titleCtrl.text, 'message': messageCtrl.text}));
+                        _saveTemplates();
+                        titleCtrl.clear(); messageCtrl.clear();
+                      },
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Ajouter template', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _blue,
+                        side: const BorderSide(color: _blue),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(height: 14),
+
+            // Planification
+            _ScheduleSection(
+              enabled: _scheduleEnabled,
+              scheduled: _scheduledAt,
+              onToggle: (v) => setState(() => _scheduleEnabled = v),
+              onDateTimeChanged: (dt) => setState(() => _scheduledAt = dt),
+            ),
+            const SizedBox(height: 14),
+
+            // Bouton envoi
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: sending ? null : _send,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                ),
+                child: sending
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        _scheduleEnabled ? '📅 Programmer la campagne' : '🔔 Envoyer à tous mes clients',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+              ),
+            ),
+
+            if (feedback != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity, padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: feedback!.contains('✅') || feedback!.contains('📅')
+                      ? const Color(0xFFE4F5EB)
+                      : feedback!.contains('⚠️')
+                          ? const Color(0xFFFEF3C7)
+                          : const Color(0xFFFDE8E7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  feedback!,
+                  style: TextStyle(
+                    color: feedback!.contains('✅') || feedback!.contains('📅')
+                        ? _successColor
+                        : feedback!.contains('⚠️')
+                            ? const Color(0xFFF59E0B)
+                            : _errorColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+
+            // Liste campagnes planifiées
+            _ScheduledList(token: widget.token, refreshKey: _refreshKey),
+            const SizedBox(height: 16),
           ],
-
-          // Liste campagnes planifiées
-          _ScheduledList(token: widget.token, refreshKey: _refreshKey),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
+        ),
+      );
   }
-
-  static InputDecoration _inputDeco(String label) => InputDecoration(
-    labelText: label,
-    labelStyle: TextStyle(color: Colors.grey[500]),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-        borderSide: BorderSide(color: blue, width: 2)),
-  );
 }
 
 // ── Onglet push ciblé ──────────────────────────────────────────────────────────
@@ -728,8 +872,6 @@ class _TargetedTab extends StatefulWidget {
 class _TargetedTabState extends State<_TargetedTab> {
   final titleCtrl = TextEditingController();
   final messageCtrl = TextEditingController();
-  static const blue = Color(0xFF2C7BE5);
-  static const purple = Color(0xFF7B4FBF);
 
   String _filterType = 'none';
   int _stampsRemaining = 3;
@@ -833,144 +975,182 @@ class _TargetedTabState extends State<_TargetedTab> {
     final stampsRequired = widget.merchantInfo?['stamps_required'] as int? ?? 10;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Filtres
-          const Text('Cibler les clients', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
-          const SizedBox(height: 12),
-          _filterCard(
-            icon: Icons.star_half_rounded, color: blue,
-            title: 'Proche de la récompense',
-            subtitle: 'Clients avec peu de tampons restants',
-            selected: _filterType == 'stamps',
-            onTap: () => setState(() => _filterType = _filterType == 'stamps' ? 'none' : 'stamps'),
-            child: _filterType == 'stamps' ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Tampons restants ≤ $_stampsRemaining', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                Slider(
-                  value: _stampsRemaining.toDouble(),
-                  min: 1, max: stampsRequired.toDouble(),
-                  divisions: stampsRequired - 1,
-                  activeColor: blue,
-                  onChanged: (v) => setState(() => _stampsRemaining = v.round()),
-                ),
-              ],
-            ) : null,
+          Text(
+            'CIBLER LES CLIENTS',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cSub, letterSpacing: 0.7),
           ),
-          const SizedBox(height: 10),
-          _filterCard(
-            icon: Icons.schedule_rounded, color: purple,
-            title: 'Clients inactifs',
-            subtitle: 'Pas de visite depuis un certain temps',
-            selected: _filterType == 'inactive',
-            onTap: () => setState(() => _filterType = _filterType == 'inactive' ? 'none' : 'inactive'),
-            child: _filterType == 'inactive' ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Inactifs depuis $_inactiveDays jours', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                Slider(
-                  value: _inactiveDays.toDouble(),
-                  min: 7, max: 90, divisions: 11,
-                  activeColor: purple,
-                  onChanged: (v) => setState(() => _inactiveDays = v.round()),
-                ),
-              ],
-            ) : null,
-          ),
-          const SizedBox(height: 20),
-
-          // Preview
-          _NotifPreview(title: titleCtrl.text, message: messageCtrl.text),
-          const SizedBox(height: 20),
-
-          // Message
-          const Text('Message', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
-            child: Column(
-              children: [
-                TextField(controller: titleCtrl, decoration: _inputDeco('Titre')),
-                const SizedBox(height: 10),
-                TextField(controller: messageCtrl, maxLines: 3, decoration: _inputDeco('Message')),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Planification
-          _ScheduleSection(
-            enabled: _scheduleEnabled,
-            scheduled: _scheduledAt,
-            onToggle: (v) => setState(() => _scheduleEnabled = v),
-            onDateTimeChanged: (dt) => setState(() => _scheduledAt = dt),
-          ),
-          const SizedBox(height: 14),
-
-          // Bouton envoi
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: sending ? null : _send,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _scheduleEnabled ? blue : (_filterType == 'inactive' ? purple : blue),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0,
-            ),
-            child: sending
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(
-                    _scheduleEnabled ? '📅 Programmer la campagne' :
-                    _filterType == 'none' ? '🎯 Envoyer (sans filtre)' :
-                    _filterType == 'stamps' ? '🎯 Envoyer aux clients proches' :
-                    '🎯 Envoyer aux clients inactifs',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            const SizedBox(height: 10),
+            _filterCard(
+              icon: Icons.star_half_rounded, color: _blue,
+              title: 'Proche de la récompense',
+              subtitle: 'Clients avec peu de tampons restants',
+              selected: _filterType == 'stamps',
+              onTap: () => setState(() => _filterType = _filterType == 'stamps' ? 'none' : 'stamps'),
+              child: _filterType == 'stamps' ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Tampons restants ≤ $_stampsRemaining', style: TextStyle(color: context.cSub, fontSize: 13)),
+                  Slider(
+                    value: _stampsRemaining.toDouble(),
+                    min: 1, max: stampsRequired.toDouble(),
+                    divisions: stampsRequired - 1,
+                    activeColor: _blue,
+                    onChanged: (v) => setState(() => _stampsRemaining = v.round()),
                   ),
-          )),
-
-          if (feedback != null) ...[
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity, padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: feedback!.contains('✅') || feedback!.contains('📅')
-                    ? Colors.green.withOpacity(0.1)
-                    : feedback!.contains('⚠️') ? Colors.orange.withOpacity(0.1)
-                    : Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(feedback!, style: TextStyle(
-                color: feedback!.contains('✅') || feedback!.contains('📅')
-                    ? Colors.green[700]
-                    : feedback!.contains('⚠️') ? Colors.orange[700] : Colors.red[700],
-                fontWeight: FontWeight.w700,
-              ), textAlign: TextAlign.center),
+                ],
+              ) : null,
             ),
-          ],
+            const SizedBox(height: 10),
+            _filterCard(
+              icon: Icons.schedule_rounded, color: _purple,
+              title: 'Clients inactifs',
+              subtitle: 'Pas de visite depuis un certain temps',
+              selected: _filterType == 'inactive',
+              onTap: () => setState(() => _filterType = _filterType == 'inactive' ? 'none' : 'inactive'),
+              child: _filterType == 'inactive' ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Inactifs depuis $_inactiveDays jours', style: TextStyle(color: context.cSub, fontSize: 13)),
+                  Slider(
+                    value: _inactiveDays.toDouble(),
+                    min: 7, max: 90, divisions: 11,
+                    activeColor: _purple,
+                    onChanged: (v) => setState(() => _inactiveDays = v.round()),
+                  ),
+                ],
+              ) : null,
+            ),
+            const SizedBox(height: 20),
 
-          // Liste campagnes planifiées
-          _ScheduledList(token: widget.token, refreshKey: _refreshKey),
-          const SizedBox(height: 16),
-        ],
-      ),
+            // Preview
+            _NotifPreview(title: titleCtrl.text, message: messageCtrl.text),
+            const SizedBox(height: 20),
+
+            // Template selector
+            _TemplateSelector(
+              onSelect: (title, body) {
+                if (title.isNotEmpty) titleCtrl.text = title;
+                if (body.isNotEmpty) messageCtrl.text = body;
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 4),
+
+            // Message
+            Text(
+              'MESSAGE',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cSub, letterSpacing: 0.7),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.cSurface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: context.cBorder),
+              ),
+              child: Column(
+                children: [
+                  TextField(controller: titleCtrl, decoration: _inputDeco(context, 'Titre'), style: TextStyle(color: context.cText)),
+                  const SizedBox(height: 10),
+                  TextField(controller: messageCtrl, maxLines: 3, decoration: _inputDeco(context, 'Message'), style: TextStyle(color: context.cText)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Planification
+            _ScheduleSection(
+              enabled: _scheduleEnabled,
+              scheduled: _scheduledAt,
+              onToggle: (v) => setState(() => _scheduleEnabled = v),
+              onDateTimeChanged: (dt) => setState(() => _scheduledAt = dt),
+            ),
+            const SizedBox(height: 14),
+
+            // Bouton envoi
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: sending ? null : _send,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _scheduleEnabled ? _blue : (_filterType == 'inactive' ? _purple : _blue),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                ),
+                child: sending
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        _scheduleEnabled ? '📅 Programmer la campagne' :
+                        _filterType == 'none' ? '🎯 Envoyer (sans filtre)' :
+                        _filterType == 'stamps' ? '🎯 Envoyer aux clients proches' :
+                        '🎯 Envoyer aux clients inactifs',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+              ),
+            ),
+
+            if (feedback != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity, padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: feedback!.contains('✅') || feedback!.contains('📅')
+                      ? const Color(0xFFE4F5EB)
+                      : feedback!.contains('⚠️')
+                          ? const Color(0xFFFEF3C7)
+                          : const Color(0xFFFDE8E7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  feedback!,
+                  style: TextStyle(
+                    color: feedback!.contains('✅') || feedback!.contains('📅')
+                        ? _successColor
+                        : feedback!.contains('⚠️')
+                            ? const Color(0xFFF59E0B)
+                            : _errorColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+
+            // Liste campagnes planifiées
+            _ScheduledList(token: widget.token, refreshKey: _refreshKey),
+            const SizedBox(height: 16),
+          ],
+        ),
     );
   }
 
-  Widget _filterCard({required IconData icon, required Color color, required String title, required String subtitle, required bool selected, required VoidCallback onTap, Widget? child}) {
+  Widget _filterCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required bool selected,
+    required VoidCallback onTap,
+    Widget? child,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? color : const Color(0xFFEDE9E3), width: selected ? 2 : 1),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+          color: context.cSurface,
+          borderRadius: BorderRadius.circular(18),
+          border: selected ? Border.all(color: color, width: 2) : Border.all(color: context.cBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -978,22 +1158,28 @@ class _TargetedTabState extends State<_TargetedTab> {
             Row(
               children: [
                 Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, color: color, size: 18),
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(
+                    color: selected ? color.withOpacity(0.12) : context.cFill,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: selected ? color : context.cSub, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: selected ? color : const Color(0xFF1A1828))),
-                      Text(subtitle, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                      Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: selected ? color : context.cText)),
+                      Text(subtitle, style: TextStyle(color: context.cSub, fontSize: 12)),
                     ],
                   ),
                 ),
-                Icon(selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                    color: selected ? color : Colors.grey[300], size: 22),
+                Icon(
+                  selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                  color: selected ? color : context.cSub,
+                  size: 22,
+                ),
               ],
             ),
             if (child != null) ...[const SizedBox(height: 12), child],
@@ -1002,13 +1188,17 @@ class _TargetedTabState extends State<_TargetedTab> {
       ),
     );
   }
-
-  static InputDecoration _inputDeco(String label) => InputDecoration(
-    labelText: label,
-    labelStyle: TextStyle(color: Colors.grey[500]),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-        borderSide: BorderSide(color: blue, width: 2)),
-  );
 }
+
+InputDecoration _inputDeco(BuildContext ctx, String label) => InputDecoration(
+  labelText: label,
+  labelStyle: TextStyle(color: ctx.cSub),
+  filled: true,
+  fillColor: ctx.cFill,
+  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+  focusedBorder: const OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(10)),
+    borderSide: BorderSide(color: _blue, width: 2),
+  ),
+);

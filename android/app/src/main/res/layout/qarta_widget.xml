@@ -3,91 +3,40 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/widget_background"
-    android:padding="16dp">
+    android:background="#E00B1220"
+    android:padding="14dp"
+    android:gravity="center_vertical">
 
-    <!-- Header -->
-    <LinearLayout
+    <TextView
+        android:id="@+id/widget_merchant_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:text="Mon commerce"
+        android:textColor="#FFFFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:layout_marginBottom="6dp" />
 
-        <TextView
-            android:id="@+id/widget_app_name"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="QARTA"
-            android:textColor="#992C7BE5"
-            android:textSize="9sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.15" />
-
-        <TextView
-            android:id="@+id/widget_merchant_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Commerce"
-            android:textColor="#FFFFFFFF"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="10dp"
-        android:background="#22FFFFFF" />
-
-    <!-- Stamps row -->
-    <LinearLayout
-        android:id="@+id/widget_stamps_row"
+    <TextView
+        android:id="@+id/widget_stamps_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginBottom="10dp">
+        android:text="0/10 tampons"
+        android:textColor="#99FFFFFF"
+        android:textSize="12sp"
+        android:layout_marginBottom="4dp" />
 
-        <!-- Stamp circles are added programmatically -->
-    </LinearLayout>
-
-    <!-- Progress bar -->
-    <ProgressBar
-        android:id="@+id/widget_progress"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:progressDrawable="@drawable/widget_progress"
-        android:progress="30"
-        android:max="100"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Bottom row -->
-    <LinearLayout
+    <TextView
+        android:id="@+id/widget_reward_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <TextView
-            android:id="@+id/widget_stamps_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="3/10 tampons"
-            android:textColor="#99FFFFFF"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/widget_reward_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎁 Récompense"
-            android:textColor="#FFFFFFFF"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+        android:text="Recompense"
+        android:textColor="#FFFFFFFF"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end" />
 
 </LinearLayout>

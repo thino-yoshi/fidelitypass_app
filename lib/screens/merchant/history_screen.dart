@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
+import '../../config/app_colors.dart';
 
 class HistoryScreen extends StatefulWidget {
   final String token;
@@ -15,7 +16,12 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   List<dynamic> history = [];
   bool loading = true;
-  static const blue = Color(0xFF2C7BE5);
+
+  static const _blue = Color(0xFF2C7BE5);
+  Color get _kBg    => context.cBg;
+  Color get _kWhite => context.cSurface;
+  Color get _kText  => context.cText;
+  Color get _kSub   => context.cSub;
 
   @override
   void initState() {
@@ -49,7 +55,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator(color: blue));
+      return const Center(child: CircularProgressIndicator(color: _blue));
     }
 
     if (history.isEmpty) {
@@ -59,10 +65,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
           children: [
             const Text('🕐', style: TextStyle(fontSize: 48)),
             const SizedBox(height: 16),
-            Text('Aucun scan pour l\'instant',
-                style: TextStyle(color: Colors.grey[500], fontSize: 15)),
-            Text('Les scans apparaîtront ici',
-                style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+            Text(
+              "Aucun scan pour l'instant",
+              style: TextStyle(color: _kText, fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Les scans apparaîtront ici',
+              style: TextStyle(color: _kSub, fontSize: 13),
+            ),
           ],
         ),
       );
@@ -70,14 +81,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return RefreshIndicator(
       onRefresh: loadHistory,
-      color: blue,
+      color: _blue,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.of(context).padding.bottom),
         itemCount: history.length,
         itemBuilder: (_, i) {
           final scan = history[i];
-          final client = scan['client'];
-          final clientName = client?['name'] ?? client?['email'] ?? 'Client inconnu';
+          final client = scan['users'];
+          final clientName = (client?['name'] ?? client?['email'] ?? 'Client inconnu') as String;
           final stamps = scan['stamps_count'] ?? 0;
           final reward = scan['reward_reached'] == true;
           final date = formatDate(scan['scanned_at'] ?? '');
@@ -86,10 +97,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _kWhite,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)
+                BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 10, offset: const Offset(0, 2)),
               ],
             ),
             child: Row(
@@ -98,13 +109,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   width: 44, height: 44,
                   decoration: BoxDecoration(
                     color: reward
-                        ? Colors.amber.withOpacity(0.15)
-                        : blue.withOpacity(0.1),
+                        ? const Color(0xFFF59E0B).withOpacity(0.12)
+                        : const Color(0xFF27AE60).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
-                    child: Text(reward ? '🏆' : '✅',
-                        style: const TextStyle(fontSize: 20)),
+                    child: Icon(
+                      reward ? Icons.emoji_events_rounded : Icons.check_circle_rounded,
+                      size: 22,
+                      color: reward ? const Color(0xFFF59E0B) : const Color(0xFF27AE60),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -112,24 +126,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(clientName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text(
+                        clientName,
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _kText),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         reward
                             ? '🎉 Récompense débloquée !'
                             : 'Tampon ajouté → $stamps tampons',
                         style: TextStyle(
-                          color: reward ? Colors.amber[700] : Colors.grey[600],
+                          color: reward ? const Color(0xFFF59E0B) : _kSub,
                           fontSize: 13,
+                          fontWeight: reward ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Text(date,
-                    style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                const SizedBox(width: 8),
+                Text(date, style: TextStyle(color: _kSub, fontSize: 11), textAlign: TextAlign.right),
               ],
             ),
           );

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../config/api.dart';
+import '../../config/app_colors.dart';
 
 class StaticQRScreen extends StatefulWidget {
   final String token;
@@ -24,6 +25,12 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
   String? qrToken;
   bool loading = true;
   String? error;
+
+  Color get _kBg     => context.cBg;
+  Color get _kWhite  => context.cSurface;
+  Color get _kBorder => context.cBorder;
+  Color get _kText   => context.cText;
+  Color get _kSub    => context.cSub;
 
   @override
   void initState() {
@@ -54,17 +61,18 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F2EE),
+      backgroundColor: _kBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0B1220),
-        foregroundColor: Colors.white,
-        title: const Text('QR code caisse', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        backgroundColor: _kWhite,
+        foregroundColor: _kText,
+        title: Text('QR code caisse',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _kText)),
         elevation: 0,
       ),
       body: loading
           ? Center(child: CircularProgressIndicator(color: widget.accentColor))
           : error != null
-              ? Center(child: Text(error!, style: const TextStyle(color: Colors.red)))
+              ? Center(child: Text(error!, style: const TextStyle(color: Color(0xFFE24B4A))))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -72,16 +80,13 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                       const SizedBox(height: 16),
                       Text(
                         'Affichez ce QR code en caisse',
-                        style: TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w800,
-                          color: const Color(0xFF1A1828),
-                        ),
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kText),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Vos clients le scannent pour rejoindre votre programme de fidélité.',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14, height: 1.5),
+                        style: TextStyle(color: _kSub, fontSize: 14, height: 1.5),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
@@ -90,10 +95,11 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                       Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _kWhite,
                           borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: _kBorder),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 8)),
+                            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 24, offset: const Offset(0, 8)),
                           ],
                         ),
                         child: Column(
@@ -137,9 +143,9 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _kWhite,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFEDE9E3)),
+                          border: Border.all(color: _kBorder),
                         ),
                         child: Row(
                           children: [
@@ -148,7 +154,7 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                             Expanded(
                               child: Text(
                                 'Ce QR code est permanent et unique à votre commerce. Imprimez-le et collez-le en caisse.',
-                                style: TextStyle(color: Colors.grey[700], fontSize: 13, height: 1.4),
+                                style: TextStyle(color: _kSub, fontSize: 13, height: 1.4),
                               ),
                             ),
                           ],

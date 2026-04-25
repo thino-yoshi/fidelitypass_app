@@ -4,8 +4,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/api.dart';
+import '../../config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../main.dart';
+import '../../widgets/user_avatar.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
 import 'program_screen.dart';
@@ -13,9 +15,16 @@ import 'history_screen.dart';
 import 'notifications_screen.dart';
 import 'clients_screen.dart';
 import 'static_qr_screen.dart';
-import 'chart_widget.dart';
 import 'card_preview_screen.dart';
 import 'merchant_onboarding.dart';
+import 'abonnement_screen.dart';
+
+// ─── Design tokens ─────────────────────────────────────────────────────────
+const _kPrimary = Color(0xFF2C7BE5);
+const _kGold    = Color(0xFFF59E0B);
+const _kSuccess = Color(0xFF27AE60);
+const _kError   = Color(0xFFE24B4A);
+const _kPurple  = Color(0xFF7C3AED);
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -26,14 +35,20 @@ class MerchantHome extends StatefulWidget {
   State<MerchantHome> createState() => _MerchantHomeState();
 }
 
-class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMixin {
-  int _tab = 0; // 0=dashboard, 1=clients, 2=historique, 3=notifs, 4=programme
+class _MerchantHomeState extends State<MerchantHome> {
+  Color get _kBg    => context.cBg;
+  Color get _kWhite => context.cSurface;
+  Color get _kBorder => context.cBorder;
+  Color get _kText  => context.cText;
+  Color get _kSub   => context.cSub;
+
+  int _tab = 0;
   Map? merchantInfo;
   Map? stats;
   bool loading = true;
   bool _showOnboarding = false;
+  List<dynamic> _recentClients = [];
 
-  // Styles par catégorie
   static const Map<String, Map<String, dynamic>> _categoryStyles = {
     'Café':        {'emoji': '☕', 'color': Color(0xFF2C7BE5)},
     'Boulangerie': {'emoji': '🥐', 'color': Color(0xFFD4A017)},
@@ -45,13 +60,10 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
 
   Map<String, dynamic> get _style {
     final cat = merchantInfo?['category'] as String? ?? '';
-    return _categoryStyles[cat] ?? {'emoji': '🏪', 'color': const Color(0xFF2C7BE5)};
+    return _categoryStyles[cat] ?? {'emoji': '🏪', 'color': _kPrimary};
   }
 
-  Color get _accentColor => _style['color'] as Color;
-
-  String get _businessName =>
-      merchantInfo?['business_name'] as String? ?? widget.merchantName;
+  String get _businessName => merchantInfo?['business_name'] as String? ?? widget.merchantName;
 
   String get _initials {
     final name = _businessName.trim();
@@ -76,25 +88,14 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
   Future<void> _loadData() async {
     setState(() => loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/merchants/'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
+      final res  = await http.get(Uri.parse('$apiUrl/merchants/'), headers: {'Authorization': 'Bearer ${widget.token}'});
       final data = jsonDecode(res.body) as List;
-
-      // Décoder le JWT pour trouver l'ID
       final parts = widget.token.split('.');
-      final payload = parts[1];
-      final normalized = base64Url.normalize(payload);
+      final normalized = base64Url.normalize(parts[1]);
       final decoded = jsonDecode(utf8.decode(base64Url.decode(normalized)));
       final myId = decoded['sub'];
       final me = data.firstWhere((m) => m['id'] == myId, orElse: () => null);
-
-      final statsRes = await http.get(
-        Uri.parse('$apiUrl/cards/stats'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-
+      final statsRes = await http.get(Uri.parse('$apiUrl/cards/stats'), headers: {'Authorization': 'Bearer ${widget.token}'});
       if (mounted) {
         setState(() {
           merchantInfo = me;
@@ -102,9 +103,19 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
           loading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => loading = false);
     }
+    await _loadRecentClients();
+  }
+
+  Future<void> _loadRecentClients() async {
+    try {
+      final res = await http.get(Uri.parse('$apiUrl/cards/clients'), headers: {'Authorization': 'Bearer ${widget.token}'});
+      if (mounted && res.statusCode == 200) {
+        setState(() => _recentClients = (jsonDecode(res.body) as List).take(3).toList());
+      }
+    } catch (_) {}
   }
 
   void _logout() async {
@@ -119,23 +130,43 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
     ));
   }
 
+  void _showProfilSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MerchantProfilSheet(
+        token: widget.token,
+        merchantInfo: merchantInfo,
+        onLogout: _logout,
+        onNavigateToProgram: () => setState(() => _tab = 4),
+        onNavigateToNotifs: () => setState(() => _tab = 3),
+        onNavigateToQR: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => StaticQRScreen(token: widget.token, businessName: _businessName, accentColor: _kPrimary),
+        )),
+        onNavigateToAbonnement: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => const AbonnementScreen(),
+        )),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: context.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F2EE),
+        backgroundColor: _kBg,
         body: Stack(
           children: [
             Column(
               children: [
                 _buildHeader(),
-                _buildSummaryStrip(),
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(bottom: 76 + MediaQuery.of(context).padding.bottom),
+                    padding: EdgeInsets.only(bottom: 64 + MediaQuery.of(context).padding.bottom),
                     child: loading
-                        ? Center(child: CircularProgressIndicator(color: _accentColor))
+                        ? const Center(child: CircularProgressIndicator(color: _kPrimary))
                         : _buildTabContent(),
                   ),
                 ),
@@ -146,9 +177,7 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
               onDone: () async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setBool('merchant_onboarding_done', true);
-                if (mounted) {
-                  setState(() { _showOnboarding = false; _tab = 4; });
-                }
+                if (mounted) setState(() { _showOnboarding = false; _tab = 4; });
               },
             ),
           ],
@@ -157,632 +186,228 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
     );
   }
 
-  // ── HEADER ─────────────────────────────────────────────────────────────────
+  // ─── Header ───────────────────────────────────────────────────────────────
 
   Widget _buildHeader() {
+    final emoji = _style['emoji'] as String;
+    final clientsCount = stats?['total_clients'] ?? 0;
+    final scansCount   = stats?['total_scans'] ?? 0;
+
     return Container(
-      color: const Color(0xFF0B1220),
+      color: _kWhite,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 14,
-        left: 20, right: 20, bottom: 18,
+        top: MediaQuery.of(context).padding.top + 12,
+        left: 16, right: 16, bottom: 12,
       ),
-      child: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _GridPainter())),
-          Positioned(
-            top: -20, right: -10,
-            child: Container(
-              width: 180, height: 180,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [_accentColor.withOpacity(0.18), Colors.transparent],
-                ),
-              ),
+      child: Row(children: [
+        GestureDetector(
+          onTap: _showProfilSheet,
+          child: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // Logo commerce
-                  GestureDetector(
-                    onTap: () => _showProfilSheet(),
-                    child: Row(
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 42, height: 42,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: _accentColor.withOpacity(0.25),
-                                border: Border.all(color: _accentColor.withOpacity(0.45), width: 1.5),
-                              ),
-                              child: Center(
-                                child: Text(_style['emoji'] as String,
-                                    style: const TextStyle(fontSize: 20)),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: -2, right: -2,
-                              child: Container(
-                                width: 12, height: 12,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF27AE60),
-                                  border: Border.all(color: const Color(0xFF0B1220), width: 2),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Tableau de bord', style: TextStyle(
-                                color: Colors.white.withOpacity(0.4), fontSize: 10, height: 1)),
-                            const SizedBox(height: 2),
-                            Text(_businessName,
-                              style: const TextStyle(color: Colors.white, fontSize: 15,
-                                  fontWeight: FontWeight.w800, height: 1.2),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Container(
-                    width: 5, height: 5,
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF27AE60)),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    loading ? '···' : '${stats?['total_clients'] ?? 0} clients · ${stats?['total_scans'] ?? 0} scans aujourd\'hui',
-                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── SUMMARY STRIP ──────────────────────────────────────────────────────────
-
-  Widget _buildSummaryStrip() {
-    final totalClients = stats?['total_clients'] ?? 0;
-    final totalStamps = stats?['total_stamps'] ?? 0;
-    final totalRewards = stats?['total_rewards'] ?? 0;
-
-    return Container(
-      color: const Color(0xFF0B1220),
-      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 18),
-      child: Row(
-        children: [
-          _sumCard('$totalClients', 'Clients', Colors.white, isActive: true),
-          const SizedBox(width: 8),
-          _sumCard('$totalStamps', 'Tampons', _accentColor),
-          const SizedBox(width: 8),
-          _sumCard('$totalRewards', 'Récompenses', const Color(0xFFFBBF24)),
-        ],
-      ),
-    );
-  }
-
-  Widget _sumCard(String val, String label, Color valColor, {bool isActive = false}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-        decoration: BoxDecoration(
-          color: isActive ? _accentColor.withOpacity(0.18) : Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive ? _accentColor.withOpacity(0.55) : Colors.white.withOpacity(0.08),
+            const SizedBox(width: 10),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_businessName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kText)),
+              Text(loading ? '···' : '$clientsCount clients · $scansCount scans aujourd\'hui',
+                  style: TextStyle(fontSize: 11, color: _kSub)),
+            ]),
+          ]),
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: _showProfilSheet,
+          child: Container(
+            width: 34, height: 34,
+            decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _kBorder)),
+            child: Icon(Icons.person_outline_rounded, color: _kSub, size: 18),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(val, style: TextStyle(
-                color: isActive ? Colors.white : valColor,
-                fontSize: 20, fontWeight: FontWeight.w700, height: 1)),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9)),
-          ],
-        ),
-      ),
+      ]),
     );
   }
 
-  // ── TAB CONTENT ────────────────────────────────────────────────────────────
+  // ─── Tab Content ──────────────────────────────────────────────────────────
 
   Widget _buildTabContent() {
     switch (_tab) {
-      case 0:
-        return _buildDashboard();
-      case 1:
-        return ClientsScreen(token: widget.token, merchantInfo: merchantInfo);
-      case 2:
-        return HistoryScreen(token: widget.token, merchantInfo: merchantInfo);
-      case 3:
-        return NotificationsScreen(token: widget.token, merchantInfo: merchantInfo);
-      case 4:
-        return ProgramScreen(
-          token: widget.token,
-          merchantInfo: merchantInfo,
-          onSaved: () async {
-            setState(() { loading = true; _tab = 0; });
-            await _loadData();
-          },
-        );
-      default:
-        return _buildDashboard();
+      case 0: return _buildDashboard();
+      case 1: return ClientsScreen(token: widget.token, merchantInfo: merchantInfo);
+      case 2: return HistoryScreen(token: widget.token, merchantInfo: merchantInfo);
+      case 3: return NotificationsScreen(token: widget.token, merchantInfo: merchantInfo);
+      case 4: return ProgramScreen(
+        token: widget.token,
+        merchantInfo: merchantInfo,
+        onSaved: () async { setState(() { loading = true; _tab = 0; }); await _loadData(); },
+      );
+      default: return _buildDashboard();
     }
   }
 
-  // ── DASHBOARD ──────────────────────────────────────────────────────────────
+  // ─── Dashboard ────────────────────────────────────────────────────────────
 
   Widget _buildDashboard() {
     if (merchantInfo == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(child: Text('⚠️', style: TextStyle(fontSize: 36))),
-              ),
-              const SizedBox(height: 20),
-              const Text('Profil non configuré',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1A1828))),
-              const SizedBox(height: 8),
-              Text('Configure ton commerce pour commencer à fidéliser tes clients.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[500], fontSize: 14, height: 1.5)),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () => setState(() => _tab = 3),
-                icon: const Icon(Icons.settings_outlined, size: 16),
-                label: const Text('Configurer mon programme'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _accentColor, foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  elevation: 0,
-                ),
-              ),
-            ],
+      return Center(child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Text('⚠️', style: TextStyle(fontSize: 44)),
+          const SizedBox(height: 16),
+          Text('Profil non configuré', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _kText)),
+          const SizedBox(height: 8),
+          Text('Configure ton commerce pour commencer à fidéliser tes clients.',
+              textAlign: TextAlign.center, style: TextStyle(color: _kSub, fontSize: 14, height: 1.5)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => setState(() => _tab = 4),
+            icon: const Icon(Icons.settings_outlined, size: 16),
+            label: const Text('Configurer mon programme'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kPrimary, foregroundColor: Colors.white, elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
           ),
-        ),
-      );
+        ]),
+      ));
     }
+
+    final clientsActifs    = stats?['total_clients'] as int? ?? 0;
+    final pointsDistribues = stats?['total_stamps']  as int? ?? 0;
+    final recompenses      = stats?['total_rewards']  as int? ?? 0;
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: _accentColor,
+      color: _kPrimary,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 96 + MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
         children: [
+          // Stats
+          Row(children: [
+            _statCard(Icons.people_outline_rounded, '$clientsActifs', 'Clients actifs', _kPrimary),
+            const SizedBox(width: 10),
+            _statCard(Icons.check_circle_outline_rounded, '$pointsDistribues', 'Tampons', _kSuccess),
+            const SizedBox(width: 10),
+            _statCard(Icons.star_outline_rounded, '$recompenses', 'Récompenses', _kGold),
+          ]),
+          const SizedBox(height: 16),
 
-          // ── Actions rapides ──
-          Row(
-            children: [
-              _quickAction(
-                icon: Icons.people_outline,
-                label: 'Clients',
-                color: const Color(0xFF2C7BE5),
-                onTap: () => setState(() => _tab = 1),
-              ),
-              const SizedBox(width: 10),
-              _quickAction(
-                icon: Icons.notifications_outlined,
-                label: 'Notifs',
-                color: const Color(0xFF7B4FBF),
-                onTap: () => setState(() => _tab = 3),
-              ),
-              const SizedBox(width: 10),
-              _quickAction(
-                icon: Icons.history_rounded,
-                label: 'Historique',
-                color: const Color(0xFF27AE60),
-                onTap: () => setState(() => _tab = 2),
-              ),
-              const SizedBox(width: 10),
-              _quickAction(
-                icon: Icons.tune_rounded,
-                label: 'Config',
-                color: const Color(0xFFF59E0B),
-                onTap: () => setState(() => _tab = 4),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // ── Stats détaillées ──
-          _sectionTitle('Performances'),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _statTile(Icons.people_outline, 'Clients', '${stats?['total_clients'] ?? 0}', _accentColor),
-              const SizedBox(width: 10),
-              _statTile(Icons.star_outline_rounded, 'Tampons total', '${stats?['total_stamps'] ?? 0}', const Color(0xFF2980B9)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _statTile(Icons.emoji_events_outlined, 'Récompenses', '${stats?['total_rewards'] ?? 0}', const Color(0xFFF59E0B)),
-              const SizedBox(width: 10),
-              _statTile(Icons.qr_code_scanner_rounded, 'Scans total', '${stats?['total_scans'] ?? 0}', const Color(0xFF27AE60)),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // ── Graphique 30 jours ──
-          _sectionTitle('Activité'),
-          const SizedBox(height: 10),
-          StatsChartWidget(token: widget.token, accentColor: _accentColor),
-          const SizedBox(height: 14),
-
-          // ── Programme actuel ──
-          _sectionTitle('Programme actuel'),
-          const SizedBox(height: 10),
+          // Clients récents
           Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFEDE9E3)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    // Tampons requis
-                    Container(
-                      width: 70, height: 70,
-                      decoration: BoxDecoration(
-                        color: _accentColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _accentColor.withOpacity(0.2)),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('${merchantInfo!['stamps_required']}',
-                              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: _accentColor, height: 1)),
-                          Text('tampons', style: TextStyle(fontSize: 9, color: _accentColor.withOpacity(0.7))),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_businessName,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1828))),
-                          const SizedBox(height: 4),
-                          Text(merchantInfo?['category'] as String? ?? '',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFFAAAAAA))),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '🎁 ${merchantInfo!['reward_description']}',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => setState(() => _tab = 3),
-                      child: Container(
-                        width: 34, height: 34,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF4F2EE),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF888888)),
-                      ),
-                    ),
-                  ],
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(12), border: Border.all(color: _kBorder)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('Clients récents', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kText)),
+                GestureDetector(
+                  onTap: () => setState(() => _tab = 1),
+                  child: const Text('Voir tout', style: TextStyle(fontSize: 13, color: _kPrimary, fontWeight: FontWeight.w600)),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // ── QR Code Caisse ──
-          _sectionTitle('QR Code Caisse'),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => StaticQRScreen(
-                token: widget.token,
-                businessName: _businessName,
-                accentColor: _accentColor,
-              ),
-            )),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFEDE9E3)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48, height: 48,
-                    decoration: BoxDecoration(color: _accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
-                    child: Icon(Icons.qr_code_rounded, color: _accentColor, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Afficher mon QR code', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1828))),
-                        const SizedBox(height: 3),
-                        Text('À imprimer ou afficher en caisse', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                      ],
+              ]),
+              const SizedBox(height: 12),
+              if (_recentClients.isEmpty)
+                Center(child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Aucun client', style: TextStyle(color: _kSub)),
+                ))
+              else
+                ..._recentClients.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final card = entry.value;
+                  final user = card['users'] as Map? ?? {};
+                  final name = (user['name'] ?? user['email'] ?? 'Client') as String;
+                  final stamps = card['stamps_count'] as int? ?? 0;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      border: i > 0 ? Border(top: BorderSide(color: _kBorder)) : null,
                     ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // ── Aperçu carte client ──
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _sectionTitle('Aperçu carte client'),
-              GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CardPreviewScreen(
-                    merchantInfo: merchantInfo!,
-                    accentColor: _accentColor,
-                    emoji: _style['emoji'] as String,
-                    businessName: _businessName,
-                    initials: _initials,
-                  ),
-                )),
-                child: Text('Voir en plein écran',
-                    style: TextStyle(fontSize: 11, color: _accentColor, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => CardPreviewScreen(
-                merchantInfo: merchantInfo!,
-                accentColor: _accentColor,
-                emoji: _style['emoji'] as String,
-                businessName: _businessName,
-                initials: _initials,
-              ),
-            )),
-            child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: _accentColor,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [BoxShadow(color: _accentColor.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('CARTE FIDÉLITÉ',
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
-                                letterSpacing: 0.1, color: Colors.white.withOpacity(0.55))),
-                        const SizedBox(height: 2),
-                        Text(_businessName,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-                      ],
-                    ),
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Center(child: Text(_initials,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                LayoutBuilder(builder: (ctx, constraints) {
-                  final total = merchantInfo?['stamps_required'] as int? ?? 10;
-                  // Calcule la taille max pour tenir sur la largeur dispo
-                  final spacing = 4.0;
-                  final perRow = total <= 10 ? total : (total <= 15 ? total : total);
-                  final maxW = constraints.maxWidth;
-                  // Taille d'un tampon = (largeur - espaces) / nombre par rangée
-                  final cols = total <= 10 ? total : (total <= 15 ? 8 : 10);
-                  final stampSize = ((maxW - spacing * (cols - 1)) / cols).clamp(16.0, 24.0);
-                  return Wrap(
-                    spacing: spacing, runSpacing: spacing,
-                    children: List.generate(total, (i) => Container(
-                      width: stampSize, height: stampSize,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(stampSize * 0.3),
-                        color: i < 3 ? Colors.white.withOpacity(0.9) : Colors.transparent,
-                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-                      ),
-                      child: i < 3 ? Center(child: Icon(Icons.check, size: stampSize * 0.5, color: _accentColor)) : null,
-                    )),
+                    child: Row(children: [
+                      UserAvatar(imageUrl: card['users']?['profile_picture_url'] as String?, name: name, size: 38),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)),
+                        Text('$stamps tampons', style: TextStyle(fontSize: 11, color: _kSub)),
+                      ])),
+                      Icon(Icons.chevron_right_rounded, color: _kSub, size: 18),
+                    ]),
                   );
                 }),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Encore ${(merchantInfo?['stamps_required'] as int? ?? 10) - 3} tampons pour ${merchantInfo?['reward_description']}',
-                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('3/${merchantInfo?['stamps_required']}',
-                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: 3 / (merchantInfo?['stamps_required'] as int? ?? 10),
-                    minHeight: 3,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    valueColor: const AlwaysStoppedAnimation(Colors.white),
-                  ),
-                ),
-              ],
-            ),
+            ]),
           ),
-          ),
+
+          const SizedBox(height: 12),
+
+          // Actions rapides
+          Row(children: [
+            _quickAction(Icons.qr_code_scanner_rounded, 'Scanner', _kPrimary, _openScanner),
+            const SizedBox(width: 10),
+            _quickAction(Icons.notifications_outlined, 'Notifs', _kGold, () => setState(() => _tab = 3)),
+            const SizedBox(width: 10),
+            _quickAction(Icons.tune_rounded, 'Programme', _kSuccess, () => setState(() => _tab = 4)),
+          ]),
         ],
       ),
     );
   }
 
-  // ── Widgets helpers ────────────────────────────────────────────────────────
-
-  Widget _sectionTitle(String title) {
-    return Text(title, style: const TextStyle(
-        fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1828)));
+  Widget _statCard(IconData icon, String value, String label, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _kWhite,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _kBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 8),
+          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kText, height: 1)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 9, color: _kSub, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
   }
 
-  Widget _quickAction({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+  Widget _quickAction(IconData icon, String label, Color color, VoidCallback onTap) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFEDE9E3)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1828)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+          height: 72,
+          decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(10), border: Border.all(color: _kBorder)),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(width: 34, height: 34,
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, color: color, size: 18)),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _kText)),
+          ]),
         ),
       ),
     );
   }
 
-  Widget _statTile(IconData icon, String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFEDE9E3)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: color, height: 1),
-                      overflow: TextOverflow.ellipsis),
-                  Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFFAAAAAA)),
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── BOTTOM NAV ─────────────────────────────────────────────────────────────
+  // ─── Bottom Nav ───────────────────────────────────────────────────────────
 
   Widget _buildBottomNav() {
     return Positioned(
       bottom: 0, left: 0, right: 0,
       child: Container(
-        height: 82 + MediaQuery.of(context).padding.bottom,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFEDE9E3))),
-        ),
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 10),
-        child: Row(
-          children: [
-            _navItem(Icons.dashboard_outlined, 'Dashboard', 0),
-            _navItem(Icons.people_outline, 'Clients', 1),
-            _navScanFab(),
-            _navItem(Icons.history_rounded, 'Historique', 2),
-            _navItem(Icons.tune_rounded, 'Programme', 4),
-          ],
-        ),
+        height: 64 + MediaQuery.of(context).padding.bottom,
+        decoration: BoxDecoration(color: _kWhite, border: Border(top: BorderSide(color: _kBorder))),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        child: Row(children: [
+          _navItem(Icons.dashboard_outlined, 'Dashboard', 0),
+          _navItem(Icons.people_outline, 'Clients', 1),
+          _navScanFab(),
+          _navItem(Icons.history_rounded, 'Historique', 2),
+          _navItem(Icons.tune_rounded, 'Programme', 4),
+        ]),
       ),
     );
   }
@@ -792,265 +417,199 @@ class _MerchantHomeState extends State<MerchantHome> with TickerProviderStateMix
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _tab = idx),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: active ? _accentColor : const Color(0xFFBBBBBB), size: 22),
-            const SizedBox(height: 3),
-            Text(label, style: TextStyle(
-              fontSize: 9, fontWeight: FontWeight.w600,
-              color: active ? _accentColor : const Color(0xFFBBBBBB),
-            )),
-          ],
-        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: active ? _kPrimary : _kSub, size: 22),
+          const SizedBox(height: 3),
+          Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: active ? _kPrimary : _kSub)),
+        ]),
       ),
     );
   }
 
   Widget _navScanFab() {
-    return GestureDetector(
-      onTap: _openScanner,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+    return Expanded(
+      child: GestureDetector(
+        onTap: _openScanner,
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
-            width: 50, height: 50,
-            decoration: BoxDecoration(
-              color: _accentColor,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: _accentColor.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
-            ),
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: _kPrimary, borderRadius: BorderRadius.circular(12)),
             child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
           ),
           const SizedBox(height: 3),
-          Text('Scanner', style: TextStyle(
-              fontSize: 9, fontWeight: FontWeight.w600, color: _accentColor)),
-        ],
-      ),
-    );
-  }
-
-  // ── PROFIL SHEET ───────────────────────────────────────────────────────────
-
-  void _showProfilSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _MerchantProfilSheet(
-        businessName: _businessName,
-        initials: _initials,
-        emoji: _style['emoji'] as String,
-        accentColor: _accentColor,
-        category: merchantInfo?['category'] as String? ?? '',
-        onLogout: _logout,
+          const Text('Scanner', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: _kPrimary)),
+        ]),
       ),
     );
   }
 }
 
-// ── Profil bottom sheet ───────────────────────────────────────────────────────
+// ─── Merchant Profile Sheet ────────────────────────────────────────────────────
 
 class _MerchantProfilSheet extends StatelessWidget {
-  final String businessName;
-  final String initials;
-  final String emoji;
-  final Color accentColor;
-  final String category;
+  final String token;
+  final Map? merchantInfo;
   final VoidCallback onLogout;
+  final VoidCallback? onNavigateToProgram;
+  final VoidCallback? onNavigateToNotifs;
+  final VoidCallback? onNavigateToQR;
+  final VoidCallback? onNavigateToAbonnement;
 
   const _MerchantProfilSheet({
-    required this.businessName,
-    required this.initials,
-    required this.emoji,
-    required this.accentColor,
-    required this.category,
-    required this.onLogout,
+    required this.token, this.merchantInfo, required this.onLogout,
+    this.onNavigateToProgram, this.onNavigateToNotifs, this.onNavigateToQR, this.onNavigateToAbonnement,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF4F2EE),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Center(child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(99)))),
-          ),
-          // Header
-          Container(
-            width: double.infinity,
-            color: accentColor,
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: Row(
-              children: [
-                Container(
-                  width: 64, height: 64,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    color: Colors.white.withOpacity(0.2),
-                    border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
-                  ),
-                  child: Center(child: Text(emoji, style: const TextStyle(fontSize: 28))),
-                ),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(businessName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(category, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _profSection([
-                  _profRow(Icons.store_outlined, const Color(0xFFE8F1FD), const Color(0xFF2C7BE5), 'Informations du commerce', 'Nom, catégorie, description'),
-                  _profRow(Icons.bar_chart_outlined, const Color(0xFFE4F5EB), const Color(0xFF27AE60), 'Statistiques avancées', 'Voir les détails complets'),
-                  _darkModeRow(),
-                  _profRow(Icons.support_outlined, const Color(0xFFFEF3C7), const Color(0xFFF59E0B), 'Aide & Support', 'FAQ, nous contacter'),
-                ]),
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () { Navigator.pop(context); onLogout(); },
-                  child: Container(
-                    width: double.infinity, height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFDE8E7), width: 1.5),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.logout_rounded, color: Color(0xFFE24B4A), size: 16),
-                        SizedBox(width: 8),
-                        Text('Se déconnecter', style: TextStyle(color: Color(0xFFE24B4A), fontSize: 14, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final kBg = context.cBg;
+    final kWhite = context.cSurface;
+    final kBorder = context.cBorder;
+    final kText = context.cText;
+    final kSub = context.cSub;
 
-  static Widget _darkModeRow() {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (_, mode, __) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF4F2EE)))),
-        child: Row(
-          children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(color: const Color(0xFFEEEBFF), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF7C5CBF), size: 18),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Mode sombre', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1828))),
-                  Text('Thème de l\'application', style: TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
-                ],
-              ),
-            ),
-            Switch(
-              value: mode == ThemeMode.dark,
-              onChanged: (val) async {
-                themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
-                final p = await SharedPreferences.getInstance();
-                await p.setBool('dark_mode', val);
-              },
-              activeColor: const Color(0xFF7C5CBF),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    final name = merchantInfo?['business_name'] as String? ?? 'Commerce';
+    final initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
 
-  static Widget _profSection(List<Widget> rows) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEDE9E3)),
+        color: kBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Column(children: rows),
-    );
-  }
-
-  static Widget _profRow(IconData icon, Color iconBg, Color iconColor, String label, String sub) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF4F2EE)))),
-      child: Row(
-        children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1828))),
-                Text(sub, style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
-              ],
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Handle
+        Padding(padding: const EdgeInsets.only(top: 12),
+            child: Center(child: Container(width: 36, height: 4,
+                decoration: BoxDecoration(color: kBorder, borderRadius: BorderRadius.circular(2))))),
+        // Header
+        Container(
+          color: _kPrimary, width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(children: [
+            Container(
+              width: 60, height: 60,
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white38, width: 2)),
+              child: Center(child: Text(initials,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white))),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: Color(0x4D1A1828), size: 18),
-        ],
+            const SizedBox(height: 10),
+            Text(name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
+              child: const Text('✦ Plan Pro', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ]),
+        ),
+
+        // Body
+        Flexible(child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('MON COMMERCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
+            const SizedBox(height: 8),
+            _section(kWhite, kBorder, [
+              _row(context, kBorder, kText, kSub, Icons.description_outlined, _kPrimary.withOpacity(0.12), _kPrimary, 'Informations', 'Nom, adresse', () => Navigator.pop(context)),
+              _row(context, kBorder, kText, kSub, Icons.credit_card_outlined, _kSuccess.withOpacity(0.12), _kSuccess, 'Ma carte fidélité', 'Tampons, récompense',
+                  () { Navigator.pop(context); onNavigateToProgram?.call(); }, noBorder: true),
+            ]),
+            const SizedBox(height: 14),
+            Text('MARKETING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
+            const SizedBox(height: 8),
+            _section(kWhite, kBorder, [
+              _row(context, kBorder, kText, kSub, Icons.notifications_outlined, _kGold.withOpacity(0.12), _kGold, 'Notifications push', 'Promos, rappels',
+                  () { Navigator.pop(context); onNavigateToNotifs?.call(); }),
+              _row(context, kBorder, kText, kSub, Icons.qr_code_2_rounded, _kPrimary.withOpacity(0.12), _kPrimary, 'QR Code boutique', 'Afficher en caisse',
+                  () { Navigator.pop(context); onNavigateToQR?.call(); }),
+              _row(context, kBorder, kText, kSub, Icons.show_chart_rounded, _kPurple.withOpacity(0.12), _kPurple, 'Statistiques', 'Analyse de l\'activité',
+                  () => Navigator.pop(context), noBorder: true),
+            ]),
+            const SizedBox(height: 14),
+            Text('COMPTE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
+            const SizedBox(height: 8),
+            _section(kWhite, kBorder, [
+              _row(context, kBorder, kText, kSub, Icons.star_outline_rounded, _kError.withOpacity(0.12), _kError, 'Abonnement', 'Plan Pro · Actif',
+                  () { Navigator.pop(context); onNavigateToAbonnement?.call(); }),
+              _row(context, kBorder, kText, kSub, Icons.help_outline_rounded, kBg, kSub, 'Aide & Support', 'FAQ, nous contacter',
+                  () => Navigator.pop(context), noBorder: true),
+            ]),
+            const SizedBox(height: 14),
+            // Dark mode
+            Container(
+              decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+              child: ValueListenableBuilder<ThemeMode>(
+                valueListenable: themeNotifier,
+                builder: (_, mode, __) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(children: [
+                    Container(width: 32, height: 32,
+                        decoration: BoxDecoration(color: _kPurple.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF7C3AED), size: 16)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Mode sombre', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+                      Text('Thème de l\'application', style: TextStyle(fontSize: 11, color: kSub)),
+                    ])),
+                    Switch(
+                      value: mode == ThemeMode.dark,
+                      onChanged: (val) async {
+                        themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                        final p = await SharedPreferences.getInstance();
+                        await p.setBool('dark_mode', val);
+                      },
+                      activeColor: _kPrimary,
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: onLogout,
+              child: Container(
+                width: double.infinity, height: 46,
+                decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _kError.withOpacity(0.4))),
+                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.logout_rounded, color: _kError, size: 16),
+                  SizedBox(width: 8),
+                  Text('Se déconnecter', style: TextStyle(color: _kError, fontSize: 14, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+          ]),
+        )),
+      ]),
+    );
+  }
+
+  Widget _section(Color kWhite, Color kBorder, List<Widget> rows) => Container(
+    decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+    child: Column(children: rows),
+  );
+
+  Widget _row(BuildContext ctx, Color kBorder, Color kText, Color kSub,
+      IconData icon, Color iconBg, Color iconColor, String label, String sub,
+      VoidCallback onTap, {bool noBorder = false}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(border: noBorder ? null : Border(bottom: BorderSide(color: kBorder))),
+        child: Row(children: [
+          Container(width: 32, height: 32,
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, color: iconColor, size: 16)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+            Text(sub, style: TextStyle(fontSize: 11, color: kSub)),
+          ])),
+          Icon(Icons.chevron_right_rounded, size: 18, color: kSub),
+        ]),
       ),
     );
   }
-}
-
-// ── Grid Painter ──────────────────────────────────────────────────────────────
-
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF3A82F6).withOpacity(0.06)
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 24) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += 24) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }

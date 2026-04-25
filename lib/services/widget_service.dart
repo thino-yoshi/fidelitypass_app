@@ -1,7 +1,6 @@
 import 'package:home_widget/home_widget.dart';
 
 class WidgetService {
-  static const _appGroupId = 'com.example.fidelitypass_app';
   static const _androidWidgetName = 'com.example.fidelitypass_app.QartaWidgetProvider';
 
   /// Met à jour le widget avec les données de la première carte disponible.
@@ -12,7 +11,6 @@ class WidgetService {
     required String rewardDescription,
   }) async {
     try {
-      await HomeWidget.setAppGroupId(_appGroupId);
       await HomeWidget.saveWidgetData<String>('widget_merchant_name', merchantName);
       await HomeWidget.saveWidgetData<int>('widget_stamps_count', stampsCount);
       await HomeWidget.saveWidgetData<int>('widget_stamps_required', stampsRequired);

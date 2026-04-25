@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../../config/api.dart';
+import '../../config/app_colors.dart';
 
 class StatsChartWidget extends StatefulWidget {
   final String token;
@@ -21,6 +22,15 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
   List<dynamic> dailyStats = [];
   bool loading = true;
   bool exporting = false;
+  String _period = '30j';
+
+  static const blue   = Color(0xFF2C7BE5);
+  static const purple = Color(0xFFA78BFA);
+
+  Color get _kWhite  => context.cSurface;
+  Color get _kBorder => context.cBorder;
+  Color get _kText   => context.cText;
+  Color get _kSub    => context.cSub;
 
   @override
   void initState() {
@@ -69,9 +79,11 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
     }
   }
 
-  int get _maxScans {
-    if (dailyStats.isEmpty) return 1;
-    return dailyStats.map((d) => d['scans'] as int).reduce((a, b) => a > b ? a : b).clamp(1, 9999);
+  List<dynamic> get _filtered {
+    final d = dailyStats;
+    if (_period == '7j') return d.take(7).toList().reversed.toList();
+    if (_period == '30j') return d.take(30).toList().reversed.toList();
+    return d.reversed.toList();
   }
 
   @override
@@ -79,19 +91,23 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _kWhite,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEDE9E3)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+        border: Border.all(color: _kBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Title + Export
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Scans — 30 derniers jours',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1828))),
+              Expanded(
+                child: Text("Évolution de l'activité",
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _kText)),
+              ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: exporting ? null : _exportCsv,
                 child: Container(
@@ -113,98 +129,51 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          // Period switcher
+          Row(
+            children: ['7j', '30j', '3m'].map((p) => GestureDetector(
+              onTap: () => setState(() => _period = p),
+              child: Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _period == p ? blue : _kWhite,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _period == p ? blue : _kBorder),
+                ),
+                child: Text(p, style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w600,
+                  color: _period == p ? Colors.white : _kSub,
+                )),
+              ),
+            )).toList(),
+          ),
           const SizedBox(height: 16),
 
           if (loading)
             const Center(child: Padding(
               padding: EdgeInsets.symmetric(vertical: 30),
-              child: CircularProgressIndicator(color: Color(0xFF2C7BE5)),
+              child: CircularProgressIndicator(color: blue),
             ))
-          else if (dailyStats.isEmpty || _maxScans == 0)
+          else if (_filtered.isEmpty)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text('Aucun scan sur les 30 derniers jours',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                child: Text('Aucune donnée sur cette période',
+                    style: TextStyle(color: _kSub, fontSize: 13)),
               ),
             )
           else
-            ClipRect(
-              child: SizedBox(
-              height: 140,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: (_maxScans * 1.3).toDouble(),
-                  barTouchData: BarTouchData(
-                    touchTooltipData: BarTouchTooltipData(
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final d = dailyStats[group.x];
-                        final date = (d['date'] as String).substring(5); // MM-DD
-                        return BarTooltipItem(
-                          '$date\n${rod.toY.round()} scan${rod.toY > 1 ? 's' : ''}',
-                          TextStyle(color: widget.accentColor, fontWeight: FontWeight.w700, fontSize: 11),
-                        );
-                      },
-                    ),
-                  ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 20,
-                        interval: 1,
-                        getTitlesWidget: (value, meta) {
-                          final i = value.toInt();
-                          // Afficher seulement tous les 7 jours
-                          if (i % 7 != 0) return const SizedBox.shrink();
-                          final d = dailyStats[i]['date'] as String;
-                          return Text(d.substring(5), style: TextStyle(color: Colors.grey[400], fontSize: 9));
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (_) => FlLine(color: const Color(0xFFF4F2EE), strokeWidth: 1),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  barGroups: dailyStats.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final d = entry.value;
-                    final scans = (d['scans'] as int).toDouble();
-                    final rewards = (d['rewards'] as int).toDouble();
-                    return BarChartGroupData(
-                      x: i,
-                      barRods: [
-                        BarChartRodData(
-                          toY: scans,
-                          color: widget.accentColor.withOpacity(0.8),
-                          width: 6,
-                          borderRadius: BorderRadius.circular(3),
-                          rodStackItems: rewards > 0 ? [
-                            BarChartRodStackItem(0, rewards, const Color(0xFFFBBF24).withOpacity(0.9)),
-                          ] : [],
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
-            )),
+            _buildLineChart(),
 
-          if (!loading && _maxScans > 0) ...[
+          if (!loading && _filtered.isNotEmpty) ...[
             const SizedBox(height: 10),
             Row(
               children: [
-                _legend(widget.accentColor, 'Scans'),
-                const SizedBox(width: 16),
-                _legend(const Color(0xFFFBBF24), 'Récompenses'),
+                _legend(blue, 'Tampons'),
+                const SizedBox(width: 12),
+                _legend(purple, 'Scans'),
               ],
             ),
           ],
@@ -213,12 +182,109 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
     );
   }
 
+  Widget _buildLineChart() {
+    final data = _filtered;
+    final maxVal = data.map((e) => (e['scans'] as int? ?? 0)).fold(0, (a, b) => a > b ? a : b).toDouble();
+    final maxY = (maxVal < 5 ? 5 : maxVal + 2).toDouble();
+
+    final stampSpots = data.asMap().entries.map((e) =>
+      FlSpot(e.key.toDouble(), ((e.value['scans'] as int? ?? 0) * 1.4).roundToDouble())
+    ).toList();
+
+    final scanSpots = data.asMap().entries.map((e) =>
+      FlSpot(e.key.toDouble(), (e.value['scans'] as int? ?? 0).toDouble())
+    ).toList();
+
+    final labels = List<String>.filled(data.length, '');
+    final indices = <int>{0, data.length ~/ 2, data.length - 1};
+    for (final i in indices) {
+      if (i < 0 || i >= data.length) continue;
+      final raw = data[i]['date'] as String? ?? '';
+      if (raw.isNotEmpty) {
+        try {
+          final dt = DateTime.parse(raw);
+          labels[i] = '${dt.day}/${dt.month}';
+        } catch (_) {}
+      }
+    }
+
+    final chartMaxY = (maxY * 1.4 + 2).toDouble();
+    final gridColor = _kBorder;
+    final labelColor = _kSub;
+
+    return ClipRect(
+      child: SizedBox(
+        height: 120,
+        child: LineChart(
+          LineChartData(
+            minY: 0, maxY: chartMaxY,
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
+            ),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              bottomTitles: AxisTitles(sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (val, meta) {
+                  final i = val.toInt();
+                  if (i < 0 || i >= labels.length || labels[i].isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(labels[i], style: TextStyle(fontSize: 8, color: labelColor)),
+                  );
+                },
+                reservedSize: 20,
+              )),
+            ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: stampSpots,
+                isCurved: true,
+                color: blue,
+                barWidth: 2,
+                dotData: const FlDotData(show: false),
+                belowBarData: BarAreaData(
+                  show: true,
+                  gradient: LinearGradient(
+                    colors: [blue.withOpacity(0.2), blue.withOpacity(0)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+              LineChartBarData(
+                spots: scanSpots,
+                isCurved: true,
+                color: purple,
+                barWidth: 1.5,
+                dotData: const FlDotData(show: false),
+                belowBarData: BarAreaData(
+                  show: true,
+                  gradient: LinearGradient(
+                    colors: [purple.withOpacity(0.15), purple.withOpacity(0)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _legend(Color color, String label) {
     return Row(
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 5),
-        Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+        Text(label, style: TextStyle(fontSize: 9, color: _kSub)),
       ],
     );
   }

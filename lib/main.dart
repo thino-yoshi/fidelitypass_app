@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'screens/auth_screen.dart';
 import 'screens/client/client_home.dart';
 import 'screens/merchant/merchant_home.dart';
@@ -69,18 +70,23 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         themeMode: mode,
         theme: ThemeData(
-          fontFamily: 'Roboto',
           useMaterial3: true,
           brightness: Brightness.light,
           colorSchemeSeed: const Color(0xFF2C7BE5),
+          scaffoldBackgroundColor: const Color(0xFFF4F2EE),
+          textTheme: GoogleFonts.soraTextTheme(
+            ThemeData(brightness: Brightness.light).textTheme,
+          ),
         ),
         darkTheme: ThemeData(
-          fontFamily: 'Roboto',
           useMaterial3: true,
           brightness: Brightness.dark,
           colorSchemeSeed: const Color(0xFF2C7BE5),
-          scaffoldBackgroundColor: const Color(0xFF0F1923),
-          cardColor: const Color(0xFF1A2535),
+          scaffoldBackgroundColor: const Color(0xFF0B1220),
+          cardColor: const Color(0xFF0F1E35),
+          textTheme: GoogleFonts.soraTextTheme(
+            ThemeData(brightness: Brightness.dark).textTheme,
+          ),
         ),
         home: const SplashRouter(),
       ),

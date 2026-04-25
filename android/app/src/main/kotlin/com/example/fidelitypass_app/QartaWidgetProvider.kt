@@ -5,12 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.RemoteViews
-import android.widget.TextView
-import es.antonborri.home_widget.HomeWidgetPlugin
 
 class QartaWidgetProvider : AppWidgetProvider() {
 
@@ -30,21 +25,18 @@ class QartaWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
-            val widgetData = HomeWidgetPlugin.getData(context)
+            val prefs = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
 
-            val merchantName = widgetData.getString("widget_merchant_name", "Mon commerce")
-            val stampsCount = widgetData.getInt("widget_stamps_count", 0)
-            val stampsRequired = widgetData.getInt("widget_stamps_required", 10)
-            val rewardDescription = widgetData.getString("widget_reward_description", "Récompense")
+            val merchantName = prefs.getString("widget_merchant_name", "Mon commerce") ?: "Mon commerce"
+            val stampsCount = prefs.getInt("widget_stamps_count", 0)
+            val stampsRequired = prefs.getInt("widget_stamps_required", 10)
+            val rewardDescription = prefs.getString("widget_reward_description", "Recompense") ?: "Recompense"
 
             val views = RemoteViews(context.packageName, R.layout.qarta_widget)
 
             views.setTextViewText(R.id.widget_merchant_name, merchantName)
             views.setTextViewText(R.id.widget_stamps_text, "$stampsCount/$stampsRequired tampons")
-            views.setTextViewText(R.id.widget_reward_text, "🎁 $rewardDescription")
-
-            val progress = if (stampsRequired > 0) (stampsCount * 100) / stampsRequired else 0
-            views.setProgressBar(R.id.widget_progress, 100, progress, false)
+            views.setTextViewText(R.id.widget_reward_text, rewardDescription)
 
             // Tap to open app
             val intent = Intent(context, MainActivity::class.java)
@@ -52,7 +44,7 @@ class QartaWidgetProvider : AppWidgetProvider() {
                 context, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(R.id.widget_stamps_text, pendingIntent)
+            views.setOnClickPendingIntent(R.id.widget_merchant_name, pendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
