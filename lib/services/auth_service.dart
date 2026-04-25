@@ -100,12 +100,16 @@ class AuthService {
   static Future<void> saveSession(
       String token,
       String userType,
-      String name,
-      ) async {
+      String name, {
+      String email = '',
+      bool isGoogle = false,
+      }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
     await prefs.setString('user_type', userType);
     await prefs.setString('name', name);
+    if (email.isNotEmpty) await prefs.setString('email', email);
+    await prefs.setBool('is_google', isGoogle);
   }
 
   static Future<Map<String, String>?> getSession() async {

@@ -117,7 +117,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     setState(() { loading = true; error = ''; });
     try {
       final data = await AuthService.login(loginEmailCtrl.text.trim(), loginPassCtrl.text);
-      await AuthService.saveSession(data['token'], data['user_type'], data['name']);
+      await AuthService.saveSession(data['token'], data['user_type'], data['name'],
+          email: loginEmailCtrl.text.trim());
       _navigate(data);
     } catch (e) {
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
@@ -135,7 +136,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         regType == 'merchant' ? 'merchant' : 'client',
         merchantCode: regType == 'merchant' ? codeCtrl.text.trim() : null,
       );
-      await AuthService.saveSession(data['token'], data['user_type'], data['name']);
+      await AuthService.saveSession(data['token'], data['user_type'], data['name'],
+          email: emailCtrl.text.trim());
       _navigate(data);
     } catch (e) {
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
@@ -157,7 +159,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           body: jsonEncode({'id_token': idToken}));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        await AuthService.saveSession(data['token'], data['user_type'], data['name']);
+        await AuthService.saveSession(data['token'], data['user_type'], data['name'],
+            email: data['email'] ?? googleUser.email, isGoogle: true);
         await AuthService.saveFCMToken(data['token']);
         _navigate(data);
       } else {

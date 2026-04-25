@@ -84,9 +84,15 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
         final url      = body['profile_picture_url'] as String?;
         final email    = body['email'] as String? ?? '';
         final isGoogle = body['is_google'] as bool? ?? false;
+        // Persister email + is_google en local pour les prochaines sessions
+        if (email.isNotEmpty) {
+          final p = await SharedPreferences.getInstance();
+          await p.setString('email', email);
+          await p.setBool('is_google', isGoogle);
+        }
         setState(() {
           if (url != null && url.isNotEmpty) _profileImageUrl = url;
-          _userEmail = email;
+          if (email.isNotEmpty) _userEmail = email;
           _isGoogle  = isGoogle;
         });
       }
