@@ -120,7 +120,31 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     });
   }
 
-  void _showPersonalInfo() {
+  Future<void> _showPersonalInfo() async {
+    // Si email pas encore chargé, forcer un fetch
+    if (_userEmail.isEmpty) {
+      try {
+        final res = await http.get(
+          Uri.parse('$apiUrl/users/me'),
+          headers: {'Authorization': 'Bearer ${widget.token}'},
+        );
+        if (res.statusCode == 200 && mounted) {
+          final body = jsonDecode(res.body) as Map<String, dynamic>;
+          final email    = body['email'] as String? ?? '';
+          final isGoogle = body['is_google'] as bool? ?? false;
+          final prefs    = await SharedPreferences.getInstance();
+          if (email.isNotEmpty) {
+            await prefs.setString('email', email);
+            setState(() => _userEmail = email);
+          }
+          final localIsGoogle = prefs.getBool('is_google') ?? false;
+          final resolved = isGoogle || localIsGoogle;
+          await prefs.setBool('is_google', resolved);
+          if (mounted) setState(() => _isGoogle = resolved);
+        }
+      } catch (_) {}
+    }
+
     const blue = Color(0xFF2C7BE5);
 
     // Champs éditables
