@@ -1201,7 +1201,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [BoxShadow(color: const Color(0xFF061324).withOpacity(0.5), blurRadius: 14, offset: const Offset(0, 4))],
               ),
-              child: const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 26),
+              child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFF112C55), size: 26),
             ),
           ],
         ),
