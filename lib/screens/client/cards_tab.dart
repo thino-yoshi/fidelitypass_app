@@ -438,11 +438,6 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     final required = isPoints ? (widget.card['merchants']?['points_required'] as int? ?? 100) : (widget.card['merchants']?['stamps_required'] as int? ?? 10);
     _initialStamps = stamps; // ← mémoriser l'état initial
     _startPolling();         // ← démarrer le polling
-    if (stamps >= required) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) { setState(() => _showConfetti = true); _confettiCtrl.forward(); }
-      });
-    }
   }
 
   @override
@@ -874,45 +869,12 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                         ),
                       ],
                     ),
-                    // Récompense débloquée
-                    if (full) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFBBF24).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Text('🎉', style: TextStyle(fontSize: 20)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text('$reward disponible !',
-                                style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.w800, fontSize: 14)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
             ],
           ),
         ),
-        if (_showConfetti)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _confettiCtrl,
-                builder: (_, __) => CustomPaint(
-                  painter: _ConfettiPainter(_confettiCtrl.value, color),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
