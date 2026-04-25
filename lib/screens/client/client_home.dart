@@ -87,7 +87,10 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         final url      = body['profile_picture_url'] as String?;
         final email    = body['email'] as String? ?? '';
-        final isGoogle = body['is_google'] as bool? ?? false;
+        // is_google : on garde true si déjà true en local (le serveur peut se tromper)
+        final serverIsGoogle = body['is_google'] as bool? ?? false;
+        final localIsGoogle  = prefs.getBool('is_google') ?? false;
+        final isGoogle = serverIsGoogle || localIsGoogle;
         // Persister tout en local
         if (url != null && url.isNotEmpty) await prefs.setString('profile_image_url', url);
         if (email.isNotEmpty) await prefs.setString('email', email);
@@ -113,7 +116,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     final isGoogle = prefs.getBool('is_google') ?? false;
     if (mounted) setState(() {
       if (email.isNotEmpty) _userEmail = email;
-      _isGoogle = isGoogle;
+      if (isGoogle) _isGoogle = true; // ne jamais rétrograder à false
     });
   }
 
