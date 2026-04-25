@@ -121,35 +121,34 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   }
 
   Future<void> _showPersonalInfo() async {
-    // Si email pas encore chargé, forcer un fetch
-    if (_userEmail.isEmpty) {
-      try {
-        final res = await http.get(
-          Uri.parse('$apiUrl/users/me'),
-          headers: {'Authorization': 'Bearer ${widget.token}'},
-        );
-        if (res.statusCode == 200 && mounted) {
-          final body = jsonDecode(res.body) as Map<String, dynamic>;
-          final email    = body['email'] as String? ?? '';
-          final isGoogle = body['is_google'] as bool? ?? false;
-          final prefs    = await SharedPreferences.getInstance();
-          if (email.isNotEmpty) {
-            await prefs.setString('email', email);
-            setState(() => _userEmail = email);
-          }
-          final localIsGoogle = prefs.getBool('is_google') ?? false;
-          final resolved = isGoogle || localIsGoogle;
-          await prefs.setBool('is_google', resolved);
-          if (mounted) setState(() => _isGoogle = resolved);
-        }
-      } catch (_) {}
-    }
+    // Toujours récupérer les données fraîches depuis le serveur
+    String freshEmail  = _userEmail;
+    bool   freshGoogle = _isGoogle;
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/users/me'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final serverEmail    = body['email'] as String? ?? '';
+        final serverIsGoogle = body['is_google'] as bool? ?? false;
+        final prefs = await SharedPreferences.getInstance();
+        final localIsGoogle  = prefs.getBool('is_google') ?? false;
+        freshEmail  = serverEmail.isNotEmpty ? serverEmail : freshEmail;
+        freshGoogle = serverIsGoogle || localIsGoogle || _isGoogle;
+        if (freshEmail.isNotEmpty) await prefs.setString('email', freshEmail);
+        await prefs.setBool('is_google', freshGoogle);
+        if (mounted) setState(() { _userEmail = freshEmail; _isGoogle = freshGoogle; });
+      }
+    } catch (_) {}
+    if (!mounted) return;
 
     const blue = Color(0xFF2C7BE5);
 
-    // Champs éditables
+    // Champs éditables — utilise les données fraîches
     final nameCtrl  = TextEditingController(text: widget.userName);
-    final emailCtrl = TextEditingController(text: _userEmail);
+    final emailCtrl = TextEditingController(text: freshEmail);
     final phoneCtrl = TextEditingController(text: _phone);
 
     // Quel champ est en cours d'édition ? null = aucun
