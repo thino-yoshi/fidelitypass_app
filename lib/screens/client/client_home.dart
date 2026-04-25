@@ -1097,10 +1097,10 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
             Container(
               width: 34, height: 34,
               decoration: BoxDecoration(
-                color: const Color(0xFF061324),
+                color: context.isDark ? const Color(0xFF428CE3) : const Color(0xFF061324),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF428CE3), size: 18),
+              child: Icon(Icons.dark_mode_outlined, color: context.isDark ? const Color(0xFF061324) : const Color(0xFF428CE3), size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
