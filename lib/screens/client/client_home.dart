@@ -15,9 +15,7 @@ import '../auth_screen.dart';
 import 'cards_tab.dart';
 import 'history_tab.dart';
 import 'rewards_tab.dart';
-import 'client_scanner_screen.dart';
 import '../../config/app_colors.dart';
-import '../../services/program_config_service.dart';
 
 class ClientHome extends StatefulWidget {
   final String token;
@@ -451,21 +449,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       if (res.statusCode == 200 && mounted) {
         final raw = jsonDecode(res.body) as List;
 
-        // Enrichir chaque carte avec la config locale (program_type, points, etc.)
-        final data = await Future.wait(raw.map((card) async {
-          final c = Map<String, dynamic>.from(card as Map);
-          final merchant = c['merchants'];
-          if (merchant != null) {
-            final merchantId = merchant['id']?.toString() ?? '';
-            if (merchantId.isNotEmpty) {
-              c['merchants'] = await ProgramConfigService.overlay(merchant as Map);
-              // DEBUG — à supprimer après vérification
-              final enriched = c['merchants'] as Map?;
-              debugPrint('[DEBUG] merchant=$merchantId type=${enriched?['program_type']}');
-            }
-          }
-          return c;
-        }));
+        final data = raw.map((card) => Map<String, dynamic>.from(card as Map)).toList();
 
         int stamps = 0;
         int rewards = 0;
@@ -867,7 +851,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       case 0:
         return CardsTab(token: widget.token, cards: _cards, onRefresh: _loadStats);
       case 1:
-        return ClientScannerScreen(token: widget.token, embedded: true);
+        return _buildScanTab();
       case 2:
         return HistoryTab(token: widget.token);
       case 3:
@@ -875,6 +859,48 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       default:
         return CardsTab(token: widget.token, cards: _cards, onRefresh: _loadStats);
     }
+  }
+
+  // ── SCAN TAB ───────────────────────────────────────────────────────────────
+
+  Widget _buildScanTab() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('Scanner un QR code', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1828))),
+            const SizedBox(height: 6),
+            Text('Scanne le QR code affiché en caisse', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+            const SizedBox(height: 24),
+            Container(
+              width: 210, height: 210,
+              decoration: BoxDecoration(color: const Color(0xFF1A1828), borderRadius: BorderRadius.circular(22)),
+              child: Stack(
+                children: [
+                  ...[Alignment.topLeft, Alignment.topRight, Alignment.bottomLeft, Alignment.bottomRight]
+                      .map((a) => Align(
+                            alignment: a,
+                            child: Padding(padding: const EdgeInsets.all(18), child: _scanCorner(a)),
+                          )),
+                  const Center(child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white24, size: 48)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Pointe ta caméra vers le QR code\ndu commerce',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500], height: 1.6), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _scanCorner(Alignment a) {
+    final isLeft = a == Alignment.topLeft || a == Alignment.bottomLeft;
+    final isTop = a == Alignment.topLeft || a == Alignment.topRight;
+    return SizedBox(width: 32, height: 32, child: CustomPaint(painter: _CornerPainter(isLeft: isLeft, isTop: isTop)));
   }
 
   // ── PROFIL TAB ─────────────────────────────────────────────────────────────

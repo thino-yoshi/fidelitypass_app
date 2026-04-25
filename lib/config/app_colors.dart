@@ -12,10 +12,23 @@ const kPurple    = Color(0xFF7C3AED);
 extension AppColors on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
 
+  // c* — ancienne convention
   Color get cBg      => isDark ? const Color(0xFF0A1628) : const Color(0xFFF4F2EE);
   Color get cSurface => isDark ? const Color(0xFF0D1F35) : Colors.white;
   Color get cBorder  => isDark ? const Color(0xFF1A2D45) : const Color(0xFFEDE9E3);
   Color get cText    => isDark ? const Color(0xFFEEF2FF) : const Color(0xFF1A1828);
   Color get cSub     => isDark ? const Color(0xFF7B8DB0) : const Color(0xFF9096A4);
   Color get cFill    => isDark ? const Color(0xFF0A1A2E) : const Color(0xFFF0F2F5);
+
+  // q* — nouvelle convention (alias)
+  Color get qBg          => cBg;
+  Color get qSurface     => cSurface;
+  Color get qBorder      => cBorder;
+  Color get qText        => cText;
+  Color get qSub         => cSub;
+  Color get qNavy        => isDark ? const Color(0xFF0A1628) : const Color(0xFF0A1628);
+  Color get qMuted       => isDark ? const Color(0xFF4A5568) : const Color(0xFFB0B7C3);
+  Color get qNavInactive => isDark ? const Color(0xFF4A5568) : const Color(0xFFB0B7C3);
+  Color get qDivider     => isDark ? const Color(0xFF1A2D45) : const Color(0xFFEEEBE6);
+  Color get qChipText    => isDark ? const Color(0xFF7B8DB0) : const Color(0xFF6B7280);
 }
