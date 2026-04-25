@@ -1188,6 +1188,9 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
 
   Widget _navFab() {
     final active = _tab == 1;
+    final isDark = context.isDark;
+    final bgColor   = isDark ? const Color(0xFF428CE3) : const Color(0xFF061324);
+    final iconColor = isDark ? const Color(0xFF061324) : const Color(0xFF428CE3);
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _tab = 1),
@@ -1197,11 +1200,11 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
             Container(
               width: 56, height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF061324),
+                color: bgColor,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: const Color(0xFF061324).withOpacity(0.5), blurRadius: 14, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: bgColor.withOpacity(0.5), blurRadius: 14, offset: const Offset(0, 4))],
               ),
-              child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFF428CE3), size: 26),
+              child: Icon(Icons.qr_code_2_rounded, color: iconColor, size: 26),
             ),
           ],
         ),
