@@ -907,7 +907,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
 
   Widget _buildProfilTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: EdgeInsets.fromLTRB(16, 14, 16, MediaQuery.of(context).padding.bottom + 90),
       child: Column(
         children: [
           // ── Avatar profil ──────────────────────────────────────────────────
