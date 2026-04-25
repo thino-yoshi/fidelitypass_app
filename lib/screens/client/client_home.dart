@@ -32,6 +32,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   int _totalStamps = 0;
   int _rewardCount = 0;
   int _notifCount = 3;
+  bool _rewardPillActive = false; // true pendant l'ouverture de la modal récompenses
   List<dynamic> _cards = [];
   bool _statsLoaded = false;
   bool _notifOpen = false;
@@ -670,8 +671,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   // ── HEADER (inclut les pills) ──────────────────────────────────────────────
 
   Widget _buildHeader() {
-    final cartesActive = _tab == 0;
-    final histoActive = _tab == 2;
+    final cartesActive = _tab == 0 && !_rewardPillActive;
     return Container(
       color: context.qNavy,
       child: Stack(
@@ -802,10 +802,11 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                     _sumPill(
                       val: '$_rewardCount',
                       label: _rewardCount > 1 ? 'Récompenses' : 'Récompense',
-                      isActive: histoActive,
-                      onTap: () {
-                        final headerH = MediaQuery.of(context).padding.top + 14 + 38 + 10 + 28 + 10 + 44 + 18; // hauteur approx du header
-                        showModalBottomSheet(
+                      isActive: _rewardPillActive,
+                      onTap: () async {
+                        setState(() => _rewardPillActive = true);
+                        final headerH = MediaQuery.of(context).padding.top + 14 + 38 + 10 + 28 + 10 + 44 + 18;
+                        await showModalBottomSheet(
                           context: context,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
@@ -824,6 +825,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                             ),
                           ),
                         );
+                        if (mounted) setState(() => _rewardPillActive = false);
                       },
                     ),
                   ],
