@@ -226,22 +226,9 @@ class _CardsTabState extends State<CardsTab> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(child: Text(
-                        full ? '$reward disponible !' : 'Encore $remaining pts pour $reward',
-                        style: TextStyle(color: full ? Colors.white : Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: full ? FontWeight.w700 : FontWeight.w400),
-                      )),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text('⭐ POINTS', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.05)),
-                      ),
-                    ],
+                  Text(
+                    full ? '$reward disponible !' : 'Encore $remaining pts pour $reward',
+                    style: TextStyle(color: full ? Colors.white : Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: full ? FontWeight.w700 : FontWeight.w400),
                   ),
                   const SizedBox(height: 8),
                   _progressBar(pct, full),
