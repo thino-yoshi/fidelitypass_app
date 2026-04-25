@@ -838,7 +838,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               ),
               // Corps scrollable
               SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 95),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 63),
                 child: Column(
                   children: [
                     // ── Carte avec flip 3D ───────────────────────────
