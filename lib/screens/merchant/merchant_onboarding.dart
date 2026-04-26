@@ -148,7 +148,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('🎉', style: TextStyle(fontSize: 64)),
+              const Icon(Icons.celebration_rounded, size: 64, color: Colors.white),
               const SizedBox(height: 28),
               const Text(
                 'Bienvenue sur Qarta !',
@@ -194,7 +194,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('🎯', style: TextStyle(fontSize: 64)),
+              const Icon(Icons.track_changes_rounded, size: 64, color: Colors.white),
               const SizedBox(height: 28),
               const Text(
                 'Créez votre programme',

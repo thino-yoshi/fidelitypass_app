@@ -499,10 +499,10 @@ class _TemplateSelector extends StatelessWidget {
   const _TemplateSelector({required this.onSelect});
 
   static const _templates = [
-    {'emoji': '🍔', 'label': 'Offre spéciale', 'title': '🍔 Offre spéciale ce soir !', 'body': '-20% sur tout le menu ce soir. On t\'attend !'},
-    {'emoji': '⏰', 'label': 'Rappel tampon', 'title': '⏰ Tu es proche d\'une récompense !', 'body': 'Plus que quelques tampons pour décrocher ta récompense !'},
-    {'emoji': '🎉', 'label': 'Merci & fidélité', 'title': '🎉 Merci pour ta fidélité !', 'body': 'Tu fais partie de nos meilleurs clients. Merci !'},
-    {'emoji': '✏️', 'label': 'Message libre', 'title': '', 'body': ''},
+    {'emoji': '', 'label': 'Offre spéciale', 'title': 'Offre spéciale ce soir !', 'body': '-20% sur tout le menu ce soir. On t\'attend !'},
+    {'emoji': '', 'label': 'Rappel tampon', 'title': 'Tu es proche d\'une récompense !', 'body': 'Plus que quelques tampons pour décrocher ta récompense !'},
+    {'emoji': '', 'label': 'Merci & fidélité', 'title': 'Merci pour ta fidélité !', 'body': 'Tu fais partie de nos meilleurs clients. Merci !'},
+    {'emoji': '', 'label': 'Message libre', 'title': '', 'body': ''},
   ];
 
   @override
@@ -569,10 +569,10 @@ class _BroadcastTabState extends State<_BroadcastTab> {
   int _refreshKey = 0;
 
   List<Map<String, String>> templates = [
-    {'title': '🎁 Offre spéciale', 'message': 'Profitez de notre offre du jour ! Venez nous rendre visite.'},
-    {'title': '⭐ Double tampons', 'message': 'Aujourd\'hui seulement : chaque achat rapporte 2 tampons !'},
-    {'title': '🎉 Nouveau menu', 'message': 'Découvrez nos nouveautés du moment. On vous attend !'},
-    {'title': '🏆 Récompense disponible', 'message': 'Vous êtes proche de votre récompense, plus qu\'un peu !'},
+    {'title': 'Offre spéciale', 'message': 'Profitez de notre offre du jour ! Venez nous rendre visite.'},
+    {'title': 'Double tampons', 'message': 'Aujourd\'hui seulement : chaque achat rapporte 2 tampons !'},
+    {'title': 'Nouveau menu', 'message': 'Découvrez nos nouveautés du moment. On vous attend !'},
+    {'title': 'Récompense disponible', 'message': 'Vous êtes proche de votre récompense, plus qu\'un peu !'},
   ];
 
   @override
@@ -1089,10 +1089,10 @@ class _TargetedTabState extends State<_TargetedTab> {
                 child: sending
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : Text(
-                        _scheduleEnabled ? '📅 Programmer la campagne' :
-                        _filterType == 'none' ? '🎯 Envoyer (sans filtre)' :
-                        _filterType == 'stamps' ? '🎯 Envoyer aux clients proches' :
-                        '🎯 Envoyer aux clients inactifs',
+                        _scheduleEnabled ? 'Programmer la campagne' :
+                        _filterType == 'none' ? 'Envoyer (sans filtre)' :
+                        _filterType == 'stamps' ? 'Envoyer aux clients proches' :
+                        'Envoyer aux clients inactifs',
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                       ),
               ),

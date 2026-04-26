@@ -161,7 +161,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(phase == 'reward' ? '🏆' : '✅', style: const TextStyle(fontSize: 80)),
+                      Icon(phase == 'reward' ? Icons.emoji_events_rounded : Icons.check_circle_rounded, size: 80, color: Colors.white),
                       const SizedBox(height: 20),
                       Text(
                         scanResult?['message'] ?? '',

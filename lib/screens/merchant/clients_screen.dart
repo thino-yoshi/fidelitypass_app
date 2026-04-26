@@ -214,7 +214,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                           color: const Color(0xFFF59E0B).withOpacity(0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Text('🏆', style: TextStyle(fontSize: 12)),
+                        child: const Icon(Icons.emoji_events_rounded, size: 13, color: Color(0xFFF59E0B)),
                       ),
                     const Icon(Icons.chevron_right_rounded, color: _blue),
                   ],
@@ -427,7 +427,7 @@ class _ClientSheetState extends State<_ClientSheet> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        '🎁 $rewardDescription',
+                        '$rewardDescription',
                         style: const TextStyle(fontSize: 13, color: Color(0xFFF59E0B), fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
                       ),
@@ -506,7 +506,7 @@ class _ClientSheetState extends State<_ClientSheet> {
                   Flexible(
                     child: Text(
                       stamps >= stampsRequired
-                          ? '🎉 Récompense disponible !'
+                          ? 'Récompense disponible !'
                           : 'Encore ${stampsRequired - stamps} tampons pour\n$rewardDescription',
                       style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.75), height: 1.4),
                     ),

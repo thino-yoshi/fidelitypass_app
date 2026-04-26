@@ -863,7 +863,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             ),
             child: loading
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text('C\'est parti ! 🚀', style: TextStyle(fontSize: _fs(context, 15, tablet: 17), fontWeight: FontWeight.w700)),
+                : Text('C\'est parti !', style: TextStyle(fontSize: _fs(context, 15, tablet: 17), fontWeight: FontWeight.w700)),
           ),
         ),
       ],

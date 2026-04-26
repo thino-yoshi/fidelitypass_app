@@ -311,7 +311,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _kText)),
                             const SizedBox(height: 2),
                             Text(
-                              '🎁 ${rewardCtrl.text.isEmpty ? "Votre récompense" : rewardCtrl.text}',
+                              '${rewardCtrl.text.isEmpty ? "Votre récompense" : rewardCtrl.text}',
                               style: const TextStyle(fontSize: 13, color: _blue, fontWeight: FontWeight.w600),
                             ),
                           ],
@@ -397,7 +397,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    Text('🎁 ${r['description']}',
+                                    Text('${r['description']}',
                                         style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: _kText)),
                                     Text('À ${r['stamps_required']} tampons',
                                         style: TextStyle(fontSize: 11, color: _kSub)),

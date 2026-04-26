@@ -133,8 +133,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       const SizedBox(height: 2),
                       Text(
                         reward
-                            ? '🎉 Récompense débloquée !'
-                            : 'Tampon ajouté → $stamps tampons',
+                            ? 'Récompense débloquée !'
+                            : 'Tampon ajouté — $stamps tampons',
                         style: TextStyle(
                           color: reward ? const Color(0xFFF59E0B) : _kSub,
                           fontSize: 13,

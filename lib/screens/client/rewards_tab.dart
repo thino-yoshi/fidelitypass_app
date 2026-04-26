@@ -169,7 +169,7 @@ class RewardsPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(11),
                                 ),
                                 child: const Center(
-                                  child: Text('⭐', style: TextStyle(fontSize: 18)),
+                                  child: Icon(Icons.star_rounded, size: 20, color: Color(0xFFF59E0B)),
                                 ),
                               ),
                               const SizedBox(width: 12),

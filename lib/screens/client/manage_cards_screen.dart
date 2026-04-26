@@ -527,7 +527,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                     // Info + barre
                     Text(
                       full
-                          ? '🎁 $reward !'
+                          ? '$reward !'
                           : '$stamps/$required ${isPoints ? 'pts' : 'tampons'}',
                       style: TextStyle(
                         color: full ? Colors.white : Colors.white.withOpacity(0.75),

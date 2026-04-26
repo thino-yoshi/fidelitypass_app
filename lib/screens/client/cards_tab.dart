@@ -321,7 +321,7 @@ class _RewardBadge extends StatelessWidget {
             Container(
               width: 38, height: 38,
               decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(11)),
-              child: const Center(child: Text('⭐', style: TextStyle(fontSize: 18))),
+              child: const Center(child: Icon(Icons.star_rounded, size: 20, color: Color(0xFFF59E0B))),
             ),
             const SizedBox(width: 12),
             Expanded(

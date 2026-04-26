@@ -58,7 +58,7 @@ class _StoresTabState extends State<StoresTab> {
       if (res.statusCode == 200 || res.statusCode == 201) {
         await loadData();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Carte créée chez ${merchant['business_name']} ! 🎉'),
+          content: Text('Carte créée chez ${merchant['business_name']} !'),
           backgroundColor: _kPrimary,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -140,7 +140,7 @@ class _StoresTabState extends State<StoresTab> {
                   Text(name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _kText)),
                   Text(category, style: TextStyle(fontSize: 11, color: _kSub)),
                   const SizedBox(height: 4),
-                  Text('🎁 $rewardDesc · $stampsReq tampons',
+                  Text('$rewardDesc · $stampsReq tampons',
                       style: const TextStyle(fontSize: 11, color: _kPrimary, fontWeight: FontWeight.w600)),
                 ])),
                 const SizedBox(width: 8),

@@ -736,7 +736,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Bonjour 👋', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, height: 1)),
+                              Text('Bonjour', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, height: 1)),
                               const SizedBox(height: 2),
                               Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
                             ],
@@ -1323,9 +1323,9 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                           children: [
                             for (final f in [
                               {'key': 'tout', 'label': 'Tout'},
-                              {'key': 'tampon', 'label': '✓ Tampons'},
-                              {'key': 'recompense', 'label': '⭐ Récompenses'},
-                              {'key': 'promo', 'label': '→ Promos'},
+                              {'key': 'tampon', 'label': 'Tampons'},
+                              {'key': 'recompense', 'label': 'Récompenses'},
+                              {'key': 'promo', 'label': 'Promos'},
                             ]) ...[
                               GestureDetector(
                                 onTap: () => setState(() => _notifFilter = f['key']!),

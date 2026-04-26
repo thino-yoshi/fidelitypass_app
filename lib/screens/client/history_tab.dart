@@ -228,7 +228,7 @@ class _HistoryTabState extends State<HistoryTab> {
             borderRadius: BorderRadius.circular(7),
           ),
           child: Text(
-            isReward ? '🏆 Récompense' : '+1 tampon',
+            isReward ? 'Récompense' : '+1 tampon',
             style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.w700,
               color: isReward ? const Color(0xFF92400E) : _kPrimary,
