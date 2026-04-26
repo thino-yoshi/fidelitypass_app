@@ -16,6 +16,7 @@ import 'cards_tab.dart';
 import 'history_tab.dart';
 import 'rewards_tab.dart';
 import 'manage_cards_screen.dart';
+import 'scan_tab.dart';
 import '../../config/app_colors.dart';
 
 class ClientHome extends StatefulWidget {
@@ -892,7 +893,10 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       case 0:
         return CardsTab(token: widget.token, cards: _cards, onRefresh: _loadStats);
       case 1:
-        return _buildScanTab();
+        return ScanTab(
+          token: widget.token,
+          onCardAdded: () { _loadStats(); setState(() => _tab = 0); },
+        );
       case 2:
         return HistoryTab(token: widget.token);
       case 3:
