@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/auth_service.dart';
 
 const _kPrimary = Color(0xFF2C7BE5);
 const _kSuccess = Color(0xFF27AE60);
@@ -36,8 +37,8 @@ class _StoresTabState extends State<StoresTab> {
   Future<void> loadData() async {
     setState(() => loading = true);
     try {
-      final mRes = await http.get(Uri.parse('$apiUrl/merchants/'), headers: {'Authorization': 'Bearer ${widget.token}'});
-      final cRes = await http.get(Uri.parse('$apiUrl/cards/me'),    headers: {'Authorization': 'Bearer ${widget.token}'});
+      final mRes = await http.get(Uri.parse('$apiUrl/merchants/'), headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'});
+      final cRes = await http.get(Uri.parse('$apiUrl/cards/me'),    headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'});
       if (mounted) {
         setState(() { merchants = jsonDecode(mRes.body); myCards = jsonDecode(cRes.body); loading = false; });
       }
@@ -52,7 +53,7 @@ class _StoresTabState extends State<StoresTab> {
     try {
       final res = await http.post(
         Uri.parse('$apiUrl/cards/'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
         body: jsonEncode({'merchant_id': merchant['id']}),
       );
       if (res.statusCode == 200 || res.statusCode == 201) {

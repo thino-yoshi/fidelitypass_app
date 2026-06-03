@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
 
 class HistoryScreen extends StatefulWidget {
   final String token;
@@ -31,19 +29,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> loadHistory() async {
     setState(() => loading = true);
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/scan-history'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (mounted) {
-        setState(() {
-          history = jsonDecode(res.body);
-          loading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => loading = false);
+    final r = await ApiService.instance.getMerchantScanHistory();
+    if (mounted) {
+      setState(() {
+        history = r.isOk ? r.value : [];
+        loading = false;
+      });
+      if (r.isErr) ApiService.showErrIfNeeded(context, r);
     }
   }
 

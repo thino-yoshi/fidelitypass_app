@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 
 class StatsChartWidget extends StatefulWidget {
   final String token;
@@ -40,27 +41,20 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
 
   Future<void> _loadStats() async {
     setState(() => loading = true);
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/stats/daily'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() { dailyStats = jsonDecode(res.body); loading = false; });
-      } else {
-        if (mounted) setState(() => loading = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => loading = false);
+    final r = await ApiService.instance.getDailyStats();
+    if (mounted) {
+      setState(() { dailyStats = r.isOk ? r.value : []; loading = false; });
     }
   }
 
   Future<void> _exportCsv() async {
     setState(() => exporting = true);
     try {
+      // Export CSV retourne des bytes bruts → on utilise http directement
+      final token = AuthService.currentToken ?? widget.token;
       final res = await http.get(
         Uri.parse('$apiUrl/cards/export-csv'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
+        headers: {'Authorization': 'Bearer $token'},
       );
       if (res.statusCode == 200) {
         final dir = await getTemporaryDirectory();

@@ -4,6 +4,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config/supabase_config.dart';
 import 'screens/auth_screen.dart';
 import 'screens/client/client_home.dart';
 import 'screens/merchant/merchant_home.dart';
@@ -18,6 +20,10 @@ final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Supabase (avant Firebase) ──────────────────────────────────────────────
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+
   await Firebase.initializeApp();
 
   // Charger la préférence de thème

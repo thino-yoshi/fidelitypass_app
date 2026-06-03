@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  supabase_flutter: ^2.6.0
   http: ^1.2.0
   shared_preferences: ^2.2.2
   qr_flutter: ^4.1.0

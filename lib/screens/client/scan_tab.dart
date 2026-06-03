@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:http/http.dart' as http;
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
 
 class ScanTab extends StatefulWidget {
   final String token;
@@ -72,37 +70,17 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
 
     final token = _extractToken(raw);
 
-    try {
-      final res = await http.post(
-        Uri.parse('$apiUrl/cards/join'),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'static_qr_token': token}),
-      );
+    final r = await ApiService.instance.joinMerchant(token);
+    if (!mounted) return;
+    setState(() => _loading = false);
 
-      if (!mounted) return;
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        final alreadyMember = data['already_member'] as bool? ?? false;
-        final merchant = data['merchant'] as Map<String, dynamic>? ?? {};
-        final name = merchant['business_name'] as String? ?? '';
-
-        _showResult(
-          success: true,
-          alreadyMember: alreadyMember,
-          merchantName: name,
-        );
-      } else {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        _showError(body['detail'] as String? ?? 'QR code invalide');
-      }
-    } catch (_) {
-      _showError('Erreur réseau. Réessaie.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    if (r.isOk) {
+      final alreadyMember = r.value['already_member'] as bool? ?? false;
+      final merchant = r.value['merchant'] as Map<String, dynamic>? ?? {};
+      final name = merchant['business_name'] as String? ?? '';
+      _showResult(success: true, alreadyMember: alreadyMember, merchantName: name);
+    } else {
+      _showError(r.error ?? 'QR code invalide');
     }
   }
 

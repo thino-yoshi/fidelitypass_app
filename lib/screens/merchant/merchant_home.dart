@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 import '../../main.dart';
 import '../../widgets/user_avatar.dart';
 import '../auth_screen.dart';
@@ -87,35 +85,26 @@ class _MerchantHomeState extends State<MerchantHome> {
 
   Future<void> _loadData() async {
     setState(() => loading = true);
-    try {
-      final res  = await http.get(Uri.parse('$apiUrl/merchants/'), headers: {'Authorization': 'Bearer ${widget.token}'});
-      final data = jsonDecode(res.body) as List;
-      final parts = widget.token.split('.');
-      final normalized = base64Url.normalize(parts[1]);
-      final decoded = jsonDecode(utf8.decode(base64Url.decode(normalized)));
-      final myId = decoded['sub'];
-      final me = data.firstWhere((m) => m['id'] == myId, orElse: () => null);
-      final statsRes = await http.get(Uri.parse('$apiUrl/cards/stats'), headers: {'Authorization': 'Bearer ${widget.token}'});
-      if (mounted) {
-        setState(() {
-          merchantInfo = me;
-          stats = statsRes.statusCode == 200 ? jsonDecode(statsRes.body) : null;
-          loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => loading = false);
+    final api = ApiService.instance;
+
+    final profileResult = await api.getMerchantProfile();
+    final statsResult   = await api.getMerchantStats();
+
+    if (mounted) {
+      setState(() {
+        merchantInfo = profileResult.isOk ? profileResult.value : null;
+        stats        = statsResult.isOk   ? statsResult.value   : null;
+        loading      = false;
+      });
     }
     await _loadRecentClients();
   }
 
   Future<void> _loadRecentClients() async {
-    try {
-      final res = await http.get(Uri.parse('$apiUrl/cards/clients'), headers: {'Authorization': 'Bearer ${widget.token}'});
-      if (mounted && res.statusCode == 200) {
-        setState(() => _recentClients = (jsonDecode(res.body) as List).take(3).toList());
-      }
-    } catch (_) {}
+    final r = await ApiService.instance.getMerchantClients(limit: 3);
+    if (mounted && r.isOk) {
+      setState(() => _recentClients = r.value.take(3).toList());
+    }
   }
 
   void _logout() async {
@@ -200,23 +189,30 @@ class _MerchantHomeState extends State<MerchantHome> {
         left: 16, right: 16, bottom: 12,
       ),
       child: Row(children: [
-        GestureDetector(
-          onTap: _showProfilSheet,
-          child: Row(children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
-            ),
-            const SizedBox(width: 10),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_businessName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kText)),
-              Text(loading ? '···' : '$clientsCount clients · $scansCount scans aujourd\'hui',
-                  style: TextStyle(fontSize: 11, color: _kSub)),
+        Expanded(
+          child: GestureDetector(
+            onTap: _showProfilSheet,
+            child: Row(children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(_businessName,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kText),
+                      overflow: TextOverflow.ellipsis),
+                  Text(loading ? '···' : '$clientsCount clients · $scansCount scans aujourd\'hui',
+                      style: TextStyle(fontSize: 11, color: _kSub),
+                      overflow: TextOverflow.ellipsis),
+                ]),
+              ),
             ]),
-          ]),
+          ),
         ),
-        const Spacer(),
+        const SizedBox(width: 8),
         GestureDetector(
           onTap: _showProfilSheet,
           child: Container(
@@ -316,7 +312,7 @@ class _MerchantHomeState extends State<MerchantHome> {
                 ..._recentClients.asMap().entries.map((entry) {
                   final i = entry.key;
                   final card = entry.value;
-                  final user = card['users'] as Map? ?? {};
+                  final user = card['client'] as Map? ?? {};
                   final name = (user['name'] ?? user['email'] ?? 'Client') as String;
                   final stamps = card['stamps_count'] as int? ?? 0;
                   return Container(
@@ -325,7 +321,7 @@ class _MerchantHomeState extends State<MerchantHome> {
                       border: i > 0 ? Border(top: BorderSide(color: _kBorder)) : null,
                     ),
                     child: Row(children: [
-                      UserAvatar(imageUrl: card['users']?['profile_picture_url'] as String?, name: name, size: 38),
+                      UserAvatar(imageUrl: card['client']?['profile_picture_url'] as String?, name: name, size: 38),
                       const SizedBox(width: 10),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)),

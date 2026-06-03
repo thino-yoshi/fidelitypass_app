@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
 import '../../widgets/user_avatar.dart';
 
 class ClientsScreen extends StatefulWidget {
@@ -34,39 +32,22 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
   Future<void> _loadClients() async {
     setState(() => loading = true);
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/clients'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (mounted) {
-        setState(() {
-          clients = jsonDecode(res.body);
-          loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => loading = false);
+    final r = await ApiService.instance.getMerchantClients();
+    if (mounted) {
+      setState(() {
+        clients = r.isOk ? r.value : [];
+        loading = false;
+      });
+      if (r.isErr) ApiService.showErrIfNeeded(context, r);
     }
   }
 
   Future<void> _adjustStamp(String cardId, int delta) async {
-    final res = await http.post(
-      Uri.parse('$apiUrl/cards/$cardId/adjust-stamp'),
-      headers: {
-        'Authorization': 'Bearer ${widget.token}',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'delta': delta}),
-    );
-    if (res.statusCode == 200) {
+    final r = await ApiService.instance.adjustStamp(cardId, delta);
+    if (r.isOk) {
       await _loadClients();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(jsonDecode(res.body)['detail'] ?? 'Erreur')),
-        );
-      }
+    } else if (mounted) {
+      ApiService.showErrIfNeeded(context, r);
     }
   }
 
@@ -159,7 +140,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
           // Client list
           ...List.generate(filtered.length, (i) {
             final card = filtered[i];
-            final user = card['users'] as Map? ?? {};
+            final user = card['client'] as Map? ?? {};
             final name = (user['name'] ?? user['email'] ?? 'Client inconnu') as String;
             final stamps = card['stamps_count'] as int? ?? 0;
             final stampsRequired = widget.merchantInfo?['stamps_required'] as int? ?? 10;
@@ -178,7 +159,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 child: Row(
                   children: [
                     UserAvatar(
-                      imageUrl: (card['users'] as Map?)?['profile_picture_url'] as String?,
+                      imageUrl: (card['client'] as Map?)?['profile_picture_url'] as String?,
                       name: name,
                       size: 44,
                     ),
@@ -354,7 +335,7 @@ class _ClientSheetState extends State<_ClientSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.client['users'] as Map? ?? {};
+    final user = widget.client['client'] as Map? ?? {};
     final clientName = (user['name'] ?? user['email'] ?? 'Client inconnu') as String;
     final email = user['email'] ?? '';
     final stamps = widget.client['stamps_count'] as int? ?? 0;
@@ -384,7 +365,7 @@ class _ClientSheetState extends State<_ClientSheet> {
             const SizedBox(height: 20),
 
             UserAvatar(
-              imageUrl: (widget.client['users'] as Map?)?['profile_picture_url'] as String?,
+              imageUrl: (widget.client['client'] as Map?)?['profile_picture_url'] as String?,
               name: clientName,
               size: 64,
             ),

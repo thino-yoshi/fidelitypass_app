@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/auth_service.dart';
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const _blue        = Color(0xFF2C7BE5);
@@ -360,7 +361,7 @@ class _ScheduledListState extends State<_ScheduledList> {
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/notifications/scheduled'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (res.statusCode == 200 && mounted) {
         setState(() { _items = jsonDecode(res.body); _loading = false; });
@@ -375,7 +376,7 @@ class _ScheduledListState extends State<_ScheduledList> {
   Future<void> _cancel(String id) async {
     await http.delete(
       Uri.parse('$apiUrl/notifications/scheduled/$id'),
-      headers: {'Authorization': 'Bearer ${widget.token}'},
+      headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
     );
     _load();
   }
@@ -616,7 +617,7 @@ class _BroadcastTabState extends State<_BroadcastTab> {
       try {
         final res = await http.post(
           Uri.parse('$apiUrl/notifications/schedule'),
-          headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+          headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
           body: jsonEncode({
             'title': titleCtrl.text,
             'message': messageCtrl.text,
@@ -644,7 +645,7 @@ class _BroadcastTabState extends State<_BroadcastTab> {
     try {
       final res = await http.post(
         Uri.parse('$apiUrl/notifications/send'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
         body: jsonEncode({'title': titleCtrl.text, 'message': messageCtrl.text}),
       );
       setState(() => feedback = res.statusCode == 200 ? '✅ Notification envoyée !' : '❌ Erreur lors de l\'envoi');
@@ -918,7 +919,7 @@ class _TargetedTabState extends State<_TargetedTab> {
       try {
         final res = await http.post(
           Uri.parse('$apiUrl/notifications/schedule'),
-          headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+          headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
           body: jsonEncode({
             'title': titleCtrl.text,
             'message': messageCtrl.text,
@@ -953,7 +954,7 @@ class _TargetedTabState extends State<_TargetedTab> {
       };
       final res = await http.post(
         Uri.parse('$apiUrl/notifications/send-targeted'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
       if (res.statusCode == 200) {

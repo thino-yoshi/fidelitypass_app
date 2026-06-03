@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
-import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
 
 class CardsTab extends StatefulWidget {
   final String token;
+  final String userName;
   final List<dynamic> cards;
   final VoidCallback onRefresh;
 
   const CardsTab({
     super.key,
     required this.token,
+    required this.userName,
     required this.cards,
     required this.onRefresh,
   });
@@ -25,6 +25,7 @@ class CardsTab extends StatefulWidget {
 }
 
 class _CardsTabState extends State<CardsTab> {
+  // Palette de secours si le commerçant n'a pas de design personnalisé
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
     Color(0xFFC0392B),
@@ -34,7 +35,16 @@ class _CardsTabState extends State<CardsTab> {
     Color(0xFFE67E22),
   ];
 
-  Color _cardColor(int i) => _palette[i % _palette.length];
+  /// Parse le card_design du site qarta.be (table merchant_card_designs.card_design).
+  /// Champs réels : bgType, bgColors, accentColors, textColor, fontFamily,
+  /// bgImageUrl, bgGradientAngle, bgImageOpacity, accentAngle, cardName, stampLabel.
+  CardStyle _styleFromCard(Map card, int fallbackIndex) {
+    return CardStyle.fromDesign(
+      card['card_design'],
+      merchantLogoUrl: (card['merchants']?['logo_url'] as String?),
+      fallbackColor: _palette[fallbackIndex % _palette.length],
+    );
+  }
 
   // Les cartes arrivent déjà enrichies depuis client_home._loadStats()
   List<dynamic> get _rewardCards => widget.cards.where((c) {
@@ -46,7 +56,7 @@ class _CardsTabState extends State<CardsTab> {
     return val >= req;
   }).toList();
 
-  void _showQRModal(Map card, Color color) {
+  void _showQRModal(Map card, CardStyle style) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -54,7 +64,7 @@ class _CardsTabState extends State<CardsTab> {
       builder: (_) => QRModal(
         token: widget.token,
         card: card,
-        color: color,
+        style: style,
         onStampAdded: widget.onRefresh, // rafraîchit les cartes après tampon
       ),
     );
@@ -98,15 +108,15 @@ class _CardsTabState extends State<CardsTab> {
 
           // Liste des cartes
           ...List.generate(cards.length, (i) {
-            final card = cards[i];
-            final color = _cardColor(i);
+            final card        = cards[i];
+            final style       = _styleFromCard(card, i);
             final programType = card['merchants']?['program_type'] as String? ?? 'stamps';
-            final isPoints = programType == 'points';
+            final isPoints    = programType == 'points';
             return GestureDetector(
-              onTap: () => _showQRModal(card, color),
+              onTap: () => _showQRModal(card, style),
               child: isPoints
-                  ? _buildPointsCard(card, color)
-                  : _buildStampsCard(card, color),
+                  ? _buildPointsCard(card, style)
+                  : _buildStampsCard(card, style),
             );
           }),
         ],
@@ -114,63 +124,182 @@ class _CardsTabState extends State<CardsTab> {
     );
   }
 
-  // ── Carte Tampons ────────────────────────────────────────────────────────────
+  // ── Carte Tampons (layout aligné sur qarta.be) ───────────────────────────────
 
-  Widget _buildStampsCard(Map card, Color color) {
+  Widget _buildStampsCard(Map card, CardStyle style) {
     final stamps       = card['stamps_count'] as int? ?? 0;
-    final required     = card['merchants']?['stamps_required'] as int? ?? 10;
+    // Le site lit stampsRequired depuis card_design → on fait pareil (fallback merchants).
+    final required     = style.stampsRequired
+        ?? card['merchants']?['stamps_required'] as int? ?? 10;
     final businessName = card['merchants']?['business_name'] as String? ?? '';
-    final reward       = card['merchants']?['reward_description'] as String? ?? '';
-    final initials     = businessName.length >= 2 ? businessName.substring(0, 2).toUpperCase() : businessName.toUpperCase();
+    // Reward : prioriser card_design.rewardDescription (édité sur qarta.be),
+    // fallback sur merchants.reward_description.
+    final reward       = (style.rewardDescription ??
+                          card['merchants']?['reward_description'] as String? ??
+                          '').trim();
     final pct          = (stamps / required).clamp(0.0, 1.0);
     final full         = stamps >= required;
+    // Le site privilégie cardName (le "nom du commerce" édité par le marchand),
+    // et l'affiche en MAJUSCULES via CSS text-transform.
+    final rawTitle     = (style.cardName ?? '').trim().isNotEmpty
+        ? style.cardName!.trim()
+        : businessName;
+    final title        = rawTitle.toUpperCase();
+    // ⚠️ Le site applique textColor BRUT (aucun auto-contraste, aucune opacité).
+    final textColor    = style.textColor;
+    final stampLabel   = style.stampLabel ?? 'POINTS COLLECTÉS';
+    final stampFill    = style.accentColor ?? const Color(0xFFFF2D78);
+
+    // 2 rangées de N/2 (alignement avec le site)
+    final perRow       = (required / 2).ceil();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: style.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Stack(
           children: [
-            Positioned(top: -30, right: -20, child: _orb(120, 0.07)),
-            Positioned(bottom: -40, left: -20, child: _orb(100, 0.05)),
+            // Background (color / gradient / image)
+            Positioned.fill(child: style.buildBackground()),
             Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _cardTopRow(businessName, initials, full, color,
-                      badge: Text('CARTE FIDÉLITÉ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.55), letterSpacing: 1.08))),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 5, runSpacing: 5,
-                    children: List.generate(required, (j) => Container(
-                      width: 22, height: 22,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(7),
-                        color: j < stamps ? Colors.white.withOpacity(0.9) : Colors.transparent,
-                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-                      ),
-                      child: j < stamps ? Center(child: Icon(Icons.check, size: 11, color: color)) : null,
-                    )),
-                  ),
-                  const SizedBox(height: 10),
+                  // ── Header : "CARTE DE FIDÉLITÉ" + titre  |  "TITULAIRE" + nom client
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: Text(
-                        full ? '$reward disponible !' : 'Encore ${required - stamps} tampon${(required - stamps) > 1 ? 's' : ''} pour $reward',
-                        style: TextStyle(color: full ? Colors.white : Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: full ? FontWeight.w700 : FontWeight.w400),
-                      )),
-                      Text('$stamps/$required', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('CARTE DE FIDÉLITÉ',
+                                style: TextStyle(
+                                    fontFamily: style.fontFamily,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                    letterSpacing: 1.3)),
+                            const SizedBox(height: 2),
+                            Text(title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontFamily: style.fontFamily,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: textColor,
+                                    height: 1.1)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('TITULAIRE',
+                              style: TextStyle(
+                                  fontFamily: style.fontFamily,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  color: textColor,
+                                  letterSpacing: 1.3)),
+                          const SizedBox(height: 2),
+                          Text(widget.userName,
+                              style: TextStyle(
+                                  fontFamily: style.fontFamily,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: textColor)),
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _progressBar(pct, full),
+                  // ── Label "POINTS COLLECTÉS"
+                  Text(stampLabel,
+                      style: TextStyle(
+                          fontFamily: style.fontFamily,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                          letterSpacing: 1.1)),
+                  const SizedBox(height: 6),
+                  // ── Tampons : 2 rangées réparties sur TOUTE la largeur (spaceBetween)
+                  LayoutBuilder(builder: (ctx, c) {
+                    const vSpacing = 5.0; // espacement vertical entre les 2 rangées
+                    // Taille du cercle : ~68% de la cellule → laisse un gap homogène,
+                    // les 1er et dernier cercles touchent les bords (comme le site).
+                    final size = (c.maxWidth / perRow * 0.68).clamp(22.0, 42.0);
+
+                    Widget buildCell(int idx) {
+                      if (idx >= required) {
+                        return SizedBox(width: size, height: size);
+                      }
+                      final filled = idx < stamps;
+                      return Container(
+                        width: size, height: size,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: filled ? stampFill : Colors.transparent,
+                          border: Border.all(
+                              color: stampFill.withOpacity(0.27), width: 1.5),
+                        ),
+                        child: filled
+                            ? Center(
+                                child: Icon(Icons.check,
+                                    size: size * 0.5,
+                                    color: _contrastOn(stampFill)),
+                              )
+                            : null,
+                      );
+                    }
+
+                    Widget buildRow(int row) => Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(
+                              perRow, (col) => buildCell(row * perRow + col)),
+                        );
+
+                    return Column(
+                      children: [
+                        buildRow(0),
+                        const SizedBox(height: vSpacing),
+                        buildRow(1),
+                      ],
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  _progressBar(pct, full, stampFill),
+                  const SizedBox(height: 6),
+                  // ── Footer : "Encore X pour [reward]"  |  "stamps / required"
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: _footerLine(
+                          remaining: required - stamps,
+                          reward: reward,
+                          full: full,
+                          style: style,
+                          textColor: textColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('$stamps / $required',
+                          style: TextStyle(
+                              fontFamily: style.fontFamily,
+                              color: textColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -180,58 +309,187 @@ class _CardsTabState extends State<CardsTab> {
     );
   }
 
-  // ── Carte Points ─────────────────────────────────────────────────────────────
+  /// Phrase "Encore X pour votre Y" avec le "X" en bold (comme sur le site).
+  Widget _footerLine({
+    required int remaining,
+    required String reward,
+    required bool full,
+    required CardStyle style,
+    required Color textColor,
+  }) {
+    final baseStyle = TextStyle(
+      fontFamily: style.fontFamily,
+      color: textColor,
+      fontSize: 10,
+      fontWeight: full ? FontWeight.w700 : FontWeight.w400,
+    );
+    if (full) {
+      final suffix = reward.isEmpty ? 'récompense disponible !' : '$reward disponible !';
+      return Text(suffix, maxLines: 2, overflow: TextOverflow.ellipsis, style: baseStyle);
+    }
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: baseStyle,
+        children: [
+          const TextSpan(text: 'Encore '),
+          TextSpan(
+              text: '$remaining',
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildPointsCard(Map card, Color color) {
-    final points       = card['stamps_count'] as int? ?? 0; // réutilise le champ stamps_count pour les points
-    final required     = card['merchants']?['points_required'] as int? ?? card['merchants']?['stamps_required'] as int? ?? 100;
-    final ptsPerEuro   = card['merchants']?['points_per_euro'] as int? ?? 10;
+  /// Retourne noir ou blanc — celui qui a le MEILLEUR contraste WCAG sur [bg].
+  /// (Sur l'orange #ff6251, le noir gagne 7:1 vs 3:1 pour le blanc — comme sur le site.)
+  Color _contrastOn(Color bg) {
+    final lum = bg.computeLuminance();
+    const dark = Color(0xFF0B1220);
+    // Ratio de contraste = (L_clair + 0.05) / (L_sombre + 0.05)
+    final contrastWithBlack = (lum + 0.05) / 0.05;          // noir : L≈0
+    final contrastWithWhite = 1.05 / (lum + 0.05);          // blanc : L≈1
+    return contrastWithBlack >= contrastWithWhite ? dark : Colors.white;
+  }
+
+  // ── Carte Points (layout aligné sur qarta.be) ────────────────────────────────
+
+  Widget _buildPointsCard(Map card, CardStyle style) {
+    final points       = card['stamps_count'] as int? ?? 0;
+    final required     = style.pointsGoal
+        ?? card['merchants']?['points_required'] as int?
+        ?? card['merchants']?['stamps_required'] as int? ?? 100;
     final businessName = card['merchants']?['business_name'] as String? ?? '';
-    final reward       = card['merchants']?['reward_description'] as String? ?? '';
-    final initials     = businessName.length >= 2 ? businessName.substring(0, 2).toUpperCase() : businessName.toUpperCase();
+    final reward       = (style.rewardDescription ??
+                          card['merchants']?['reward_description'] as String? ??
+                          '').trim();
     final pct          = (points / required).clamp(0.0, 1.0);
     final full         = points >= required;
     final remaining    = required - points;
+    final rawTitle     = (style.cardName ?? '').trim().isNotEmpty
+        ? style.cardName!.trim()
+        : businessName;
+    final title        = rawTitle.toUpperCase();
+    final textColor    = style.textColor;  // brut, comme le site
+    final accent       = style.accentColor ?? const Color(0xFFFF2D78);
+    final pointsLabel  = style.pointsLabel ?? style.stampLabel ?? 'POINTS COLLECTÉS';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: color,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: style.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: Stack(
           children: [
-            Positioned(top: -30, right: -20, child: _orb(120, 0.07)),
-            Positioned(bottom: -40, left: -20, child: _orb(100, 0.05)),
+            Positioned.fill(child: style.buildBackground()),
             Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _cardTopRow(businessName, initials, full, color,
-                      badge: Text('CARTE FIDÉLITÉ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.55), letterSpacing: 1.08))),
-                  const SizedBox(height: 14),
-                  // Gros compteur de points
+                  // ── Header : titre  |  TITULAIRE
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$points', style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w900, height: 1)),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 5, left: 4),
-                        child: Text('/ $required pts', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14, fontWeight: FontWeight.w600)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('CARTE DE FIDÉLITÉ',
+                                style: TextStyle(
+                                    fontFamily: style.fontFamily,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: textColor.withOpacity(0.55),
+                                    letterSpacing: 1.4)),
+                            const SizedBox(height: 4),
+                            Text(title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontFamily: style.fontFamily,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: textColor,
+                                    height: 1)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('TITULAIRE',
+                              style: TextStyle(
+                                  fontFamily: style.fontFamily,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: textColor.withOpacity(0.55),
+                                  letterSpacing: 1.4)),
+                          const SizedBox(height: 4),
+                          Text(widget.userName,
+                              style: TextStyle(
+                                  fontFamily: style.fontFamily,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: textColor)),
+                        ],
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    full ? '$reward disponible !' : 'Encore $remaining pts pour $reward',
-                    style: TextStyle(color: full ? Colors.white : Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: full ? FontWeight.w700 : FontWeight.w400),
+                  Text(pointsLabel,
+                      style: TextStyle(
+                          fontFamily: style.fontFamily,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: textColor.withOpacity(0.55),
+                          letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  // ── Gros compteur de points
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('$points',
+                          style: TextStyle(
+                              fontFamily: style.fontFamily,
+                              color: accent,
+                              fontSize: 42,
+                              fontWeight: FontWeight.w900,
+                              height: 1)),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6, left: 4),
+                        child: Text('/ $required pts',
+                            style: TextStyle(
+                                fontFamily: style.fontFamily,
+                                color: textColor.withOpacity(0.55),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 12),
+                  _progressBar(pct, full, accent),
                   const SizedBox(height: 8),
-                  _progressBar(pct, full),
+                  Text(
+                    full
+                        ? '$reward disponible !'
+                        : (reward.isEmpty
+                            ? 'Encore $remaining pts pour votre récompense'
+                            : 'Encore $remaining pts pour votre $reward'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontFamily: style.fontFamily,
+                        color: textColor.withOpacity(full ? 1.0 : 0.85),
+                        fontSize: 11,
+                        fontWeight: full ? FontWeight.w700 : FontWeight.w500),
+                  ),
                 ],
               ),
             ),
@@ -243,47 +501,275 @@ class _CardsTabState extends State<CardsTab> {
 
   // ── Widgets partagés cartes ───────────────────────────────────────────────────
 
-  Widget _cardTopRow(String name, String initials, bool full, Color color, {Widget? badge}) {
+  Widget _cardTopRow(String name, String initials, bool full, CardStyle style, {Widget? badge}) {
+    final logoUrl = style.logoUrl;
+    final textColor = style.textColor;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (badge != null) ...[badge, const SizedBox(height: 3)],
-            Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (badge != null) ...[badge, const SizedBox(height: 3)],
+              Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontFamily: style.fontFamily,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: textColor)),
+            ],
+          ),
         ),
         Container(
           width: 38, height: 38,
           decoration: BoxDecoration(
-            color: full ? Colors.white.withOpacity(0.25) : Colors.white.withOpacity(0.18),
+            color: full ? textColor.withOpacity(0.25) : textColor.withOpacity(0.18),
             borderRadius: BorderRadius.circular(11),
           ),
-          child: Center(child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
+          child: logoUrl != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: Image.network(
+                    logoUrl,
+                    width: 38, height: 38,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(initials, style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                )
+              : Center(child: Text(initials, style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w800))),
         ),
       ],
     );
   }
 
-  Widget _orb(double size, double opacity) {
+  Widget _orb(double size, Color tint, double opacity) {
     return Container(
       width: size, height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(opacity)),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: tint.withOpacity(opacity)),
     );
   }
 
-  Widget _progressBar(double pct, bool full) {
+  /// Barre de progression — track = blanc 10% (comme le site : rgba(255,255,255,0.1)),
+  /// remplissage = couleur d'accent.
+  Widget _progressBar(double pct, bool full, Color accent) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(99),
       child: LinearProgressIndicator(
         value: pct,
-        minHeight: 3,
-        backgroundColor: Colors.white.withOpacity(0.2),
-        valueColor: AlwaysStoppedAnimation(full ? Colors.white : Colors.white.withOpacity(0.85)),
+        minHeight: 2,
+        backgroundColor: Colors.white.withOpacity(0.1),
+        valueColor: AlwaysStoppedAnimation(accent),
       ),
     );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CardStyle : parse le card_design (qarta.be) en un style Flutter directement utilisable
+// ════════════════════════════════════════════════════════════════════════════
+
+class CardStyle {
+  final String bgType;           // 'color' | 'gradient' | 'image'
+  final List<Color> bgColors;    // 1 si color, 2+ si gradient
+  final double bgGradientAngle;  // degrés
+  final String? bgImageUrl;
+  final double bgImageOpacity;
+  final Color textColor;
+  final List<Color> accentColors;
+  final double accentAngle;
+  final String? fontFamily;
+  final String? cardName;
+  final String? stampLabel;
+  final String? pointsLabel;
+  final String? rewardDescription;  // depuis card_design (prioritaire sur merchants.reward_description)
+  final int? stampsRequired;        // depuis card_design (prioritaire sur merchants.stamps_required)
+  final int? pointsGoal;            // depuis card_design (prioritaire sur merchants.points_required)
+  final String? logoUrl;
+  final Color fallback;
+
+  CardStyle({
+    required this.bgType,
+    required this.bgColors,
+    required this.bgGradientAngle,
+    required this.bgImageUrl,
+    required this.bgImageOpacity,
+    required this.textColor,
+    required this.accentColors,
+    required this.accentAngle,
+    required this.fontFamily,
+    required this.cardName,
+    required this.stampLabel,
+    required this.pointsLabel,
+    required this.rewardDescription,
+    required this.stampsRequired,
+    required this.pointsGoal,
+    required this.logoUrl,
+    required this.fallback,
+  });
+
+  /// Couleur "principale" — sert d'ombrage et de fallback.
+  Color get primary => bgColors.isNotEmpty ? bgColors.first : fallback;
+
+  /// Couleur d'accent (utilisée pour tampons cochés, compteur points).
+  Color? get accentColor => accentColors.isNotEmpty ? accentColors.first : null;
+
+  /// Couleur de texte effective : si textColor a un mauvais contraste sur le fond,
+  /// on bascule sur blanc/noir auto. Le site qarta.be a un bouton "Auto" qui fait
+  /// pareil — on émule ce comportement quand textColor=#000000 sur fond sombre.
+  Color get effectiveTextColor {
+    final bg = primary;
+    final txt = textColor;
+    final bgLum = bg.computeLuminance();
+    final txtLum = txt.computeLuminance();
+    // contraste approximatif WCAG : (L1+0.05)/(L2+0.05)
+    final lighter = txtLum > bgLum ? txtLum : bgLum;
+    final darker  = txtLum > bgLum ? bgLum  : txtLum;
+    final ratio   = (lighter + 0.05) / (darker + 0.05);
+    if (ratio >= 3.5) return txt; // contraste suffisant → respecter textColor
+    // Sinon : noir si fond clair, blanc si fond sombre
+    return bgLum > 0.5 ? const Color(0xFF0B1220) : Colors.white;
+  }
+
+  /// Couleur de remplissage des tampons cochés (basée sur textColor pour bon contraste).
+  Color get stampFillColor => effectiveTextColor.withOpacity(0.9);
+
+  factory CardStyle.fromDesign(
+    dynamic design, {
+    String? merchantLogoUrl,
+    required Color fallbackColor,
+  }) {
+    if (design is! Map) {
+      return CardStyle(
+        bgType: 'color',
+        bgColors: [fallbackColor],
+        bgGradientAngle: 135,
+        bgImageUrl: null,
+        bgImageOpacity: 0.3,
+        textColor: Colors.white,
+        accentColors: const [],
+        accentAngle: 135,
+        fontFamily: null,
+        cardName: null,
+        stampLabel: null,
+        pointsLabel: null,
+        rewardDescription: null,
+        stampsRequired: null,
+        pointsGoal: null,
+        logoUrl: merchantLogoUrl,
+        fallback: fallbackColor,
+      );
+    }
+    return CardStyle(
+      bgType:             (design['bgType']           as String?) ?? 'color',
+      bgColors:           _parseColors(design['bgColors'])       ?? [fallbackColor],
+      bgGradientAngle:    _toDouble(design['bgGradientAngle'])   ?? 135,
+      bgImageUrl:         _str(design['bgImageUrl']),
+      bgImageOpacity:     _toDouble(design['bgImageOpacity'])    ?? 0.3,
+      textColor:          _parseColor(design['textColor'])       ?? Colors.white,
+      accentColors:       _parseColors(design['accentColors'])   ?? const [],
+      accentAngle:        _toDouble(design['accentAngle'])       ?? 135,
+      fontFamily:         _str(design['fontFamily']),
+      cardName:           _str(design['cardName']),
+      stampLabel:         _str(design['stampLabel']),
+      pointsLabel:        _str(design['pointsLabel']),
+      rewardDescription:  _str(design['rewardDescription']),
+      stampsRequired:     _toInt(design['stampsRequired']),
+      pointsGoal:         _toInt(design['pointsGoal']),
+      logoUrl:            _str(design['logoUrl']) ?? _str(design['logo_url']) ?? merchantLogoUrl,
+      fallback:           fallbackColor,
+    );
+  }
+
+  /// Construit le widget de fond (couleur, gradient, ou image).
+  Widget buildBackground() {
+    switch (bgType) {
+      case 'image':
+        if (bgImageUrl != null && bgImageUrl!.isNotEmpty) {
+          return Stack(fit: StackFit.expand, children: [
+            Container(color: primary),
+            Opacity(
+              opacity: bgImageOpacity.clamp(0.0, 1.0),
+              child: Image.network(bgImageUrl!, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+            ),
+          ]);
+        }
+        return Container(color: primary);
+      case 'gradient':
+        if (bgColors.length >= 2) {
+          // Convention CSS linear-gradient(Ndeg, …) :
+          //   0° = bas→haut, 90° = gauche→droite, 180° = haut→bas, 270° = droite→gauche.
+          //   L'angle est mesuré dans le sens horaire depuis le haut.
+          // En coords écran (y vers le bas) : direction = (sin θ, -cos θ).
+          //   begin = -direction (1ère couleur), end = +direction (dernière couleur).
+          final rad = bgGradientAngle * pi / 180;
+          final dx = sin(rad);
+          final dy = -cos(rad);
+          // On étire le vecteur pour que la composante dominante atteigne ±1
+          // (le dégradé couvre bien toute la carte, y compris en diagonale).
+          final m = (dx.abs() > dy.abs() ? dx.abs() : dy.abs());
+          final scale = m == 0 ? 1.0 : 1 / m;
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(-dx * scale, -dy * scale),
+                end:   Alignment( dx * scale,  dy * scale),
+                colors: bgColors,
+              ),
+            ),
+          );
+        }
+        return Container(color: primary);
+      case 'color':
+      default:
+        return Container(color: primary);
+    }
+  }
+
+  // ── Helpers de parsing ──────────────────────────────────────────────────────
+
+  static String? _str(dynamic v) => v is String && v.isNotEmpty ? v : null;
+
+  static double? _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return null;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
+  static Color? _parseColor(dynamic raw) {
+    if (raw is! String) return null;
+    final hex = raw.replaceAll('#', '').trim();
+    try {
+      if (hex.length == 6) return Color(int.parse('FF$hex', radix: 16));
+      if (hex.length == 8) return Color(int.parse(hex,     radix: 16));
+    } catch (_) {}
+    return null;
+  }
+
+  static List<Color>? _parseColors(dynamic raw) {
+    if (raw is List) {
+      final out = <Color>[];
+      for (final c in raw) {
+        final col = _parseColor(c);
+        if (col != null) out.add(col);
+      }
+      return out.isEmpty ? null : out;
+    }
+    final single = _parseColor(raw);
+    return single == null ? null : [single];
   }
 }
 
@@ -379,9 +865,13 @@ class _SectionHeader extends StatelessWidget {
 class QRModal extends StatefulWidget {
   final String token;
   final Map card;
-  final Color color;
+  final CardStyle style;
   final VoidCallback? onStampAdded;
-  const QRModal({super.key, required this.token, required this.card, required this.color, this.onStampAdded});
+  const QRModal({super.key, required this.token, required this.card, required this.style, this.onStampAdded});
+
+  // Compat : raccourcis pour l'ancien code interne
+  Color get color => style.primary;
+  String? get logoUrl => style.logoUrl;
 
   @override
   State<QRModal> createState() => _QRModalState();
@@ -443,48 +933,37 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   }
 
   Future<void> _checkForNewStamp() async {
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/me'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (res.statusCode != 200 || !mounted) return;
-      final cards = (jsonDecode(res.body) as List);
-      final matching = cards.where((c) => c['id'] == widget.card['id']).toList();
-      if (matching.isEmpty) return;
-      final updated = matching.first;
-      final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
-      final newVal = isPoints
-          ? (updated['points_count'] as int? ?? 0)
-          : (updated['stamps_count'] as int? ?? 0);
-      if (newVal > _initialStamps) {
-        _pollTimer?.cancel();
-        if (mounted) {
-          final cb = widget.onStampAdded;
-          Navigator.pop(context); // ferme le modal QR
-          if (cb != null) Future.microtask(cb); // ferme le modal parent + rafraîchit
-        }
+    final r = await ApiService.instance.getMyCards();
+    if (!mounted || r.isErr) return;
+    final matching = r.value.where((c) => c['id'] == widget.card['id']).toList();
+    if (matching.isEmpty) return;
+    final updated = matching.first;
+    final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
+    final newVal = isPoints
+        ? (updated['points_count'] as int? ?? 0)
+        : (updated['stamps_count'] as int? ?? 0);
+    if (newVal > _initialStamps) {
+      _pollTimer?.cancel();
+      if (mounted) {
+        final cb = widget.onStampAdded;
+        Navigator.pop(context);
+        if (cb != null) Future.microtask(cb);
       }
-    } catch (_) {}
+    }
   }
 
   Future<void> fetchDynamicQR() async {
     setState(() { loadingQR = true; dynamicToken = null; });
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/qr/${widget.card['id']}'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          dynamicToken = data['dynamic_token'];
-          timeLeft = data['expires_in'] ?? 60;
-          loadingQR = false;
-        });
-        startTimer();
-      }
-    } catch (e) {
+    final r = await ApiService.instance.getDynamicQR(widget.card['id'] as String);
+    if (!mounted) return;
+    if (r.isOk) {
+      setState(() {
+        dynamicToken = r.value['dynamic_token'] as String?;
+        timeLeft     = r.value['expires_in'] as int? ?? 60;
+        loadingQR    = false;
+      });
+      startTimer();
+    } else {
       setState(() => loadingQR = false);
     }
   }
@@ -554,11 +1033,15 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
 
   // ── FACE AVANT : carte fidélité + QR ─────────────────────────────────────────
   Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false]) {
+    final rawLogo  = widget.logoUrl;
+    final logoUrl  = (rawLogo != null && rawLogo.isNotEmpty) ? rawLogo : null;
+    final initials = businessName.length >= 2 ? businessName.substring(0, 2).toUpperCase() : businessName.toUpperCase();
+    final txt      = widget.style.textColor;
+
     return GestureDetector(
       onTap: _toggleFlip,
       child: Container(
         decoration: BoxDecoration(
-          color: color,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
         ),
@@ -566,8 +1049,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(18),
           child: Stack(
             children: [
-              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.07)))),
-              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.05)))),
+              Positioned.fill(child: widget.style.buildBackground()),
+              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.07)))),
+              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.05)))),
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -577,14 +1061,41 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // Logo ou initiales
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: logoUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    logoUrl,
+                                    width: 44, height: 44,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                                    ),
+                                  ),
+                                )
+                              : Center(child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800))),
+                        ),
                         Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('CARTE FIDÉLITÉ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.12, color: Colors.white.withOpacity(0.55))),
+                            Text('CARTE DE FIDÉLITÉ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.12, color: Colors.white.withOpacity(0.55))),
                             const SizedBox(height: 3),
-                            Text(businessName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
+                            Text(businessName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
                           ],
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
                         GestureDetector(
                           onTap: () => Share.share("Rejoins le programme de fidélité de $businessName sur l'app Qarta !", subject: 'Carte fidélité $businessName'),
                           child: Container(
@@ -672,15 +1183,18 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
 
   // ── FACE ARRIÈRE : infos du commerce ─────────────────────────────────────────
   Widget _buildCardBack(Color color, String businessName) {
-    final address = widget.card['merchants']?['address'] as String? ?? '—';
-    final phone   = widget.card['merchants']?['phone']   as String? ?? '—';
-    final hours   = widget.card['merchants']?['hours']   as String? ?? '—';
+    final address  = widget.card['merchants']?['address'] as String? ?? '—';
+    final phone    = widget.card['merchants']?['phone']   as String? ?? '—';
+    final hours    = widget.card['merchants']?['hours']   as String? ?? '—';
+    final rawLogo  = widget.logoUrl;
+    final logoUrl  = (rawLogo != null && rawLogo.isNotEmpty) ? rawLogo : null;
+    final initials = businessName.length >= 2 ? businessName.substring(0, 2).toUpperCase() : businessName.toUpperCase();
+    final txt      = widget.style.textColor;
 
     return GestureDetector(
       onTap: _toggleFlip,
       child: Container(
         decoration: BoxDecoration(
-          color: color,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
         ),
@@ -688,14 +1202,36 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(18),
           child: Stack(
             children: [
-              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.07)))),
-              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.05)))),
+              Positioned.fill(child: widget.style.buildBackground()),
+              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.07)))),
+              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.05)))),
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(businessName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white), textAlign: TextAlign.center),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (logoUrl != null) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              logoUrl,
+                              width: 36, height: 36,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 36, height: 36,
+                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                                child: Center(child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800))),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Text(businessName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white), textAlign: TextAlign.center),
+                      ],
+                    ),
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(16),

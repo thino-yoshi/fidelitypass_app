@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
-import 'cards_tab.dart' show QRModal;
+import 'cards_tab.dart' show QRModal, CardStyle;
 
 class RewardsPage extends StatelessWidget {
   final String token;
@@ -32,7 +32,15 @@ class RewardsPage extends StatelessWidget {
     return _palette[i % _palette.length];
   }
 
-  void _showQRModal(BuildContext context, Map card, Color color) {
+  CardStyle _styleForCard(Map card) {
+    return CardStyle.fromDesign(
+      card['card_design'],
+      merchantLogoUrl: card['merchants']?['logo_url'] as String?,
+      fallbackColor: _cardColor(card),
+    );
+  }
+
+  void _showQRModal(BuildContext context, Map card) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -40,7 +48,7 @@ class RewardsPage extends StatelessWidget {
       builder: (_) => QRModal(
         token: token,
         card: card,
-        color: color,
+        style: _styleForCard(card),
         onStampAdded: () {
           // ferme le modal récompenses, puis rafraîchit + retour tab cartes
           Navigator.pop(context);
@@ -136,12 +144,11 @@ class RewardsPage extends StatelessWidget {
                     itemCount: rewards.length,
                     itemBuilder: (context, index) {
                       final card = rewards[index];
-                      final color = _cardColor(card);
                       final name = card['merchants']?['business_name'] as String? ?? '';
                       final reward = card['merchants']?['reward_description'] as String? ?? '';
 
                       return GestureDetector(
-                        onTap: () => _showQRModal(context, card as Map, color),
+                        onTap: () => _showQRModal(context, card as Map),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(14),

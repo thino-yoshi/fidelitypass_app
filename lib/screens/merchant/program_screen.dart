@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../config/api.dart';
-import '../../config/app_colors.dart';
 import 'package:flutter/services.dart';
+import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
 
 class ProgramScreen extends StatefulWidget {
   final String token;
@@ -48,19 +46,12 @@ class _ProgramScreenState extends State<ProgramScreen> {
   }
 
   Future<void> _loadBonusRewards() async {
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/merchants/me/rewards'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() {
-          _bonusRewards = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
-          _rewardsLoaded = true;
-        });
-      }
-    } catch (_) {
-      setState(() => _rewardsLoaded = true);
+    final r = await ApiService.instance.getMerchantRewards();
+    if (mounted) {
+      setState(() {
+        _bonusRewards = r.isOk ? r.value.cast<Map<String, dynamic>>() : [];
+        _rewardsLoaded = true;
+      });
     }
   }
 
@@ -150,65 +141,47 @@ class _ProgramScreenState extends State<ProgramScreen> {
       ),
     );
     if (confirmed != true || descCtrl.text.isEmpty) return;
-    try {
-      final res = await http.post(
-        Uri.parse('$apiUrl/merchants/me/rewards'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
-        body: jsonEncode({'stamps_required': newStamps, 'description': descCtrl.text}),
-      );
-      if (res.statusCode == 200 && mounted) _loadBonusRewards();
-    } catch (_) {}
+    final r = await ApiService.instance.addMerchantReward(newStamps, descCtrl.text.trim());
+    if (mounted) {
+      if (r.isOk) {
+        _loadBonusRewards();
+      } else {
+        ApiService.showErrIfNeeded(context, r);
+      }
+    }
   }
 
   Future<void> _deleteBonusReward(String id) async {
-    try {
-      await http.delete(
-        Uri.parse('$apiUrl/merchants/me/rewards/$id'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (mounted) _loadBonusRewards();
-    } catch (_) {}
+    final r = await ApiService.instance.deleteMerchantReward(id);
+    if (mounted) {
+      if (r.isOk) {
+        _loadBonusRewards();
+      } else {
+        ApiService.showErrIfNeeded(context, r);
+      }
+    }
   }
 
   Future<void> saveProgram() async {
     setState(() => saving = true);
-    try {
-      final body = jsonEncode({
-        'business_name': nameCtrl.text,
-        'category': categoryCtrl.text,
-        'stamps_required': stampsRequired,
-        'reward_description': rewardCtrl.text,
-      });
-
-      final res = await http.post(
-        Uri.parse('$apiUrl/merchants/setup'),
-        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
-        body: body,
-      );
-
-      if (!mounted) return;
-      if (res.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Programme mis à jour ! ✓'),
-          backgroundColor: _successColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          behavior: SnackBarBehavior.floating,
-        ));
-        widget.onSaved?.call();
-      } else {
-        final data = jsonDecode(res.body);
-        throw Exception(data['detail'] ?? 'Erreur');
-      }
-    } catch (e) {
-      if (!mounted) return;
+    final r = await ApiService.instance.setupMerchant({
+      'business_name':     nameCtrl.text.trim(),
+      'category':          categoryCtrl.text.trim(),
+      'stamps_required':   stampsRequired,
+      'reward_description': rewardCtrl.text.trim(),
+    });
+    if (!mounted) return;
+    setState(() => saving = false);
+    if (r.isOk) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Erreur : ${e.toString().replaceAll("Exception: ", "")}'),
-        backgroundColor: _errorColor,
+        content: const Text('Programme mis à jour ! ✓'),
+        backgroundColor: _successColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ));
-    } finally {
-      setState(() => saving = false);
+      widget.onSaved?.call();
+    } else {
+      ApiService.showErrIfNeeded(context, r);
     }
   }
 

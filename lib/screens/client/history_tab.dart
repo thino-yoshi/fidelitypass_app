@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/auth_service.dart';
 
 const _kPrimary = Color(0xFF2C7BE5);
 const _kGold    = Color(0xFFF59E0B);
@@ -37,7 +38,7 @@ class _HistoryTabState extends State<HistoryTab> {
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/cards/my-history'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (mounted && res.statusCode == 200) {
         setState(() { _history = jsonDecode(res.body); _loading = false; });

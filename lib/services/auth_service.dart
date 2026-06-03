@@ -3,160 +3,186 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api.dart';
 import '../main.dart' show navigatorKey;
 import '../screens/auth_screen.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 const _kTimeout = Duration(seconds: 10);
 
 class AuthService {
+  static SupabaseClient get _supabase => Supabase.instance.client;
+
+  // ── Token actuel (toujours frais via Supabase SDK) ──────────────────────────
+  static String? get currentToken => _supabase.auth.currentSession?.accessToken;
+
+  // ── Connexion email / mot de passe ──────────────────────────────────────────
   static Future<Map<String, dynamic>> login(String email, String password) async {
-    final res = await http.post(
-      Uri.parse('$apiUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
+    final res = await _supabase.auth.signInWithPassword(
+      email: email,
+      password: password,
     );
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      print('📥 Login response: $data');
-      await saveSession(
-        data['token'] ?? data['access_token'] ?? '',
-        data['user_type'] ?? 'client',
-        data['name'] ?? email,
-      );
-      await saveFCMToken(data['token'] ?? data['access_token'] ?? '');
-      return data;
+    final user = res.user;
+    if (user == null || res.session == null) {
+      throw Exception('Connexion échouée — vérifiez vos identifiants');
     }
-    final error = jsonDecode(res.body);
-    throw Exception(error['detail'] ?? 'Erreur de connexion');
+    final userType = (user.userMetadata?['user_type'] as String?) ?? 'client';
+    final name     = (user.userMetadata?['name']      as String?) ?? user.email ?? '';
+    final token    = res.session!.accessToken;
+
+    await saveSession(token, userType, name, email: user.email ?? '');
+    await fetchAndSaveProfile(token);
+    await saveFCMToken(token);
+
+    return {'token': token, 'user_type': userType, 'name': name};
   }
 
+  // ── Inscription email / mot de passe (clients uniquement) ───────────────────
   static Future<Map<String, dynamic>> register(
-      String email,
-      String password,
-      String name,
-      String userType, {
-        String? merchantCode,
-      }) async {
-    final body = <String, dynamic>{
-      'email': email,
-      'password': password,
-      'name': name,
-      'user_type': userType,
-    };
-    if (merchantCode != null && merchantCode.isNotEmpty) {
-      body['merchant_code'] = merchantCode;
+    String email,
+    String password,
+    String name,
+    String userType, {
+    String? merchantCode, // conservé pour compat, non utilisé
+  }) async {
+    final res = await _supabase.auth.signUp(
+      email: email,
+      password: password,
+      data: {'user_type': userType, 'name': name},
+    );
+    final user = res.user;
+    if (user == null) throw Exception('Inscription échouée');
+
+    // Email confirmation activée → session null, on attend la vérification
+    if (res.session == null) {
+      return {'pending_confirmation': true, 'user_type': userType, 'name': name, 'token': ''};
     }
 
-    final res = await http.post(
-      Uri.parse('$apiUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      print('📥 Register response: $data');
-      await saveSession(
-        data['token'] ?? data['access_token'] ?? '',
-        data['user_type'] ?? userType,
-        data['name'] ?? name,
-      );
-      await saveFCMToken(data['token'] ?? data['access_token'] ?? '');
-      return data;
-    }
-    final error = jsonDecode(res.body);
-    throw Exception(error['detail'] ?? 'Erreur inscription');
+    final token = res.session!.accessToken;
+    await saveSession(token, userType, name, email: user.email ?? '');
+    await fetchAndSaveProfile(token);
+    await saveFCMToken(token);
+
+    return {'token': token, 'user_type': userType, 'name': name};
   }
 
+  // ── Connexion Google (token natif → Supabase) ────────────────────────────────
+  static Future<Map<String, dynamic>> signInWithGoogle() async {
+    final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+    final googleUser   = await googleSignIn.signIn();
+    if (googleUser == null) throw Exception('Connexion Google annulée');
+
+    final googleAuth = await googleUser.authentication;
+    final idToken    = googleAuth.idToken;
+    if (idToken == null) throw Exception('Token Google introuvable');
+
+    final res = await _supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: googleAuth.accessToken,
+    );
+    final user = res.user;
+    if (user == null || res.session == null) throw Exception('Connexion Google échouée');
+
+    final userType = (user.userMetadata?['user_type'] as String?) ?? 'client';
+    final name     = (user.userMetadata?['name']      as String?)
+        ?? googleUser.displayName
+        ?? user.email
+        ?? '';
+    final token    = res.session!.accessToken;
+
+    await saveSession(token, userType, name, email: user.email ?? '', isGoogle: true);
+    await fetchAndSaveProfile(token);
+    await saveFCMToken(token);
+
+    return {'token': token, 'user_type': userType, 'name': name};
+  }
+
+  // ── Envoi du token FCM à l'API ───────────────────────────────────────────────
   static Future<void> saveFCMToken(String authToken) async {
     try {
       final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.requestPermission();
-      print('🔔 Permission: ${settings.authorizationStatus}');
+      await messaging.requestPermission();
       final fcmToken = await messaging.getToken();
-      print('📱 FCM Token: $fcmToken');
-      if (fcmToken != null && authToken.isNotEmpty) {
-        print('🚀 Envoi FCM token vers API...');
-        final res = await http.put(
+      final token = currentToken ?? authToken;
+      if (fcmToken != null && token.isNotEmpty) {
+        await http.put(
           Uri.parse('$apiUrl/users/fcm-token'),
           headers: {
-            'Authorization': 'Bearer $authToken',
+            'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
           },
           body: jsonEncode({'fcm_token': fcmToken}),
-        );
-        print('✅ FCM Token envoyé: ${res.statusCode}');
-        print('📨 Réponse body: ${res.body}');
-      } else {
-        print('⚠️ FCM Token null ou authToken vide — token: $fcmToken, auth: $authToken');
+        ).timeout(_kTimeout);
       }
     } catch (e) {
-      print('❌ Erreur FCM: $e');
+      debugPrint('❌ Erreur FCM: $e');
     }
   }
 
+  // ── Session ──────────────────────────────────────────────────────────────────
+
+  /// Persiste les informations de base dans SharedPreferences (compatibilité
+  /// avec les écrans qui lisent encore email/is_google depuis les prefs).
   static Future<void> saveSession(
-      String token,
-      String userType,
-      String name, {
-      String email = '',
-      bool isGoogle = false,
-      }) async {
+    String token,
+    String userType,
+    String name, {
+    String email   = '',
+    bool isGoogle  = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', token);
+    await prefs.setString('token',     token);
     await prefs.setString('user_type', userType);
-    await prefs.setString('name', name);
+    await prefs.setString('name',      name);
     if (email.isNotEmpty) await prefs.setString('email', email);
     await prefs.setBool('is_google', isGoogle);
   }
 
-  /// Récupère email + is_google depuis /users/me et les persiste en local.
-  /// À appeler juste après chaque connexion/inscription réussie.
+  /// Enrichit le profil depuis Supabase Auth et le persiste (remplace l'appel
+  /// à /users/me de l'ancienne version).
   static Future<void> fetchAndSaveProfile(String token) async {
-    if (token.isEmpty) return;
     try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/users/me'),
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(_kTimeout);
-      if (res.statusCode == 200) {
-        final body     = jsonDecode(res.body) as Map<String, dynamic>;
-        final email    = (body['email'] as String?)?.trim() ?? '';
-        final isGoogle = body['is_google'] as bool? ?? false;
-        final prefs    = await SharedPreferences.getInstance();
-        if (email.isNotEmpty) await prefs.setString('email', email);
-        // is_google : ne jamais rétrograder (OR avec la valeur locale existante)
-        final localIsGoogle = prefs.getBool('is_google') ?? false;
-        await prefs.setBool('is_google', isGoogle || localIsGoogle);
-      }
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      final email    = user.email ?? '';
+      final isGoogle = (user.appMetadata['provider'] as String?) == 'google';
+      final prefs    = await SharedPreferences.getInstance();
+      if (email.isNotEmpty) await prefs.setString('email', email);
+      // Ne jamais rétrograder is_google (OR avec la valeur locale)
+      final localIsGoogle = prefs.getBool('is_google') ?? false;
+      await prefs.setBool('is_google', isGoogle || localIsGoogle);
     } catch (_) {}
   }
 
+  /// Lit la session Supabase active (remplace la lecture via SharedPreferences).
   static Future<Map<String, String>?> getSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    final userType = prefs.getString('user_type');
-    final name = prefs.getString('name');
-    if (token == null || token.isEmpty) return null;
+    final session = _supabase.auth.currentSession;
+    if (session == null) return null;
+
+    final user     = _supabase.auth.currentUser;
+    final userType = (user?.userMetadata?['user_type'] as String?) ?? 'client';
+    final name     = (user?.userMetadata?['name']      as String?) ?? user?.email ?? '';
+
     return {
-      'token': token,
-      'user_type': userType ?? 'client',
-      'name': name ?? '',
+      'token':     session.accessToken,
+      'user_type': userType,
+      'name':      name,
     };
   }
 
+  // ── Déconnexion ──────────────────────────────────────────────────────────────
   static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
     try {
-      final googleSignIn = GoogleSignIn();
-      await googleSignIn.signOut();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      await _supabase.auth.signOut();
     } catch (_) {}
   }
 
-  /// Redirige vers le login si le token est expiré (401).
+  // ── Gestion 401 ──────────────────────────────────────────────────────────────
   static Future<void> _handleUnauthorized() async {
     await logout();
     navigatorKey.currentState?.pushAndRemoveUntil(
@@ -165,52 +191,64 @@ class AuthService {
     );
   }
 
-  /// Transforme les exceptions réseau en messages lisibles.
   static String networkErrorMessage(Object e) {
     if (e is SocketException) return 'Pas de connexion internet.';
-    if (e is HttpException) return 'Erreur serveur. Réessayez.';
+    if (e is HttpException)   return 'Erreur serveur. Réessayez.';
     if (e.toString().contains('TimeoutException')) return 'Le serveur met trop de temps à répondre.';
     return 'Erreur réseau. Réessayez.';
   }
 
-  /// Wrapper GET authentifié — timeout 10s + gestion 401.
+  // ── Helpers HTTP authentifiés ────────────────────────────────────────────────
+  //   Toujours utiliser le token Supabase le plus récent (auto-refresh transparent).
+
+  static String _resolve(String fallback) => currentToken ?? fallback;
+
   static Future<http.Response> authGet(String path, String token) async {
-    final res = await http.get(
-      Uri.parse('$apiUrl$path'),
-      headers: {'Authorization': 'Bearer $token'},
-    ).timeout(_kTimeout);
+    final res = await http
+        .get(Uri.parse('$apiUrl$path'),
+            headers: {'Authorization': 'Bearer ${_resolve(token)}'})
+        .timeout(_kTimeout);
     if (res.statusCode == 401) await _handleUnauthorized();
     return res;
   }
 
-  /// Wrapper POST authentifié — timeout 10s + gestion 401.
-  static Future<http.Response> authPost(String path, String token, Map<String, dynamic> body) async {
-    final res = await http.post(
-      Uri.parse('$apiUrl$path'),
-      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    ).timeout(_kTimeout);
+  static Future<http.Response> authPost(
+      String path, String token, Map<String, dynamic> body) async {
+    final res = await http
+        .post(
+          Uri.parse('$apiUrl$path'),
+          headers: {
+            'Authorization': 'Bearer ${_resolve(token)}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(_kTimeout);
     if (res.statusCode == 401) await _handleUnauthorized();
     return res;
   }
 
-  /// Wrapper PUT authentifié — timeout 10s + gestion 401.
-  static Future<http.Response> authPut(String path, String token, Map<String, dynamic> body) async {
-    final res = await http.put(
-      Uri.parse('$apiUrl$path'),
-      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    ).timeout(_kTimeout);
+  static Future<http.Response> authPut(
+      String path, String token, Map<String, dynamic> body) async {
+    final res = await http
+        .put(
+          Uri.parse('$apiUrl$path'),
+          headers: {
+            'Authorization': 'Bearer ${_resolve(token)}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(_kTimeout);
     if (res.statusCode == 401) await _handleUnauthorized();
     return res;
   }
 
-  /// Wrapper DELETE authentifié — timeout 10s + gestion 401.
   static Future<http.Response> authDelete(String path, String token) async {
-    final res = await http.delete(
-      Uri.parse('$apiUrl$path'),
-      headers: {'Authorization': 'Bearer $token'},
-    ).timeout(_kTimeout);
+    final res = await http
+        .delete(Uri.parse('$apiUrl$path'),
+            headers: {'Authorization': 'Bearer ${_resolve(token)}'})
+        .timeout(_kTimeout);
     if (res.statusCode == 401) await _handleUnauthorized();
     return res;
   }

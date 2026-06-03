@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 import '../../services/widget_service.dart';
 import '../../config/api.dart';
 import '../../main.dart';
@@ -28,7 +29,8 @@ class ClientHome extends StatefulWidget {
   State<ClientHome> createState() => _ClientHomeState();
 }
 
-class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
+class _ClientHomeState extends State<ClientHome>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   int _tab = 0; // 0=cartes, 1=scan, 2=historique, 3=profil
   int _cardCount = 0;
   int _totalStamps = 0;
@@ -61,12 +63,25 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // ← détecte resume/pause de l'app
     _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
     _loadStats();
     _loadNotifs();
     _loadProfileImage();
     _loadPhone();
     _loadSessionInfo();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // L'app revient au premier plan → on recharge les cartes pour récupérer
+    // les modifs de design faites par le commerçant sur qarta.be entre-temps.
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('🔄 [ClientHome] App resumed → reload cards');
+      _loadStats();
+      _loadNotifs();
+    }
   }
 
   Future<void> _loadProfileImage() async {
@@ -84,7 +99,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/users/me'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -130,7 +145,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/users/me'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -331,7 +346,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                             final res = await http.patch(
                               Uri.parse('$apiUrl/users/me'),
                               headers: {
-                                'Authorization': 'Bearer ${widget.token}',
+                                'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
                                 'Content-Type': 'application/json',
                               },
                               body: jsonEncode({
@@ -419,7 +434,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
         'POST',
         Uri.parse('$apiUrl/users/profile-picture'),
       )
-        ..headers['Authorization'] = 'Bearer ${widget.token}'
+        ..headers['Authorization'] = 'Bearer ${AuthService.currentToken ?? widget.token}'
         ..files.add(await http.MultipartFile.fromPath('file', picked.path));
       final streamed = await req.send();
       final res = await http.Response.fromStream(streamed);
@@ -438,7 +453,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/notifications/client'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as List;
@@ -473,6 +488,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _notifAnim.dispose();
     super.dispose();
   }
@@ -482,39 +498,29 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   }
 
   Future<void> _loadStats() async {
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/me'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (res.statusCode == 200 && mounted) {
-        final raw = jsonDecode(res.body) as List;
+    final r = await ApiService.instance.getMyCards();
+    if (!mounted || r.isErr) return;
 
-        final data = raw.map((card) => Map<String, dynamic>.from(card as Map)).toList();
-
-        int stamps = 0;
-        int rewards = 0;
-        for (final c in data) {
-          final val = c['stamps_count'] as int? ?? 0;
-          stamps += val;
-          final type = c['merchants']?['program_type'] as String? ?? 'stamps';
-          final req = type == 'points'
-              ? (c['merchants']?['points_required'] as int? ?? 100)
-              : (c['merchants']?['stamps_required'] as int? ?? 10);
-          if (val >= req) rewards++;
-        }
-
-        if (!mounted) return;
-        setState(() {
-          _cards = data;
-          _cardCount = data.length;
-          _totalStamps = stamps;
-          _rewardCount = rewards;
-          _statsLoaded = true;
-        });
-        WidgetService.updateFromCards(data);
-      }
-    } catch (_) {}
+    final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
+    int stamps = 0;
+    int rewards = 0;
+    for (final c in data) {
+      final val  = c['stamps_count'] as int? ?? 0;
+      stamps += val;
+      final type = c['merchants']?['program_type'] as String? ?? 'stamps';
+      final req  = type == 'points'
+          ? (c['merchants']?['points_required'] as int? ?? 100)
+          : (c['merchants']?['stamps_required'] as int? ?? 10);
+      if (val >= req) rewards++;
+    }
+    setState(() {
+      _cards       = data;
+      _cardCount   = data.length;
+      _totalStamps = stamps;
+      _rewardCount = rewards;
+      _statsLoaded = true;
+    });
+    WidgetService.updateFromCards(data);
   }
 
   void _showChangePassword() {
@@ -543,7 +549,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                 try {
                   final res = await http.put(
                     Uri.parse('$apiUrl/users/change-password'),
-                    headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+                    headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
                     body: jsonEncode({'current_password': currentCtrl.text, 'new_password': newCtrl.text}),
                   );
                   if (!ctx.mounted) return;
@@ -588,7 +594,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
                 try {
                   final res = await http.delete(
                     Uri.parse('$apiUrl/users/account'),
-                    headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+                    headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
                     body: jsonEncode({'password': passCtrl.text}),
                   );
                   if (!ctx.mounted) return;
@@ -632,7 +638,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
     });
     http.put(
       Uri.parse('$apiUrl/notifications/client/read-all'),
-      headers: {'Authorization': 'Bearer ${widget.token}'},
+      headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
     );
   }
 
@@ -891,7 +897,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        return CardsTab(token: widget.token, cards: _cards, onRefresh: _loadStats);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats);
       case 1:
         return ScanTab(
           token: widget.token,
@@ -902,7 +908,7 @@ class _ClientHomeState extends State<ClientHome> with TickerProviderStateMixin {
       case 3:
         return _buildProfilTab();
       default:
-        return CardsTab(token: widget.token, cards: _cards, onRefresh: _loadStats);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats);
     }
   }
 

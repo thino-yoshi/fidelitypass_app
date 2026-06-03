@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../../config/api.dart';
+import '../../services/api_service.dart';
 
 class ScannerScreen extends StatefulWidget {
   final String token;
@@ -30,26 +28,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
     if (processing) return;
     setState(() { processing = true; phase = 'validating'; });
 
-    try {
-      final res = await http.post(
-        Uri.parse('$apiUrl/scan/'),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'qr_token': qrToken}),
-      );
-      final data = jsonDecode(res.body);
-      if (res.statusCode == 200) {
-        setState(() {
-          scanResult = data;
-          phase = data['reward_reached'] ? 'reward' : 'success';
-        });
-      } else {
-        setState(() => phase = 'error');
-      }
-    } catch (e) {
-      setState(() => phase = 'error');
+    final r = await ApiService.instance.scanQR(qrToken);
+    if (mounted) {
+      setState(() {
+        if (r.isOk) {
+          scanResult = r.value;
+          phase = (r.value['reward_reached'] == true) ? 'reward' : 'success';
+        } else {
+          phase = 'error';
+        }
+        processing = false;
+      });
     }
   }
 

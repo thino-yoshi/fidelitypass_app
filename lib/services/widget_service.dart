@@ -26,16 +26,21 @@ class WidgetService {
   /// Appelé après chaque refresh des cartes client.
   static Future<void> updateFromCards(List<dynamic> cards) async {
     if (cards.isEmpty) return;
-    // Prend la première carte (ou la carte avec le plus de tampons)
-    final card = cards.reduce((a, b) {
-      final sa = (a['stamps_count'] as int? ?? 0);
-      final sb = (b['stamps_count'] as int? ?? 0);
-      return sa >= sb ? a : b;
-    });
-    final merchantName = card['merchants']?['business_name'] as String? ?? 'Mon commerce';
-    final stampsCount = card['stamps_count'] as int? ?? 0;
-    final stampsRequired = card['merchants']?['stamps_required'] as int? ?? 10;
-    final rewardDescription = card['merchants']?['reward_description'] as String? ?? 'Récompense';
+    // Prend la carte avec le plus de tampons (itération manuelle pour éviter
+    // le souci de typage de List<Map>.reduce avec une lambda non-typée)
+    dynamic best = cards.first;
+    int bestStamps = (best['stamps_count'] as int?) ?? 0;
+    for (final c in cards.skip(1)) {
+      final s = (c['stamps_count'] as int?) ?? 0;
+      if (s > bestStamps) {
+        best = c;
+        bestStamps = s;
+      }
+    }
+    final merchantName = best['merchants']?['business_name'] as String? ?? 'Mon commerce';
+    final stampsCount = best['stamps_count'] as int? ?? 0;
+    final stampsRequired = best['merchants']?['stamps_required'] as int? ?? 10;
+    final rewardDescription = best['merchants']?['reward_description'] as String? ?? 'Récompense';
 
     await updateWidget(
       merchantName: merchantName,

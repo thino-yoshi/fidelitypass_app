@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/api_service.dart';
 
 class StaticQRScreen extends StatefulWidget {
   final String token;
@@ -40,21 +38,13 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
 
   Future<void> _loadQR() async {
     setState(() { loading = true; error = null; });
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/merchants/me/static-qr'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (res.statusCode == 200) {
-        setState(() {
-          qrToken = jsonDecode(res.body)['static_qr_token'];
-          loading = false;
-        });
-      } else {
-        setState(() { error = 'Erreur lors du chargement'; loading = false; });
-      }
-    } catch (e) {
-      setState(() { error = 'Erreur réseau'; loading = false; });
+    final r = await ApiService.instance.getStaticQR();
+    if (mounted) {
+      setState(() {
+        qrToken = r.isOk  ? r.value : null;
+        error   = r.isErr ? r.error : null;
+        loading = false;
+      });
     }
   }
 

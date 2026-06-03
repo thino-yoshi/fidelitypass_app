@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
+import '../../services/auth_service.dart';
 
 enum _SortMode { recent, oldest, mostStamps, leastStamps }
 
@@ -129,7 +130,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
       try {
         await http.delete(
           Uri.parse('$apiUrl/cards/$id'),
-          headers: {'Authorization': 'Bearer ${widget.token}'},
+          headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
         );
       } catch (_) {}
     }

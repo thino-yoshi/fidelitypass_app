@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'dart:convert';
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
-import '../config/api.dart';
 import 'client/client_home.dart';
 import 'merchant/merchant_home.dart';
 import 'merchant_redirect_screen.dart';
@@ -50,8 +46,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   late AnimationController _orbCtrl;
   late Animation<double> _orbOpacity;
-
-  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
 
   bool _isTablet(BuildContext ctx) => MediaQuery.of(ctx).size.width >= 600;
   double _maxW(BuildContext ctx) => _isTablet(ctx) ? 480.0 : double.infinity;
@@ -118,10 +112,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Future<void> _doLogin() async {
     setState(() { loading = true; error = ''; });
     try {
-      final data  = await AuthService.login(loginEmailCtrl.text.trim(), loginPassCtrl.text);
-      final token = data['token'] ?? data['access_token'] ?? '';
-      // Récupère email + is_google depuis la BDD et sauvegarde en local
-      await AuthService.fetchAndSaveProfile(token);
+      final data = await AuthService.login(
+        loginEmailCtrl.text.trim(),
+        loginPassCtrl.text,
+      );
       _navigate(data);
     } catch (e) {
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
@@ -133,15 +127,36 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Future<void> _doRegister() async {
     setState(() { loading = true; error = ''; });
     try {
-      final data  = await AuthService.register(
-        emailCtrl.text.trim(), passCtrl.text,
-        prenomCtrl.text.trim(),
-        regType == 'merchant' ? 'merchant' : 'client',
-        merchantCode: regType == 'merchant' ? codeCtrl.text.trim() : null,
+      final data = await AuthService.register(
+        emailCtrl.text.trim(),
+        passCtrl.text,
+        '${prenomCtrl.text.trim()} ${nomCtrl.text.trim()}'.trim(),
+        'client',
       );
-      final token = data['token'] ?? data['access_token'] ?? '';
-      // Récupère email + is_google depuis la BDD et sauvegarde en local
-      await AuthService.fetchAndSaveProfile(token);
+      // Email confirmation activée → Supabase envoie un mail, session null
+      if (data['pending_confirmation'] == true) {
+        if (!mounted) return;
+        setState(() { error = ''; loading = false; });
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF0E1E35),
+            title: const Text('Vérifie ton email', style: TextStyle(color: Colors.white)),
+            content: Text(
+              'Un lien de confirmation a été envoyé à ${emailCtrl.text.trim()}. '
+              'Clique sur le lien pour activer ton compte.',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(color: Color(0xFF4A9EFF))),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
       _navigate(data);
     } catch (e) {
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
@@ -153,29 +168,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Future<void> _doGoogle() async {
     setState(() { googleLoading = true; error = ''; });
     try {
-      final googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) { setState(() => googleLoading = false); return; }
-      final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-      if (idToken == null) { setState(() { error = 'Token introuvable'; googleLoading = false; }); return; }
-      final res = await http.post(Uri.parse('$apiUrl/auth/google'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'id_token': idToken}));
-      if (res.statusCode == 200) {
-        final data  = jsonDecode(res.body);
-        final token = data['token'] ?? data['access_token'] ?? '';
-        // isGoogle: true sauvegardé immédiatement (fiable même si /users/me échoue)
-        await AuthService.saveSession(token, data['user_type'] ?? 'client', data['name'] ?? '',
-            email: data['email'] ?? googleUser.email, isGoogle: true);
-        await AuthService.saveFCMToken(token);
-        // Récupère email + is_google depuis la BDD et sauvegarde en local
-        await AuthService.fetchAndSaveProfile(token);
-        _navigate(data);
-      } else {
-        setState(() => error = jsonDecode(res.body)['detail'] ?? 'Erreur Google');
-      }
+      final data = await AuthService.signInWithGoogle();
+      _navigate(data);
     } catch (e) {
-      setState(() => error = 'Erreur : $e');
+      if (e.toString().contains('annulée')) {
+        // L'utilisateur a fermé la fenêtre Google — pas une erreur à afficher
+      } else {
+        setState(() => error = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => googleLoading = false);
     }
