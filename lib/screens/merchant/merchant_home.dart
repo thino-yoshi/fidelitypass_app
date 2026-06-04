@@ -16,13 +16,20 @@ import 'static_qr_screen.dart';
 import 'card_preview_screen.dart';
 import 'merchant_onboarding.dart';
 import 'abonnement_screen.dart';
+import '../client/cards_tab.dart' show LoyaltyCardFace, CardStyle;
 
-// ─── Design tokens ─────────────────────────────────────────────────────────
-const _kPrimary = Color(0xFF2C7BE5);
-const _kGold    = Color(0xFFF59E0B);
-const _kSuccess = Color(0xFF27AE60);
-const _kError   = Color(0xFFE24B4A);
-const _kPurple  = Color(0xFF7C3AED);
+// ─── Design tokens (alignés sur le mockup dashboard v10) ────────────────────
+const _kPrimary   = Color(0xFF2C7BE5);
+const _kBlueLight = Color(0xFF4A9EF5);
+const _kNavy      = Color(0xFF0B1220);
+const _kNavyCard  = Color(0xFF1E2D45);
+const _kGold      = Color(0xFFF59E0B);
+const _kSuccess   = Color(0xFF27AE60);
+const _kError     = Color(0xFFE24B4A);
+const _kPurple    = Color(0xFF7C3AED);
+
+// Largeur max du contenu — sur tablette/pliable on centre, sur téléphone aucun effet
+const double _kMaxContentWidth = 500;
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -46,6 +53,10 @@ class _MerchantHomeState extends State<MerchantHome> {
   bool loading = true;
   bool _showOnboarding = false;
   List<dynamic> _recentClients = [];
+  List<dynamic> _daily = [];        // [{date, scans, rewards}] sur 30 jours
+  String _period = 'today';         // 'today' | '7j' | '30j'
+  String _graphRange = '7j';        // '7j' | '30j' — plage du graphique
+  Map? _cardDesign;                 // design de carte créé sur qarta.be (card_design JSON)
 
   static const Map<String, Map<String, dynamic>> _categoryStyles = {
     'Café':        {'emoji': '☕', 'color': Color(0xFF2C7BE5)},
@@ -98,6 +109,15 @@ class _MerchantHomeState extends State<MerchantHome> {
       });
     }
     await _loadRecentClients();
+    await _loadDaily();
+    await _loadCardDesign();
+  }
+
+  Future<void> _loadCardDesign() async {
+    final r = await ApiService.instance.getMerchantCardDesign();
+    if (mounted && r.isOk) {
+      setState(() => _cardDesign = r.value?['card_design'] as Map?);
+    }
   }
 
   Future<void> _loadRecentClients() async {
@@ -105,6 +125,38 @@ class _MerchantHomeState extends State<MerchantHome> {
     if (mounted && r.isOk) {
       setState(() => _recentClients = r.value.take(3).toList());
     }
+  }
+
+  Future<void> _loadDaily() async {
+    final r = await ApiService.instance.getDailyStats();
+    if (mounted && r.isOk) setState(() => _daily = r.value);
+  }
+
+  // ─── Agrégation KPIs selon la période sélectionnée ──────────────────────────
+  // Retourne {scans, rewards, scansDelta, rewardsDelta} (delta = null si non calculable)
+  Map<String, int?> _periodAgg() {
+    if (_daily.isEmpty) return {'scans': 0, 'rewards': 0, 'scansDelta': null, 'rewardsDelta': null};
+    int sumScans(List<dynamic> l)   => l.fold(0, (s, d) => s + ((d['scans']   as int?) ?? 0));
+    int sumRewards(List<dynamic> l) => l.fold(0, (s, d) => s + ((d['rewards'] as int?) ?? 0));
+
+    if (_period == 'today') {
+      final today = _daily.last;
+      final yest  = _daily.length >= 2 ? _daily[_daily.length - 2] : null;
+      final s = (today['scans'] as int?) ?? 0, r = (today['rewards'] as int?) ?? 0;
+      return {
+        'scans': s, 'rewards': r,
+        'scansDelta':   yest != null ? s - ((yest['scans']   as int?) ?? 0) : null,
+        'rewardsDelta': yest != null ? r - ((yest['rewards'] as int?) ?? 0) : null,
+      };
+    }
+    final n = _period == '7j' ? 7 : 30;
+    final cur  = _daily.length >= n ? _daily.sublist(_daily.length - n) : _daily;
+    final prev = _daily.length >= n * 2 ? _daily.sublist(_daily.length - n * 2, _daily.length - n) : null;
+    return {
+      'scans': sumScans(cur), 'rewards': sumRewards(cur),
+      'scansDelta':   prev != null ? sumScans(cur)   - sumScans(prev)   : null,
+      'rewardsDelta': prev != null ? sumRewards(cur) - sumRewards(prev) : null,
+    };
   }
 
   void _logout() async {
@@ -153,7 +205,7 @@ class _MerchantHomeState extends State<MerchantHome> {
                 _buildHeader(),
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(bottom: 64 + MediaQuery.of(context).padding.bottom),
+                    padding: EdgeInsets.only(bottom: 84 + MediaQuery.of(context).padding.bottom),
                     child: loading
                         ? const Center(child: CircularProgressIndicator(color: _kPrimary))
                         : _buildTabContent(),
@@ -175,53 +227,104 @@ class _MerchantHomeState extends State<MerchantHome> {
     );
   }
 
-  // ─── Header ───────────────────────────────────────────────────────────────
+  // ─── Header navy (avatar + nom + statut + cloche) ───────────────────────────
 
   Widget _buildHeader() {
-    final emoji = _style['emoji'] as String;
-    final clientsCount = stats?['total_clients'] ?? 0;
-    final scansCount   = stats?['total_scans'] ?? 0;
+    final clients = stats?['total_clients'] ?? 0;
+    final rewards = stats?['total_rewards'] ?? 0;
+    final active  = (merchantInfo?['subscription_status'] as String?) == 'active';
 
     return Container(
-      color: _kWhite,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 12,
-        left: 16, right: 16, bottom: 12,
-      ),
-      child: Row(children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: _showProfilSheet,
+      color: _kNavy,
+      child: Stack(children: [
+        // Orbe lumineux discret
+        Positioned(
+          top: -60, right: -20,
+          child: Container(width: 180, height: 180,
+            decoration: BoxDecoration(shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [_kPrimary.withOpacity(0.25), Colors.transparent], stops: const [0, 0.7]))),
+        ),
+        Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+          child: Column(children: [
+          // Ligne du haut
+          Padding(
+            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 14, left: 20, right: 20, bottom: 0),
             child: Row(children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
+              GestureDetector(
+                onTap: _showProfilSheet,
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: _kPrimary.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: _kBlueLight.withOpacity(0.45), width: 1.5)),
+                  child: Center(child: Text(_initials,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kBlueLight))),
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 11),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(_businessName,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kText),
-                      overflow: TextOverflow.ellipsis),
-                  Text(loading ? '···' : '$clientsCount clients · $scansCount scans aujourd\'hui',
-                      style: TextStyle(fontSize: 11, color: _kSub),
-                      overflow: TextOverflow.ellipsis),
+                  Text(_businessName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: _kSuccess, shape: BoxShape.circle)),
+                    const SizedBox(width: 5),
+                    Text('Connecté · ${active ? "Plan Pro" : "Plan Free"}',
+                      style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.5))),
+                  ]),
                 ]),
+              ),
+              // Cloche notifications
+              GestureDetector(
+                onTap: () => setState(() => _tab = 3),
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: Colors.white.withOpacity(0.12))),
+                  child: Icon(Icons.notifications_outlined, color: Colors.white.withOpacity(0.85), size: 18),
+                ),
               ),
             ]),
           ),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: _showProfilSheet,
-          child: Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _kBorder)),
-            child: Icon(Icons.person_outline_rounded, color: _kSub, size: 18),
+          // Bande stats globales
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Row(children: [
+              _gsCard('$clients', 'Clients carte', () => setState(() => _tab = 1)),
+              const SizedBox(width: 7),
+              _gsCard('$rewards', 'Récompenses', null),
+            ]),
           ),
-        ),
+        ]),
+        )),
       ]),
+    );
+  }
+
+  Widget _gsCard(String val, String label, VoidCallback? onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _kNavyCard),
+          ),
+          child: Column(children: [
+            Text(val, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Colors.white, height: 1)),
+            const SizedBox(height: 2),
+            Text(label, textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 8, color: Colors.white.withOpacity(0.42))),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -270,122 +373,305 @@ class _MerchantHomeState extends State<MerchantHome> {
       ));
     }
 
-    final clientsActifs    = stats?['total_clients'] as int? ?? 0;
-    final pointsDistribues = stats?['total_stamps']  as int? ?? 0;
-    final recompenses      = stats?['total_rewards']  as int? ?? 0;
+    final agg = _periodAgg();
 
     return RefreshIndicator(
       onRefresh: _loadData,
       color: _kPrimary,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
+      child: Center(child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + MediaQuery.of(context).padding.bottom),
         children: [
-          // Stats
-          Row(children: [
-            _statCard(Icons.people_outline_rounded, '$clientsActifs', 'Clients actifs', _kPrimary),
-            const SizedBox(width: 10),
-            _statCard(Icons.check_circle_outline_rounded, '$pointsDistribues', 'Tampons', _kSuccess),
-            const SizedBox(width: 10),
-            _statCard(Icons.star_outline_rounded, '$recompenses', 'Récompenses', _kGold),
-          ]),
-          const SizedBox(height: 16),
-
-          // Clients récents
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(12), border: Border.all(color: _kBorder)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Clients récents', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kText)),
-                GestureDetector(
-                  onTap: () => setState(() => _tab = 1),
-                  child: const Text('Voir tout', style: TextStyle(fontSize: 13, color: _kPrimary, fontWeight: FontWeight.w600)),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              if (_recentClients.isEmpty)
-                Center(child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Aucun client', style: TextStyle(color: _kSub)),
-                ))
-              else
-                ..._recentClients.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final card = entry.value;
-                  final user = card['client'] as Map? ?? {};
-                  final name = (user['name'] ?? user['email'] ?? 'Client') as String;
-                  final stamps = card['stamps_count'] as int? ?? 0;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      border: i > 0 ? Border(top: BorderSide(color: _kBorder)) : null,
-                    ),
-                    child: Row(children: [
-                      UserAvatar(imageUrl: card['client']?['profile_picture_url'] as String?, name: name, size: 38),
-                      const SizedBox(width: 10),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kText)),
-                        Text('$stamps tampons', style: TextStyle(fontSize: 11, color: _kSub)),
-                      ])),
-                      Icon(Icons.chevron_right_rounded, color: _kSub, size: 18),
-                    ]),
-                  );
-                }),
-            ]),
-          ),
-
+          _googleBubble(),
           const SizedBox(height: 12),
-
-          // Actions rapides
-          Row(children: [
-            _quickAction(Icons.qr_code_scanner_rounded, 'Scanner', _kPrimary, _openScanner),
-            const SizedBox(width: 10),
-            _quickAction(Icons.notifications_outlined, 'Notifs', _kGold, () => setState(() => _tab = 3)),
-            const SizedBox(width: 10),
-            _quickAction(Icons.tune_rounded, 'Programme', _kSuccess, () => setState(() => _tab = 4)),
-          ]),
+          _periodToggle(),
+          const SizedBox(height: 12),
+          _kpiGrid(agg),
+          const SizedBox(height: 14),
+          Center(child: Text('Statistiques générales',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kText))),
+          const SizedBox(height: 8),
+          _graphCard(),
+          const SizedBox(height: 12),
+          _cardPreviewBlock(),
         ],
       ),
+      )),
     );
   }
 
-  Widget _statCard(IconData icon, String value, String label, Color color) {
-    return Expanded(
+  // ── Bulle "Demander un avis Google" (feature à venir) ──────────────────────
+  Widget _googleBubble() {
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Avis Google — bientôt disponible'),
+          behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2)));
+      },
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
-          color: _kWhite,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _kBorder),
+          gradient: const LinearGradient(colors: [Color(0xFF1A3A6B), Color(0xFF0F2044)]),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kBlueLight.withOpacity(0.2)),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kText, height: 1)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 9, color: _kSub, fontWeight: FontWeight.w600)),
+        child: Row(children: [
+          const Text('G', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF4285F4))),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('Demander un avis Google',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(color: _kGold.withOpacity(0.25), borderRadius: BorderRadius.circular(20)),
+            child: const Text('+5 pts offerts',
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFFFBBF24))),
+          ),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.5), size: 16),
         ]),
       ),
     );
   }
 
-  Widget _quickAction(IconData icon, String label, Color color, VoidCallback onTap) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 72,
-          decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(10), border: Border.all(color: _kBorder)),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(width: 34, height: 34,
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, color: color, size: 18)),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _kText)),
-          ]),
+  // ── Toggle période (Aujourd'hui / 7 jours / 30 jours) ──────────────────────
+  Widget _periodToggle() {
+    Widget btn(String key, String label) {
+      final active = _period == key;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _period = key),
+          child: Container(
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active ? _kNavy : Colors.transparent,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                color: active ? Colors.white : _kSub)),
+          ),
         ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(12), border: Border.all(color: _kBorder)),
+      child: Row(children: [
+        btn('today', "Aujourd'hui"),
+        btn('7j', '7 jours'),
+        btn('30j', '30 jours'),
+      ]),
+    );
+  }
+
+  // ── Grille de 4 KPIs ────────────────────────────────────────────────────────
+  Widget _kpiGrid(Map<String, int?> agg) {
+    return Column(children: [
+      IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _kpiCard('0', 'Clients ${_period == 'today' ? "aujourd'hui" : 'actifs'}', null),
+          const SizedBox(width: 8),
+          _kpiCard('${agg['scans'] ?? 0}', 'Tampons ajoutés', agg['scansDelta']),
+        ]),
+      ),
+      const SizedBox(height: 8),
+      IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _kpiCard('${agg['rewards'] ?? 0}', 'Récompenses débloquées', agg['rewardsDelta']),
+          const SizedBox(width: 8),
+          _kpiCard('0', 'Nouveaux clients', null),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _kpiCard(String val, String label, int? delta) {
+    final ref = _period == 'today' ? 'hier' : 'préc.';
+    Widget? deltaChip;
+    if (delta != null) {
+      final up = delta > 0, flat = delta == 0;
+      final c = flat ? _kSub : (up ? _kSuccess : _kError);
+      final bg = flat ? _kBg : (up ? const Color(0xFFE4F5EB) : const Color(0xFFFDE8E7));
+      deltaChip = Container(
+        margin: const EdgeInsets.only(top: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+        child: Text(flat ? '= même qu\'$ref' : '${up ? "↑ +" : "↓ "}$delta vs $ref',
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: c)),
+      );
+    }
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        decoration: BoxDecoration(
+          color: _kNavyCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF2A3D5A)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(val, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _kBlueLight, height: 1)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.65))),
+          if (deltaChip != null) deltaChip,
+        ]),
       ),
     );
+  }
+
+  // ── Graphique : barres groupées (tampons bleu + récompenses vert) ──────────
+  // Aligné sur le mockup : valeur au-dessus de chaque barre + labels jours.
+  List<Map<String, dynamic>> _graphGroups() {
+    if (_daily.isEmpty) return [];
+    const wd = ['L', 'M', 'M', 'J', 'V', 'S', 'D']; // lundi..dimanche
+    if (_graphRange == '7j') {
+      final days = _daily.length >= 7 ? _daily.sublist(_daily.length - 7) : _daily;
+      return days.map((d) {
+        final date = DateTime.tryParse(d['date'] as String? ?? '');
+        return {
+          'label': date != null ? wd[(date.weekday - 1).clamp(0, 6)] : '',
+          'stamps': (d['scans'] as int?) ?? 0,
+          'rewards': (d['rewards'] as int?) ?? 0,
+        };
+      }).toList();
+    }
+    // 30j → 4 semaines agrégées (S1..S4) sur les 28 derniers jours
+    final last28 = _daily.length >= 28 ? _daily.sublist(_daily.length - 28) : _daily;
+    final perWeek = (last28.length / 4).ceil().clamp(1, last28.length);
+    final groups = <Map<String, dynamic>>[];
+    for (int w = 0; w < 4; w++) {
+      final start = w * perWeek;
+      if (start >= last28.length) break;
+      final end = (start + perWeek).clamp(0, last28.length);
+      final slice = last28.sublist(start, end);
+      groups.add({
+        'label': 'S${w + 1}',
+        'stamps': slice.fold<int>(0, (a, d) => a + ((d['scans'] as int?) ?? 0)),
+        'rewards': slice.fold<int>(0, (a, d) => a + ((d['rewards'] as int?) ?? 0)),
+      });
+    }
+    return groups;
+  }
+
+  Widget _graphCard() {
+    final groups = _graphGroups();
+    final maxV = groups.fold<double>(1, (m, g) => (g['stamps'] as int) > m ? (g['stamps'] as int).toDouble() : m);
+    final headroom = maxV * 1.28; // marge en haut pour les valeurs
+
+    Widget gpBtn(String key, String label) {
+      final active = _graphRange == key;
+      return GestureDetector(
+        onTap: () => setState(() => _graphRange = key),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: active ? _kPrimary : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: active ? _kPrimary : _kBorder),
+          ),
+          child: Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: active ? Colors.white : _kSub)),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Évolution des tampons', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText)),
+          Row(children: [gpBtn('7j', '7j'), const SizedBox(width: 4), gpBtn('30j', 'Mois')]),
+        ]),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 88,
+          child: groups.isEmpty
+              ? Center(child: Text('Pas encore de données', style: TextStyle(fontSize: 11, color: _kSub)))
+              : Row(children: groups.map((g) {
+                  final s = g['stamps'] as int;
+                  final r = g['rewards'] as int;
+                  return Expanded(
+                    child: Column(children: [
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _bar(s, headroom, _kPrimary),
+                            if (r > 0) ...[const SizedBox(width: 3), _bar(r, headroom, _kSuccess)],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(g['label'] as String, style: TextStyle(fontSize: 8, color: _kSub)),
+                    ]),
+                  );
+                }).toList()),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          _legend(_kPrimary, 'Tampons'),
+          const SizedBox(width: 14),
+          _legend(_kSuccess, 'Récompenses'),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _bar(int value, double maxV, Color color) {
+    final h = maxV > 0 ? (value / maxV * 60).clamp(value > 0 ? 4.0 : 2.0, 60.0) : 2.0;
+    return Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.end, children: [
+      Text('$value', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: color)),
+      const SizedBox(height: 2),
+      Container(width: _graphRange == '7j' ? 9 : 16, height: h,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+    ]);
+  }
+
+  Widget _legend(Color c, String label) => Row(children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(fontSize: 9, color: _kSub)),
+      ]);
+
+  // ── Aperçu "Ma carte fidélité" — réutilise le rendu client (design réel) ────
+  Widget _cardPreviewBlock() {
+    // Carte synthétique au même format que côté client (LoyaltyCardFace).
+    final card = {
+      'stamps_count': 0,
+      'card_design': _cardDesign,
+      'merchants': merchantInfo ?? {},
+    };
+    final style = CardStyle.fromDesign(
+      _cardDesign,
+      merchantLogoUrl: merchantInfo?['logo_url'] as String?,
+      fallbackColor: _kPrimary,
+    );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('Ma carte fidélité', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kText)),
+        GestureDetector(
+          onTap: () => setState(() => _tab = 4),
+          child: const Text('Modifier', style: TextStyle(fontSize: 10, color: _kPrimary, fontWeight: FontWeight.w600)),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      GestureDetector(
+        onTap: () => setState(() => _tab = 4),
+        child: LoyaltyCardFace(
+          card: card,
+          style: style,
+          userName: 'Client',  // aperçu — titulaire générique
+        ),
+      ),
+      const SizedBox(height: 8),
+      Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.edit_outlined, size: 11, color: _kSub),
+        const SizedBox(width: 5),
+        Text('Appuyer pour modifier la carte', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kSub)),
+      ])),
+    ]);
   }
 
   // ─── Bottom Nav ───────────────────────────────────────────────────────────
@@ -394,16 +680,17 @@ class _MerchantHomeState extends State<MerchantHome> {
     return Positioned(
       bottom: 0, left: 0, right: 0,
       child: Container(
-        height: 64 + MediaQuery.of(context).padding.bottom,
+        height: 84 + MediaQuery.of(context).padding.bottom,
         decoration: BoxDecoration(color: _kWhite, border: Border(top: BorderSide(color: _kBorder))),
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-        child: Row(children: [
-          _navItem(Icons.dashboard_outlined, 'Dashboard', 0),
-          _navItem(Icons.people_outline, 'Clients', 1),
-          _navScanFab(),
-          _navItem(Icons.history_rounded, 'Historique', 2),
-          _navItem(Icons.tune_rounded, 'Programme', 4),
-        ]),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8),
+        child: Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+          child: Row(children: [
+            _navItem(Icons.home_outlined, 'Accueil', 0),
+            _navScanFab(),
+            _navItem(Icons.history_rounded, 'Historique', 2),
+          ]),
+        )),
       ),
     );
   }
@@ -426,14 +713,18 @@ class _MerchantHomeState extends State<MerchantHome> {
     return Expanded(
       child: GestureDetector(
         onTap: _openScanner,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: _kPrimary, borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              color: _kBlueLight,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [BoxShadow(color: _kBlueLight.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 6))],
+            ),
+            child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 26),
           ),
-          const SizedBox(height: 3),
-          const Text('Scanner', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: _kPrimary)),
+          const SizedBox(height: 2),
+          Text('Scanner', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: _kSub)),
         ]),
       ),
     );

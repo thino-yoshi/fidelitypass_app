@@ -120,6 +120,18 @@ class ApiService {
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
+  /// Design de carte du commerçant (créé sur qarta.be) — { card_design, updated_at }.
+  /// Retourne null dans la donnée si aucun design n'a encore été créé (404).
+  Future<ApiResult<Map<String, dynamic>?>> getMerchantCardDesign() async {
+    final r = await _get('/merchants/me/card-design');
+    if (r.isErr) {
+      // 404 = pas de design → on renvoie ok(null) pour ne pas casser l'écran
+      if (r.statusCode == 404) return ApiResult.ok(null);
+      return ApiResult.err(r.error!);
+    }
+    return ApiResult.ok(r.data as Map<String, dynamic>?);
+  }
+
   /// Stats globales (clients, tampons, récompenses, scans).
   Future<ApiResult<Map<String, dynamic>>> getMerchantStats() async {
     final r = await _get('/cards/stats');
