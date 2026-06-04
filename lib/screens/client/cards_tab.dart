@@ -35,6 +35,21 @@ class _CardsTabState extends State<CardsTab> {
     Color(0xFFE67E22),
   ];
 
+  /// Prénom seul du titulaire (premier mot), avec 1ère lettre en majuscule.
+  String get _firstName {
+    final parts = widget.userName.trim().split(RegExp(r'\s+'));
+    final first = parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : widget.userName;
+    if (first.isEmpty) return first;
+    return first[0].toUpperCase() + first.substring(1);
+  }
+
+  /// Taille du nom de commerce — réduite si le nom est long (émule le clamp du site).
+  double _titleFontSize(String name) {
+    if (name.length >= 22) return 14;
+    if (name.length >= 16) return 16;
+    return 18;
+  }
+
   /// Parse le card_design du site qarta.be (table merchant_card_designs.card_design).
   /// Champs réels : bgType, bgColors, accentColors, textColor, fontFamily,
   /// bgImageUrl, bgGradientAngle, bgImageOpacity, accentAngle, cardName, stampLabel.
@@ -65,6 +80,7 @@ class _CardsTabState extends State<CardsTab> {
         token: widget.token,
         card: card,
         style: style,
+        userName: widget.userName,
         onStampAdded: widget.onRefresh, // rafraîchit les cartes après tampon
       ),
     );
@@ -108,15 +124,18 @@ class _CardsTabState extends State<CardsTab> {
 
           // Liste des cartes
           ...List.generate(cards.length, (i) {
-            final card        = cards[i];
-            final style       = _styleFromCard(card, i);
-            final programType = card['merchants']?['program_type'] as String? ?? 'stamps';
-            final isPoints    = programType == 'points';
-            return GestureDetector(
-              onTap: () => _showQRModal(card, style),
-              child: isPoints
-                  ? _buildPointsCard(card, style)
-                  : _buildStampsCard(card, style),
+            final card  = cards[i];
+            final style = _styleFromCard(card, i);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GestureDetector(
+                onTap: () => _showQRModal(card, style),
+                child: LoyaltyCardFace(
+                  card: card,
+                  style: style,
+                  userName: widget.userName,
+                ),
+              ),
             );
           }),
         ],
@@ -188,14 +207,14 @@ class _CardsTabState extends State<CardsTab> {
                                     letterSpacing: 1.3)),
                             const SizedBox(height: 2),
                             Text(title,
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontFamily: style.fontFamily,
-                                    fontSize: 18,
+                                    fontSize: _titleFontSize(title),
                                     fontWeight: FontWeight.w900,
                                     color: textColor,
-                                    height: 1.1)),
+                                    height: 1.05)),
                           ],
                         ),
                       ),
@@ -211,7 +230,7 @@ class _CardsTabState extends State<CardsTab> {
                                   color: textColor,
                                   letterSpacing: 1.3)),
                           const SizedBox(height: 2),
-                          Text(widget.userName,
+                          Text(_firstName,
                               style: TextStyle(
                                   fontFamily: style.fontFamily,
                                   fontSize: 11,
@@ -403,20 +422,20 @@ class _CardsTabState extends State<CardsTab> {
                             Text('CARTE DE FIDÉLITÉ',
                                 style: TextStyle(
                                     fontFamily: style.fontFamily,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: textColor.withOpacity(0.55),
-                                    letterSpacing: 1.4)),
-                            const SizedBox(height: 4),
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                    letterSpacing: 1.3)),
+                            const SizedBox(height: 2),
                             Text(title,
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontFamily: style.fontFamily,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: _titleFontSize(title),
+                                    fontWeight: FontWeight.w900,
                                     color: textColor,
-                                    height: 1)),
+                                    height: 1.05)),
                           ],
                         ),
                       ),
@@ -427,30 +446,30 @@ class _CardsTabState extends State<CardsTab> {
                           Text('TITULAIRE',
                               style: TextStyle(
                                   fontFamily: style.fontFamily,
-                                  fontSize: 9,
+                                  fontSize: 8,
                                   fontWeight: FontWeight.w700,
-                                  color: textColor.withOpacity(0.55),
-                                  letterSpacing: 1.4)),
-                          const SizedBox(height: 4),
-                          Text(widget.userName,
+                                  color: textColor,
+                                  letterSpacing: 1.3)),
+                          const SizedBox(height: 2),
+                          Text(_firstName,
                               style: TextStyle(
                                   fontFamily: style.fontFamily,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
                                   color: textColor)),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(pointsLabel,
                       style: TextStyle(
                           fontFamily: style.fontFamily,
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: FontWeight.w700,
-                          color: textColor.withOpacity(0.55),
-                          letterSpacing: 1.2)),
-                  const SizedBox(height: 12),
+                          color: textColor,
+                          letterSpacing: 1.1)),
+                  const SizedBox(height: 10),
                   // ── Gros compteur de points
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -459,7 +478,7 @@ class _CardsTabState extends State<CardsTab> {
                           style: TextStyle(
                               fontFamily: style.fontFamily,
                               color: accent,
-                              fontSize: 42,
+                              fontSize: 40,
                               fontWeight: FontWeight.w900,
                               height: 1)),
                       Padding(
@@ -467,15 +486,15 @@ class _CardsTabState extends State<CardsTab> {
                         child: Text('/ $required pts',
                             style: TextStyle(
                                 fontFamily: style.fontFamily,
-                                color: textColor.withOpacity(0.55),
+                                color: accent,
                                 fontSize: 14,
-                                fontWeight: FontWeight.w600)),
+                                fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _progressBar(pct, full, accent),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
                   Text(
                     full
                         ? '$reward disponible !'
@@ -486,9 +505,9 @@ class _CardsTabState extends State<CardsTab> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontFamily: style.fontFamily,
-                        color: textColor.withOpacity(full ? 1.0 : 0.85),
-                        fontSize: 11,
-                        fontWeight: full ? FontWeight.w700 : FontWeight.w500),
+                        color: textColor,
+                        fontSize: 10,
+                        fontWeight: full ? FontWeight.w700 : FontWeight.w400),
                   ),
                 ],
               ),
@@ -566,6 +585,260 @@ class _CardsTabState extends State<CardsTab> {
         backgroundColor: Colors.white.withOpacity(0.1),
         valueColor: AlwaysStoppedAnimation(accent),
       ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Helpers partagés (liste + modale QR)
+// ════════════════════════════════════════════════════════════════════════════
+
+double lcTitleFontSize(String name) {
+  if (name.length >= 22) return 14;
+  if (name.length >= 16) return 16;
+  return 18;
+}
+
+String lcFirstName(String fullName) {
+  final parts = fullName.trim().split(RegExp(r'\s+'));
+  final first = parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : fullName;
+  if (first.isEmpty) return first;
+  return first[0].toUpperCase() + first.substring(1);
+}
+
+/// Noir ou blanc — le meilleur contraste WCAG sur [bg].
+Color lcContrastOn(Color bg) {
+  final lum = bg.computeLuminance();
+  const dark = Color(0xFF0B1220);
+  final cBlack = (lum + 0.05) / 0.05;
+  final cWhite = 1.05 / (lum + 0.05);
+  return cBlack >= cWhite ? dark : Colors.white;
+}
+
+Widget lcProgressBar(double pct, Color accent) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(99),
+    child: LinearProgressIndicator(
+      value: pct,
+      minHeight: 2,
+      backgroundColor: Colors.white.withOpacity(0.1),
+      valueColor: AlwaysStoppedAnimation(accent),
+    ),
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LoyaltyCardFace : le visuel de carte (tampons OU points), réplique du site.
+// Réutilisé par la liste des cartes ET la face avant de la modale QR.
+// ════════════════════════════════════════════════════════════════════════════
+
+class LoyaltyCardFace extends StatelessWidget {
+  final Map card;
+  final CardStyle style;
+  final String userName;
+  const LoyaltyCardFace({
+    super.key,
+    required this.card,
+    required this.style,
+    required this.userName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isPoints = (card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
+    final businessName = card['merchants']?['business_name'] as String? ?? '';
+    final reward = (style.rewardDescription ??
+            card['merchants']?['reward_description'] as String? ??
+            '')
+        .trim();
+    final rawTitle = (style.cardName ?? '').trim().isNotEmpty
+        ? style.cardName!.trim()
+        : businessName;
+    final title = rawTitle.toUpperCase();
+    final textColor = style.textColor;
+    final accent = style.accentColor ?? const Color(0xFFFF2D78);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: style.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Positioned.fill(child: style.buildBackground()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _header(title, textColor),
+                  const SizedBox(height: 8),
+                  if (isPoints) ..._points(textColor, accent, reward) else ..._stamps(textColor, accent, reward),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(String title, Color textColor) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('CARTE DE FIDÉLITÉ',
+                    style: TextStyle(fontFamily: style.fontFamily, fontSize: 8, fontWeight: FontWeight.w600, color: textColor, letterSpacing: 1.3)),
+                const SizedBox(height: 2),
+                Text(title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontFamily: style.fontFamily, fontSize: lcTitleFontSize(title), fontWeight: FontWeight.w900, color: textColor, height: 1.05)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('TITULAIRE',
+                  style: TextStyle(fontFamily: style.fontFamily, fontSize: 8, fontWeight: FontWeight.w700, color: textColor, letterSpacing: 1.3)),
+              const SizedBox(height: 2),
+              Text(lcFirstName(userName),
+                  style: TextStyle(fontFamily: style.fontFamily, fontSize: 11, fontWeight: FontWeight.w700, color: textColor)),
+            ],
+          ),
+        ],
+      );
+
+  List<Widget> _stamps(Color textColor, Color accent, String reward) {
+    final stamps = card['stamps_count'] as int? ?? 0;
+    final required = style.stampsRequired ?? card['merchants']?['stamps_required'] as int? ?? 10;
+    final pct = (stamps / required).clamp(0.0, 1.0);
+    final full = stamps >= required;
+    final stampLabel = style.stampLabel ?? 'POINTS COLLECTÉS';
+    final perRow = (required / 2).ceil();
+
+    return [
+      Text(stampLabel,
+          style: TextStyle(fontFamily: style.fontFamily, fontSize: 8, fontWeight: FontWeight.w700, color: textColor, letterSpacing: 1.1)),
+      const SizedBox(height: 6),
+      LayoutBuilder(builder: (ctx, c) {
+        const vSpacing = 5.0;
+        final size = (c.maxWidth / perRow * 0.68).clamp(22.0, 42.0);
+        Widget cell(int idx) {
+          if (idx >= required) return SizedBox(width: size, height: size);
+          final filled = idx < stamps;
+          return Container(
+            width: size, height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: filled ? accent : Colors.transparent,
+              border: Border.all(color: accent.withOpacity(0.27), width: 1.5),
+            ),
+            child: filled ? Center(child: Icon(Icons.check, size: size * 0.5, color: lcContrastOn(accent))) : null,
+          );
+        }
+        Widget row(int r) => Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(perRow, (col) => cell(r * perRow + col)),
+            );
+        return Column(children: [row(0), const SizedBox(height: vSpacing), row(1)]);
+      }),
+      const SizedBox(height: 8),
+      lcProgressBar(pct, accent),
+      const SizedBox(height: 6),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: _footer(required - stamps, reward, full, textColor)),
+          const SizedBox(width: 8),
+          Text('$stamps / $required',
+              style: TextStyle(fontFamily: style.fontFamily, color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _points(Color textColor, Color accent, String reward) {
+    final points = card['stamps_count'] as int? ?? 0;
+    final required = style.pointsGoal ?? card['merchants']?['points_required'] as int? ?? card['merchants']?['stamps_required'] as int? ?? 100;
+    final pct = (points / required).clamp(0.0, 1.0);
+    final full = points >= required;
+    final remaining = required - points;
+    final pointsLabel = style.pointsLabel ?? style.stampLabel ?? 'POINTS COLLECTÉS';
+
+    return [
+      Text(pointsLabel,
+          style: TextStyle(fontFamily: style.fontFamily, fontSize: 8, fontWeight: FontWeight.w700, color: textColor, letterSpacing: 1.1)),
+      const SizedBox(height: 10),
+      // ── Grand chiffre : "{points} PTS" (le /goal va dans le compteur footer, comme le site)
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text('$points',
+              style: TextStyle(fontFamily: style.fontFamily, color: accent, fontSize: 40, fontWeight: FontWeight.w900, height: 1)),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6, left: 4),
+            child: Text('PTS',
+                style: TextStyle(fontFamily: style.fontFamily, color: accent.withOpacity(0.75), fontSize: 14, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      lcProgressBar(pct, accent),
+      const SizedBox(height: 7),
+      // ── Footer : "Encore X pts pour votre Y"  |  "{points} / {goal}"
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: _pointsFooter(remaining, reward, full, textColor)),
+          const SizedBox(width: 8),
+          Text('$points / $required',
+              style: TextStyle(fontFamily: style.fontFamily, color: textColor, fontSize: 13, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    ];
+  }
+
+  /// Footer points : "Encore X pts pour votre Y" avec le "X pts" en bold (comme le site).
+  Widget _pointsFooter(int remaining, String reward, bool full, Color textColor) {
+    final base = TextStyle(fontFamily: style.fontFamily, color: textColor, fontSize: 10, fontWeight: full ? FontWeight.w700 : FontWeight.w400);
+    if (full) {
+      return Text(reward.isEmpty ? 'Récompense disponible 🎉' : '$reward disponible !',
+          maxLines: 2, overflow: TextOverflow.ellipsis, style: base);
+    }
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(style: base, children: [
+        const TextSpan(text: 'Encore '),
+        TextSpan(text: '$remaining pts', style: const TextStyle(fontWeight: FontWeight.w700)),
+        TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+      ]),
+    );
+  }
+
+  Widget _footer(int remaining, String reward, bool full, Color textColor) {
+    final base = TextStyle(fontFamily: style.fontFamily, color: textColor, fontSize: 10, fontWeight: full ? FontWeight.w700 : FontWeight.w400);
+    if (full) {
+      return Text(reward.isEmpty ? 'récompense disponible !' : '$reward disponible !',
+          maxLines: 2, overflow: TextOverflow.ellipsis, style: base);
+    }
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(style: base, children: [
+        const TextSpan(text: 'Encore '),
+        TextSpan(text: '$remaining', style: const TextStyle(fontWeight: FontWeight.w800)),
+        TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+      ]),
     );
   }
 }
@@ -866,8 +1139,9 @@ class QRModal extends StatefulWidget {
   final String token;
   final Map card;
   final CardStyle style;
+  final String userName;
   final VoidCallback? onStampAdded;
-  const QRModal({super.key, required this.token, required this.card, required this.style, this.onStampAdded});
+  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded});
 
   // Compat : raccourcis pour l'ancien code interne
   Color get color => style.primary;
@@ -1031,153 +1305,89 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     );
   }
 
-  // ── FACE AVANT : carte fidélité + QR ─────────────────────────────────────────
+  // ── FACE AVANT : carte fidélité (réplique du site) + panneau QR ──────────────
   Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false]) {
-    final rawLogo  = widget.logoUrl;
-    final logoUrl  = (rawLogo != null && rawLogo.isNotEmpty) ? rawLogo : null;
-    final initials = businessName.length >= 2 ? businessName.substring(0, 2).toUpperCase() : businessName.toUpperCase();
-    final txt      = widget.style.textColor;
-
-    return GestureDetector(
-      onTap: _toggleFlip,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1. Le visuel de carte — identique à la liste / au site (tap → flip infos)
+        GestureDetector(
+          onTap: _toggleFlip,
+          child: LoyaltyCardFace(
+            card: widget.card,
+            style: widget.style,
+            userName: widget.userName,
+          ),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Stack(
+        const SizedBox(height: 12),
+        // 2. Panneau QR (fond sombre, indépendant de la carte)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111726),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.06)),
+          ),
+          child: Column(
             children: [
-              Positioned.fill(child: widget.style.buildBackground()),
-              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.07)))),
-              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.05)))),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Logo ou initiales
-                        Container(
-                          width: 44, height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: logoUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    logoUrl,
-                                    width: 44, height: 44,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Center(
-                                      child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-                                    ),
-                                  ),
-                                )
-                              : Center(child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800))),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('CARTE DE FIDÉLITÉ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.12, color: Colors.white.withOpacity(0.55))),
-                            const SizedBox(height: 3),
-                            Text(businessName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        GestureDetector(
-                          onTap: () => Share.share("Rejoins le programme de fidélité de $businessName sur l'app Qarta !", subject: 'Carte fidélité $businessName'),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withOpacity(0.25))),
-                            child: const Row(children: [Icon(Icons.share_rounded, color: Colors.white, size: 12), SizedBox(width: 5), Text('Partager', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700))]),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    if (isPoints) ...[
-                      // ── Mode Points ──
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('$stamps', style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900)),
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6, left: 4),
-                            child: Text('/ $required pts', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 15)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(child: Text(
-                            full ? '$reward disponible !' : 'Encore ${required - stamps} pts pour $reward',
-                            style: TextStyle(color: Colors.white.withOpacity(full ? 1 : 0.7), fontSize: 11, fontWeight: full ? FontWeight.w700 : FontWeight.w400),
-                          )),
-                        ],
-                      ),
-                    ] else ...[
-                      // ── Mode Tampons ──
-                      Wrap(
-                        spacing: 5, runSpacing: 5,
-                        children: List.generate(required, (j) => Container(
-                          width: 24, height: 24,
-                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(7), color: j < stamps ? Colors.white.withOpacity(0.9) : Colors.transparent, border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5)),
-                          child: j < stamps ? Center(child: Icon(Icons.check, size: 13, color: color)) : null,
-                        )),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(child: Text(full ? '$reward disponible !' : 'Encore ${required - stamps} tampon${(required - stamps) > 1 ? 's' : ''} pour $reward', style: TextStyle(color: Colors.white.withOpacity(full ? 1 : 0.7), fontSize: 11, fontWeight: full ? FontWeight.w700 : FontWeight.w400))),
-                          Text('$stamps/$required', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                    ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: pct, minHeight: 3, backgroundColor: Colors.white.withOpacity(0.2), valueColor: AlwaysStoppedAnimation(Colors.white.withOpacity(0.85)))),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: GestureDetector(
-                        onTap: loadingQR ? null : () => _showQRZoom(context, color),
-                        child: Hero(
-                          tag: 'qr-${widget.card['id']}',
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(color: const Color(0xFF0B1220), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12)]),
-                            child: loadingQR
-                                ? SizedBox(width: 120, height: 120, child: Center(child: CircularProgressIndicator(color: color, strokeWidth: 2)))
-                                : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 120, foregroundColor: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Center(child: Text('🔒 Renouvellement dans ${timeLeft}s', style: TextStyle(fontSize: 11, color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.45), fontWeight: FontWeight.w600))),
-                    const SizedBox(height: 6),
-                    ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: timeLeft / 60, minHeight: 2, backgroundColor: Colors.white.withOpacity(0.15), valueColor: AlwaysStoppedAnimation(timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.5)))),
-                    const SizedBox(height: 10),
-                    Center(child: Text('Tapez pour voir les infos', style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w600))),
-                  ],
+              // Bouton partager
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () => Share.share(
+                      "Rejoins le programme de fidélité de $businessName sur l'app Qarta !",
+                      subject: 'Carte fidélité $businessName'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.15))),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.share_rounded, color: Colors.white, size: 12),
+                      SizedBox(width: 5),
+                      Text('Partager', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
                 ),
               ),
+              const SizedBox(height: 12),
+              // QR code (fond blanc = scan optimal)
+              GestureDetector(
+                onTap: loadingQR ? null : () => _showQRZoom(context, color),
+                child: Hero(
+                  tag: 'qr-${widget.card['id']}',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 16)]),
+                    child: loadingQR
+                        ? SizedBox(width: 150, height: 150, child: Center(child: CircularProgressIndicator(color: color, strokeWidth: 2)))
+                        : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 150, foregroundColor: const Color(0xFF0B1220)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('🔒 Renouvellement dans ${timeLeft}s',
+                  style: TextStyle(fontSize: 11, color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.5), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                      value: timeLeft / 60,
+                      minHeight: 2,
+                      backgroundColor: Colors.white.withOpacity(0.12),
+                      valueColor: AlwaysStoppedAnimation(timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.4)))),
+              const SizedBox(height: 10),
+              Text('Tapez la carte pour voir les infos',
+                  style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w600)),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 

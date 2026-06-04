@@ -824,6 +824,7 @@ class _ClientHomeState extends State<ClientHome>
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                               child: RewardsPage(
                                 token: widget.token,
+                                userName: widget.userName,
                                 cards: _cards,
                                 onStampAdded: () {
                                   _loadStats();

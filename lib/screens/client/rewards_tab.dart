@@ -4,10 +4,11 @@ import 'cards_tab.dart' show QRModal, CardStyle;
 
 class RewardsPage extends StatelessWidget {
   final String token;
+  final String userName;
   final List<dynamic> cards;
   final VoidCallback? onStampAdded; // appelé après détection d'un tampon
 
-  const RewardsPage({super.key, required this.token, required this.cards, this.onStampAdded});
+  const RewardsPage({super.key, required this.token, this.userName = '', required this.cards, this.onStampAdded});
 
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
@@ -49,6 +50,7 @@ class RewardsPage extends StatelessWidget {
         token: token,
         card: card,
         style: _styleForCard(card),
+        userName: userName,
         onStampAdded: () {
           // ferme le modal récompenses, puis rafraîchit + retour tab cartes
           Navigator.pop(context);
