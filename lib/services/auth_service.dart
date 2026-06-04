@@ -18,6 +18,18 @@ class AuthService {
   // ── Token actuel (toujours frais via Supabase SDK) ──────────────────────────
   static String? get currentToken => _supabase.auth.currentSession?.accessToken;
 
+  /// Détermine le type de compte depuis les métadonnées Supabase.
+  /// Règle : site = marchand (clé `role`), app = client (clé `user_type`).
+  /// On lit les deux clés pour être robuste quel que soit l'endroit de création.
+  static String resolveUserType(Map<String, dynamic>? meta) {
+    final ut = (meta?['user_type'] as String?)?.trim();
+    if (ut == 'merchant' || ut == 'client') return ut!;
+    final role = (meta?['role'] as String?)?.trim();
+    if (role == 'merchant') return 'merchant';
+    if (role == 'client') return 'client';
+    return 'client';
+  }
+
   // ── Connexion email / mot de passe ──────────────────────────────────────────
   static Future<Map<String, dynamic>> login(String email, String password) async {
     final res = await _supabase.auth.signInWithPassword(
@@ -28,7 +40,7 @@ class AuthService {
     if (user == null || res.session == null) {
       throw Exception('Connexion échouée — vérifiez vos identifiants');
     }
-    final userType = (user.userMetadata?['user_type'] as String?) ?? 'client';
+    final userType = resolveUserType(user.userMetadata);
     final name     = (user.userMetadata?['name']      as String?) ?? user.email ?? '';
     final token    = res.session!.accessToken;
 
@@ -86,7 +98,7 @@ class AuthService {
     final user = res.user;
     if (user == null || res.session == null) throw Exception('Connexion Google échouée');
 
-    final userType = (user.userMetadata?['user_type'] as String?) ?? 'client';
+    final userType = resolveUserType(user.userMetadata);
     final name     = (user.userMetadata?['name']      as String?)
         ?? googleUser.displayName
         ?? user.email
@@ -163,7 +175,7 @@ class AuthService {
     if (session == null) return null;
 
     final user     = _supabase.auth.currentUser;
-    final userType = (user?.userMetadata?['user_type'] as String?) ?? 'client';
+    final userType = resolveUserType(user?.userMetadata);
     final name     = (user?.userMetadata?['name']      as String?) ?? user?.email ?? '';
 
     return {
