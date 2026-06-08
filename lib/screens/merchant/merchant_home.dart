@@ -16,6 +16,7 @@ import 'static_qr_screen.dart';
 import 'card_preview_screen.dart';
 import 'merchant_onboarding.dart';
 import 'abonnement_screen.dart';
+import 'stats_screen.dart';
 import '../client/cards_tab.dart' show LoyaltyCardFace, CardStyle;
 
 // ─── Design tokens (alignés sur le mockup dashboard v10) ────────────────────
@@ -665,9 +666,8 @@ class _MerchantHomeState extends State<MerchantHome> {
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText))),
           GestureDetector(
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Page Statistiques — bientôt'),
-              behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2))),
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => StatsScreen(token: widget.token, merchantInfo: merchantInfo))),
             child: const Text('Voir stats →', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _kPrimary)),
           ),
           const SizedBox(width: 8),
