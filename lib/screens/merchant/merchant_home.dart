@@ -54,8 +54,10 @@ class _MerchantHomeState extends State<MerchantHome> {
   bool _showOnboarding = false;
   List<dynamic> _recentClients = [];
   List<dynamic> _daily = [];        // [{date, scans, rewards}] sur 30 jours
+  List<dynamic> _scanHistory = [];  // derniers scans (pour estimer la rétention)
   String _period = 'today';         // 'today' | '7j' | '30j'
   String _graphRange = '7j';        // '7j' | '30j' — plage du graphique
+  String _retPeriod = 'sem';        // 'sem' | 'mois' — taux de retour
   Map? _cardDesign;                 // design de carte créé sur qarta.be (card_design JSON)
 
   static const Map<String, Map<String, dynamic>> _categoryStyles = {
@@ -130,6 +132,26 @@ class _MerchantHomeState extends State<MerchantHome> {
   Future<void> _loadDaily() async {
     final r = await ApiService.instance.getDailyStats();
     if (mounted && r.isOk) setState(() => _daily = r.value);
+    final h = await ApiService.instance.getMerchantScanHistory();
+    if (mounted && h.isOk) setState(() => _scanHistory = h.value);
+  }
+
+  // Taux de retour estimé : % de clients revenus ≥ 2× sur la période, à partir
+  // de l'historique des scans (approx ; un endpoint dédié serait plus précis).
+  ({int pct, int returning, int total}) _retention(String period) {
+    final cutoff = DateTime.now().subtract(Duration(days: period == 'sem' ? 7 : 30));
+    final counts = <String, int>{};
+    for (final s in _scanHistory) {
+      final t = DateTime.tryParse(s['scanned_at'] as String? ?? '');
+      if (t == null || t.isBefore(cutoff)) continue;
+      final cid = (s['client_id'] ?? '').toString();
+      if (cid.isEmpty) continue;
+      counts[cid] = (counts[cid] ?? 0) + 1;
+    }
+    final total = counts.length;
+    final returning = counts.values.where((c) => c >= 2).length;
+    final pct = total > 0 ? (returning / total * 100).round() : 0;
+    return (pct: pct, returning: returning, total: total);
   }
 
   // ─── Agrégation KPIs selon la période sélectionnée ──────────────────────────
@@ -388,6 +410,8 @@ class _MerchantHomeState extends State<MerchantHome> {
           _periodToggle(),
           const SizedBox(height: 12),
           _kpiGrid(agg),
+          const SizedBox(height: 12),
+          _retentionCard(),
           const SizedBox(height: 14),
           Center(child: Text('Statistiques générales',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kText))),
@@ -431,6 +455,64 @@ class _MerchantHomeState extends State<MerchantHome> {
           Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.5), size: 16),
         ]),
       ),
+    );
+  }
+
+  // ── Carte "Taux de retour" (rétention) ─────────────────────────────────────
+  Widget _retentionCard() {
+    final r = _retention(_retPeriod);
+    final isDark = context.isDark;
+    final bg     = isDark ? _kNavyCard : const Color(0xFFEFF5FE);
+    final border = isDark ? const Color(0xFF2A3D5A) : const Color(0xFFD6E6FB);
+    final iconBg = isDark ? _kPrimary.withOpacity(0.25) : const Color(0xFFDBEAFB);
+
+    Widget pill(String key, String label) {
+      final active = _retPeriod == key;
+      return GestureDetector(
+        onTap: () => setState(() => _retPeriod = key),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: active ? _kPrimary : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(label, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700,
+              color: active ? Colors.white : _kSub)),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 34, height: 34,
+            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.replay_rounded, color: _kPrimary, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Taux de retour', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: _kText)),
+            Text('Clients qui reviennent', style: TextStyle(fontSize: 9, color: _kSub)),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${r.pct}%', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: _kPrimary, height: 1)),
+            Text('${r.returning}/${r.total} ${_retPeriod == 'sem' ? "cette sem." : "ce mois"}',
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: _kSub)),
+          ]),
+        ]),
+        const SizedBox(height: 9),
+        Container(
+          decoration: BoxDecoration(
+            color: context.cSurface, borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+          ),
+          padding: const EdgeInsets.all(2),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [pill('sem', 'Semaine'), pill('mois', 'Mois')]),
+        ),
+      ]),
     );
   }
 
@@ -578,9 +660,18 @@ class _MerchantHomeState extends State<MerchantHome> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Évolution des tampons', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText)),
-          Row(children: [gpBtn('7j', '7j'), const SizedBox(width: 4), gpBtn('30j', 'Mois')]),
+        Row(children: [
+          Expanded(child: Text('Évolution des tampons',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText))),
+          GestureDetector(
+            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Page Statistiques — bientôt'),
+              behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2))),
+            child: const Text('Voir stats →', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _kPrimary)),
+          ),
+          const SizedBox(width: 8),
+          gpBtn('7j', '7j'), const SizedBox(width: 4), gpBtn('30j', 'Mois'),
         ]),
         const SizedBox(height: 14),
         SizedBox(

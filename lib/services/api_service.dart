@@ -215,6 +215,14 @@ class ApiService {
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
+  /// Identifie le client d'un QR SANS ajouter de tampon (le commerçant choisit
+  /// ensuite combien ajouter via adjustStamp).
+  Future<ApiResult<Map<String, dynamic>>> resolveScan(String qrToken) async {
+    final r = await _post('/scan/resolve', {'qr_token': qrToken});
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
   // ── CLIENT ─────────────────────────────────────────────────────────────────
 
   /// Toutes les cartes fidélité du client connecté.
@@ -243,6 +251,29 @@ class ApiService {
     final r = await _get('/cards/my-history');
     if (r.isErr) return ApiResult.err(r.error!);
     return ApiResult.ok(r.data as List<dynamic>);
+  }
+
+  // ── RÉCOMPENSES (portefeuille) ───────────────────────────────────────────────
+
+  /// Récompenses disponibles du client (triées de la plus ancienne à la récente).
+  Future<ApiResult<List<dynamic>>> getMyRewards() async {
+    final r = await _get('/rewards/me');
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as List<dynamic>);
+  }
+
+  /// QR dynamique d'une récompense (pour la faire valider au commerce).
+  Future<ApiResult<Map<String, dynamic>>> getRewardQR(String rewardId) async {
+    final r = await _get('/rewards/$rewardId/qr');
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
+  /// Le commerçant valide une récompense scannée.
+  Future<ApiResult<Map<String, dynamic>>> redeemReward(String qrToken) async {
+    final r = await _post('/rewards/redeem', {'qr_token': qrToken});
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
   // ── Helpers UI ─────────────────────────────────────────────────────────────

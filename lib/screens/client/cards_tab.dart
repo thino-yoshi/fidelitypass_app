@@ -6,11 +6,33 @@ import 'package:share_plus/share_plus.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 
+/// Événement émis quand le commerçant ajoute des tampons/points à une carte
+/// pendant que le client a son QR ouvert (détecté par polling).
+class StampEvent {
+  final String cardId;
+  final String merchantName;
+  final int delta;       // nb tampons/points ajoutés (0 si inconnu)
+  final int newCount;
+  final int total;
+  final bool reward;     // true si la récompense vient d'être atteinte
+  final bool isPoints;
+  const StampEvent({
+    required this.cardId,
+    required this.merchantName,
+    required this.delta,
+    required this.newCount,
+    required this.total,
+    required this.reward,
+    required this.isPoints,
+  });
+}
+
 class CardsTab extends StatefulWidget {
   final String token;
   final String userName;
   final List<dynamic> cards;
   final VoidCallback onRefresh;
+  final void Function(StampEvent)? onStampEvent;
 
   const CardsTab({
     super.key,
@@ -18,6 +40,7 @@ class CardsTab extends StatefulWidget {
     required this.userName,
     required this.cards,
     required this.onRefresh,
+    this.onStampEvent,
   });
 
   @override
@@ -82,6 +105,7 @@ class _CardsTabState extends State<CardsTab> {
         style: style,
         userName: widget.userName,
         onStampAdded: widget.onRefresh, // rafraîchit les cartes après tampon
+        onStampEvent: widget.onStampEvent, // popup + remontée carte (géré par client_home)
       ),
     );
   }
@@ -1141,7 +1165,8 @@ class QRModal extends StatefulWidget {
   final CardStyle style;
   final String userName;
   final VoidCallback? onStampAdded;
-  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded});
+  final void Function(StampEvent)? onStampEvent;
+  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded, this.onStampEvent});
 
   // Compat : raccourcis pour l'ancien code interne
   Color get color => style.primary;
@@ -1213,16 +1238,45 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     if (matching.isEmpty) return;
     final updated = matching.first;
     final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
+    final total = isPoints
+        ? (updated['merchants']?['points_required'] as int? ?? widget.card['merchants']?['points_required'] as int? ?? 100)
+        : (updated['merchants']?['stamps_required'] as int? ?? widget.card['merchants']?['stamps_required'] as int? ?? 10);
     final newVal = isPoints
         ? (updated['points_count'] as int? ?? 0)
         : (updated['stamps_count'] as int? ?? 0);
-    if (newVal > _initialStamps) {
-      _pollTimer?.cancel();
-      if (mounted) {
-        final cb = widget.onStampAdded;
-        Navigator.pop(context);
-        if (cb != null) Future.microtask(cb);
-      }
+
+    // Aucun changement → on continue à attendre.
+    if (newVal == _initialStamps) return;
+
+    // Changement détecté. Si le compteur a BAISSÉ, c'est que la carte a été
+    // complétée et remise à zéro (report du surplus) → récompense atteinte.
+    final increased = newVal > _initialStamps;
+    final reward    = !increased;
+    final delta     = increased
+        ? (newVal - _initialStamps)
+        : ((total - _initialStamps) + newVal).clamp(0, total); // tampons ajoutés avant le wrap
+    final merchantName = (widget.card['merchants']?['business_name'] as String?) ?? 'Le magasin';
+
+    _pollTimer?.cancel();
+    if (!mounted) return;
+
+    final event = StampEvent(
+      cardId: widget.card['id'] as String,
+      merchantName: merchantName,
+      delta: delta,
+      newCount: newVal,
+      total: total,
+      reward: reward,
+      isPoints: isPoints,
+    );
+
+    final cbEvent = widget.onStampEvent;
+    final cbOld   = widget.onStampAdded;
+    Navigator.pop(context);
+    if (cbEvent != null) {
+      Future.microtask(() => cbEvent(event));
+    } else if (cbOld != null) {
+      Future.microtask(cbOld);
     }
   }
 

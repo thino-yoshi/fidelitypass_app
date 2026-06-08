@@ -15,7 +15,7 @@ import '../../main.dart';
 import '../auth_screen.dart';
 import 'cards_tab.dart';
 import 'history_tab.dart';
-import 'rewards_tab.dart';
+import 'rewards_wallet_screen.dart';
 import 'manage_cards_screen.dart';
 import 'scan_tab.dart';
 import '../../config/app_colors.dart';
@@ -503,24 +503,110 @@ class _ClientHomeState extends State<ClientHome>
 
     final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
     int stamps = 0;
-    int rewards = 0;
     for (final c in data) {
-      final val  = c['stamps_count'] as int? ?? 0;
-      stamps += val;
-      final type = c['merchants']?['program_type'] as String? ?? 'stamps';
-      final req  = type == 'points'
-          ? (c['merchants']?['points_required'] as int? ?? 100)
-          : (c['merchants']?['stamps_required'] as int? ?? 10);
-      if (val >= req) rewards++;
+      stamps += c['stamps_count'] as int? ?? 0;
     }
     setState(() {
       _cards       = data;
       _cardCount   = data.length;
       _totalStamps = stamps;
-      _rewardCount = rewards;
       _statsLoaded = true;
     });
     WidgetService.updateFromCards(data);
+    _loadRewardsCount();
+  }
+
+  /// Nb de récompenses DISPONIBLES (table rewards) → pill "Récompenses".
+  Future<void> _loadRewardsCount() async {
+    final r = await ApiService.instance.getMyRewards();
+    if (mounted && r.isOk) setState(() => _rewardCount = r.value.length);
+  }
+
+  // ── Le commerçant a ajouté des tampons pendant que le QR était ouvert ────────
+  Future<void> _onStampEvent(StampEvent e) async {
+    await _loadStats();                       // recharge les cartes (tampons à jour)
+    if (!mounted) return;
+    setState(() {
+      _tab = 0;                               // retour à l'onglet Cartes
+      // Remonter la carte scannée tout en haut de la liste
+      final idx = _cards.indexWhere((c) => c['id'] == e.cardId);
+      if (idx > 0) {
+        final card = _cards.removeAt(idx);
+        _cards.insert(0, card);
+      }
+    });
+    _showStampPopup(e);                        // petite fenêtre centrale
+  }
+
+  void _showStampPopup(StampEvent e) {
+    final unit = e.isPoints ? 'point' : 'tampon';
+    final accent = e.reward ? const Color(0xFFFBBF24) : const Color(0xFF27AE60);
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.55),
+      builder: (ctx) {
+        // Auto-fermeture après 3,5 s
+        Future.delayed(const Duration(milliseconds: 3500), () {
+          if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+        });
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+            decoration: BoxDecoration(
+              color: context.qSurface,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(color: accent.withOpacity(0.15), shape: BoxShape.circle),
+                child: Icon(e.reward ? Icons.emoji_events_rounded : Icons.check_circle_rounded, color: accent, size: 34),
+              ),
+              const SizedBox(height: 16),
+              if (e.reward) ...[
+                Text('Récompense débloquée ! 🎉',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.qText)),
+                const SizedBox(height: 6),
+                Text('Chez ${e.merchantName}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: context.qSub)),
+              ] else ...[
+                Text('${e.merchantName}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.qText)),
+                const SizedBox(height: 6),
+                RichText(textAlign: TextAlign.center, text: TextSpan(
+                  style: TextStyle(fontSize: 13, color: context.qSub, height: 1.4),
+                  children: [
+                    const TextSpan(text: 'a ajouté '),
+                    TextSpan(text: '${e.delta} $unit${e.delta > 1 ? "s" : ""}',
+                        style: TextStyle(fontWeight: FontWeight.w800, color: accent)),
+                    const TextSpan(text: ' sur votre carte 🎉'),
+                  ],
+                )),
+                const SizedBox(height: 4),
+                Text('${e.newCount}/${e.total}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.qSub)),
+              ],
+              const SizedBox(height: 18),
+              SizedBox(width: double.infinity, child: ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2C7BE5), foregroundColor: Colors.white, elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                ),
+                child: const Text('Super !', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              )),
+            ]),
+          ),
+        );
+      },
+    );
   }
 
   void _showChangePassword() {
@@ -813,28 +899,15 @@ class _ClientHomeState extends State<ClientHome>
                       isActive: _rewardPillActive,
                       onTap: () async {
                         setState(() => _rewardPillActive = true);
-                        final headerH = MediaQuery.of(context).padding.top + 14 + 38 + 10 + 28 + 10 + 44 + 18;
-                        await showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => SizedBox(
-                            height: MediaQuery.of(context).size.height - headerH,
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                              child: RewardsPage(
-                                token: widget.token,
-                                userName: widget.userName,
-                                cards: _cards,
-                                onStampAdded: () {
-                                  _loadStats();
-                                  setState(() => _tab = 0);
-                                },
-                              ),
-                            ),
+                        await Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => RewardsWalletScreen(
+                            token: widget.token,
+                            userName: widget.userName,
+                            onChanged: _loadRewardsCount,
                           ),
-                        );
+                        ));
                         if (mounted) setState(() => _rewardPillActive = false);
+                        _loadRewardsCount();
                       },
                     ),
                   ],
@@ -898,7 +971,7 @@ class _ClientHomeState extends State<ClientHome>
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
       case 1:
         return ScanTab(
           token: widget.token,
@@ -909,7 +982,7 @@ class _ClientHomeState extends State<ClientHome>
       case 3:
         return _buildProfilTab();
       default:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
   }
 
