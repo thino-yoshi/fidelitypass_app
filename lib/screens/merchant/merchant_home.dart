@@ -204,7 +204,8 @@ class _MerchantHomeState extends State<MerchantHome> {
         merchantInfo: merchantInfo,
         onLogout: _logout,
         onNavigateToProgram: () => setState(() => _tab = 4),
-        onNavigateToNotifs: () => setState(() => _tab = 3),
+        onNavigateToNotifs: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo))),
         onNavigateToQR: () => Navigator.push(context, MaterialPageRoute(
           builder: (_) => StaticQRScreen(token: widget.token, businessName: _businessName, accentColor: _kPrimary),
         )),
@@ -302,7 +303,8 @@ class _MerchantHomeState extends State<MerchantHome> {
               ),
               // Cloche notifications
               GestureDetector(
-                onTap: () => setState(() => _tab = 3),
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo))),
                 child: Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
