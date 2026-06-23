@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import 'notifications_screen.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const _kPrimary   = Color(0xFF2C7BE5);
@@ -368,8 +369,8 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         const SizedBox(height: 9),
         SizedBox(width: double.infinity, child: ElevatedButton(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Notifications push — bientôt'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2))),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
           style: ElevatedButton.styleFrom(backgroundColor: _kGold, foregroundColor: Colors.white, elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
           child: const Text('Lancer une offre heure creuse', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
@@ -510,8 +511,8 @@ class _StatsScreenState extends State<StatsScreen> {
       label: n > 1 ? 'sont proches de la récompense' : 'est proche de la récompense',
       sub: '≥ ${(_required - 2).clamp(1, _required)}/$_required tampons · prêts à être relancés',
       btn: 'Notifier', btnBg: _kGold, btnText: Colors.white,
-      onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Notifications push — bientôt'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2))),
+      onTap: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
     );
   }
 
@@ -523,8 +524,8 @@ class _StatsScreenState extends State<StatsScreen> {
       label: n > 1 ? 'inactifs depuis +7 jours' : 'inactif depuis +7 jours',
       sub: 'aucune visite récente · à reconquérir',
       btn: 'Relancer', btnBg: context.cBg, btnText: context.cText,
-      onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Notifications push — bientôt'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2))),
+      onTap: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
     );
   }
 }

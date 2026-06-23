@@ -120,6 +120,20 @@ class ApiService {
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
+  /// Met à jour les infos publiques du commerce (écran Info commerce).
+  Future<ApiResult<Map<String, dynamic>>> saveMerchantInfo(Map<String, dynamic> info) async {
+    final r = await _post('/merchants/me/info', info);
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
+  /// Crée ou met à jour le design visuel de la carte fidélité.
+  Future<ApiResult<Map<String, dynamic>>> saveCardDesign(Map<String, dynamic> design) async {
+    final r = await _post('/merchants/me/card-design', {'card_design': design});
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
   /// Design de carte du commerçant (créé sur qarta.be) — { card_design, updated_at }.
   /// Retourne null dans la donnée si aucun design n'a encore été créé (404).
   Future<ApiResult<Map<String, dynamic>?>> getMerchantCardDesign() async {
@@ -192,6 +206,13 @@ class ApiService {
     final r = await _post('/cards/$cardId/adjust-stamp', {'delta': delta});
     if (r.isErr) return ApiResult.err(r.error!);
     return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
+  /// Note privée du commerçant sur un client (stockée sur sa carte).
+  Future<ApiResult<void>> saveClientNote(String cardId, String note) async {
+    final r = await _post('/cards/$cardId/note', {'note': note});
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(null);
   }
 
   /// Historique des scans du commerçant.

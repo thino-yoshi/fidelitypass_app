@@ -1447,9 +1447,13 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
 
   // ── FACE ARRIÈRE : infos du commerce ─────────────────────────────────────────
   Widget _buildCardBack(Color color, String businessName) {
-    final address  = widget.card['merchants']?['address'] as String? ?? '—';
-    final phone    = widget.card['merchants']?['phone']   as String? ?? '—';
-    final hours    = widget.card['merchants']?['hours']   as String? ?? '—';
+    final address  = widget.card['merchants']?['address']       as String? ?? '';
+    final phone    = widget.card['merchants']?['phone']         as String? ?? '';
+    final rawHours = widget.card['merchants']?['opening_hours'] as String? ?? '';
+    final rawDays  = widget.card['merchants']?['opening_days']  as String? ?? '';
+    final hours    = rawDays.isNotEmpty && rawHours.isNotEmpty
+        ? '$rawDays · $rawHours'
+        : rawHours.isNotEmpty ? rawHours : rawDays.isNotEmpty ? rawDays : '';
     final rawLogo  = widget.logoUrl;
     final logoUrl  = (rawLogo != null && rawLogo.isNotEmpty) ? rawLogo : null;
     final initials = businessName.length >= 2 ? businessName.substring(0, 2).toUpperCase() : businessName.toUpperCase();
@@ -1506,11 +1510,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                       ),
                       child: Column(
                         children: [
-                          _backInfoRow(Icons.location_on_outlined, 'Adresse', address),
+                          _backInfoRow(Icons.location_on_outlined, 'Adresse',   address.isEmpty   ? '—' : address),
                           const SizedBox(height: 14),
-                          _backInfoRow(Icons.phone_outlined, 'Téléphone', phone),
+                          _backInfoRow(Icons.phone_outlined,       'Téléphone', phone.isEmpty     ? '—' : phone),
                           const SizedBox(height: 14),
-                          _backInfoRow(Icons.access_time_rounded, 'Horaires', hours),
+                          _backInfoRow(Icons.access_time_rounded,  'Horaires',  hours.isEmpty     ? '—' : hours),
                         ],
                       ),
                     ),

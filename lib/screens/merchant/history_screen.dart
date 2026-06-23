@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import 'fiche_client_screen.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const _kPrimary = Color(0xFF2C7BE5);
@@ -175,11 +176,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _row(dynamic scan) {
     final client = scan['client'] as Map? ?? {};
-    final name   = (client['name'] ?? client['email'] ?? 'Client') as String;
-    final stamps = (scan['stamps_count'] as int?) ?? 0;
+    final name   = (client['name'] ?? client['email'] ?? 'Client').toString();
+    final stamps = (scan['stamps_count'] as num?)?.toInt() ?? 0;
     final reward = scan['reward_reached'] == true;
     final isNew  = !reward && _isNew(scan);
-    final t = DateTime.tryParse(scan['scanned_at'] as String? ?? '')?.toLocal();
+    final t = DateTime.tryParse(scan['scanned_at']?.toString() ?? '')?.toLocal();
     final time = t != null ? '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}' : '';
 
     // Type → couleur d'accent + libellés.
@@ -193,21 +194,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     final avatarUrl = client['profile_picture_url'] as String?;
 
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openClient(scan, client, name, avatarUrl),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 7),
       decoration: BoxDecoration(
         color: context.cSurface,
         borderRadius: BorderRadius.circular(14),
-        // Barre d'accent verticale à gauche.
-        border: Border(
-          left: BorderSide(color: accent, width: 3),
-          top: BorderSide(color: context.cBorder),
-          right: BorderSide(color: context.cBorder),
-          bottom: BorderSide(color: context.cBorder),
-        ),
+        border: Border.all(color: context.cBorder),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      // Barre d'accent à gauche via Stack : un border non-uniforme + borderRadius
+      // plante au runtime ("uniform colors"). Le Stack reste compatible.
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: Stack(children: [
+        Padding(
+        padding: const EdgeInsets.fromLTRB(15, 10, 12, 10),
         child: Row(children: [
           // Avatar carré bleu avec initiales (photo si dispo).
           if (avatarUrl != null && avatarUrl.isNotEmpty)
@@ -234,7 +237,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ]),
         ]),
       ),
-    );
+        Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 3, color: accent)),
+        ]),
+      ),
+    ));
+  }
+
+  void _openClient(dynamic scan, Map client, String name, String? avatarUrl) {
+    final clientId = (scan['client_id'] ?? '').toString();
+    final cardId = (scan['card_id'] ?? '').toString();
+    if (clientId.isEmpty || cardId.isEmpty) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => FicheClientScreen(
+      token: widget.token,
+      clientId: clientId,
+      cardId: cardId,
+      clientName: name,
+      clientEmail: client['email'] as String?,
+      clientPic: avatarUrl,
+      merchantInfo: widget.merchantInfo ?? {},
+    )));
   }
 
   Widget _initialsBox(String name) => Container(

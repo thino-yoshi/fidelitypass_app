@@ -15,6 +15,9 @@ import 'static_qr_screen.dart';
 import 'merchant_onboarding.dart';
 import 'abonnement_screen.dart';
 import 'stats_screen.dart';
+import 'info_commerce_screen.dart';
+import 'carte_editor_screen.dart';
+import 'google_auto_screen.dart';
 import '../client/cards_tab.dart' show LoyaltyCardFace, CardStyle;
 
 // ─── Design tokens (alignés sur le mockup dashboard v10) ────────────────────
@@ -209,6 +212,14 @@ class _MerchantHomeState extends State<MerchantHome> {
         )),
         onNavigateToAbonnement: () => Navigator.push(context, MaterialPageRoute(
           builder: (_) => const AbonnementScreen(),
+        )),
+        onNavigateToInfo: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => InfoCommerceScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
+        )).then((updated) {
+          if (updated != null && mounted) setState(() => merchantInfo = updated as Map);
+        }),
+        onNavigateToCarteEditor: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
         )),
       ),
     );
@@ -426,14 +437,11 @@ class _MerchantHomeState extends State<MerchantHome> {
     );
   }
 
-  // ── Bulle "Demander un avis Google" (feature à venir) ──────────────────────
+  // ── Bulle "Demander un avis Google" ─────────────────────────────────────────
   Widget _googleBubble() {
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Avis Google — bientôt disponible'),
-          behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2)));
-      },
+      onTap: () => Navigator.push(context, MaterialPageRoute(
+        builder: (_) => GoogleAutoScreen(token: widget.token, merchantInfo: merchantInfo ?? {}))),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
@@ -832,10 +840,13 @@ class _MerchantProfilSheet extends StatelessWidget {
   final VoidCallback? onNavigateToNotifs;
   final VoidCallback? onNavigateToQR;
   final VoidCallback? onNavigateToAbonnement;
+  final VoidCallback? onNavigateToInfo;
+  final VoidCallback? onNavigateToCarteEditor;
 
   const _MerchantProfilSheet({
     required this.token, this.merchantInfo, required this.onLogout,
-    this.onNavigateToProgram, this.onNavigateToNotifs, this.onNavigateToQR, this.onNavigateToAbonnement,
+    this.onNavigateToProgram, this.onNavigateToNotifs, this.onNavigateToQR,
+    this.onNavigateToAbonnement, this.onNavigateToInfo, this.onNavigateToCarteEditor,
   });
 
   @override
@@ -889,9 +900,10 @@ class _MerchantProfilSheet extends StatelessWidget {
             Text('MON COMMERCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
             const SizedBox(height: 8),
             _section(kWhite, kBorder, [
-              _row(context, kBorder, kText, kSub, Icons.description_outlined, _kPrimary.withValues(alpha: 0.12), _kPrimary, 'Informations', 'Nom, adresse', () => Navigator.pop(context)),
-              _row(context, kBorder, kText, kSub, Icons.credit_card_outlined, _kSuccess.withValues(alpha: 0.12), _kSuccess, 'Ma carte fidélité', 'Tampons, récompense',
-                  () { Navigator.pop(context); onNavigateToProgram?.call(); }, noBorder: true),
+              _row(context, kBorder, kText, kSub, Icons.description_outlined, _kPrimary.withValues(alpha: 0.12), _kPrimary, 'Informations', 'Nom, adresse',
+                  () { Navigator.pop(context); onNavigateToInfo?.call(); }),
+              _row(context, kBorder, kText, kSub, Icons.credit_card_outlined, _kSuccess.withValues(alpha: 0.12), _kSuccess, 'Ma carte fidélité', 'Tampons, récompense, couleur',
+                  () { Navigator.pop(context); onNavigateToCarteEditor?.call(); }, noBorder: true),
             ]),
             const SizedBox(height: 14),
             Text('MARKETING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
