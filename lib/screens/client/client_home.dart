@@ -132,10 +132,12 @@ class _ClientHomeState extends State<ClientHome>
     final prefs = await SharedPreferences.getInstance();
     final email    = prefs.getString('email') ?? '';
     final isGoogle = prefs.getBool('is_google') ?? false;
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       if (email.isNotEmpty) _userEmail = email;
       if (isGoogle) _isGoogle = true; // ne jamais rétrograder à false
     });
+    }
   }
 
   Future<void> _showPersonalInfo() async {
@@ -195,16 +197,16 @@ class _ClientHomeState extends State<ClientHome>
             final isEditing = editingField == fieldKey;
             return Container(
               decoration: BoxDecoration(
-                color: blue.withOpacity(0.06),
+                color: blue.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: blue.withOpacity(isEditing ? 0.45 : 0.12)),
+                border: Border.all(color: blue.withValues(alpha: isEditing ? 0.45 : 0.12)),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
                   Container(
                     width: 36, height: 36,
-                    decoration: BoxDecoration(color: blue.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
                     child: Icon(icon, color: blue, size: 18),
                   ),
                   const SizedBox(width: 12),
@@ -272,7 +274,7 @@ class _ClientHomeState extends State<ClientHome>
                   Center(
                     child: Container(
                       width: 40, height: 4,
-                      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -285,7 +287,7 @@ class _ClientHomeState extends State<ClientHome>
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.orange.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                          decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                           child: const Text('Compte Google', style: TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.w700)),
                         ),
                       ],
@@ -393,16 +395,16 @@ class _ClientHomeState extends State<ClientHome>
     const blue = Color(0xFF2C7BE5);
     return Container(
       decoration: BoxDecoration(
-        color: blue.withOpacity(0.06),
+        color: blue.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: blue.withOpacity(0.12)),
+        border: Border.all(color: blue.withValues(alpha: 0.12)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
           Container(
             width: 36, height: 36,
-            decoration: BoxDecoration(color: blue.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: blue, size: 18),
           ),
           const SizedBox(width: 12),
@@ -543,7 +545,7 @@ class _ClientHomeState extends State<ClientHome>
     final accent = e.reward ? const Color(0xFFFBBF24) : const Color(0xFF27AE60);
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: Colors.black.withValues(alpha: 0.55),
       builder: (ctx) {
         // Auto-fermeture après 3,5 s
         Future.delayed(const Duration(milliseconds: 3500), () {
@@ -562,7 +564,7 @@ class _ClientHomeState extends State<ClientHome>
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                 width: 64, height: 64,
-                decoration: BoxDecoration(color: accent.withOpacity(0.15), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), shape: BoxShape.circle),
                 child: Icon(e.reward ? Icons.emoji_events_rounded : Icons.check_circle_rounded, color: accent, size: 34),
               ),
               const SizedBox(height: 16),
@@ -575,7 +577,7 @@ class _ClientHomeState extends State<ClientHome>
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, color: context.qSub)),
               ] else ...[
-                Text('${e.merchantName}',
+                Text(e.merchantName,
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.qText)),
                 const SizedBox(height: 6),
@@ -685,8 +687,9 @@ class _ClientHomeState extends State<ClientHome>
                   );
                   if (!ctx.mounted) return;
                   Navigator.pop(ctx);
-                  if (res.statusCode == 200) _logout();
-                  else if (mounted) {
+                  if (res.statusCode == 200) {
+                    _logout();
+                  } else if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(jsonDecode(res.body)['detail'] ?? 'Erreur'), backgroundColor: Colors.red));
                   }
                 } catch (_) { setDialogState(() => loading = false); }
@@ -719,7 +722,9 @@ class _ClientHomeState extends State<ClientHome>
 
   void _markAllRead() {
     setState(() {
-      for (var n in _notifs) n['read'] = true;
+      for (var n in _notifs) {
+        n['read'] = true;
+      }
       _notifCount = 0;
     });
     http.put(
@@ -788,7 +793,7 @@ class _ClientHomeState extends State<ClientHome>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [const Color(0xFF2C7BE5).withOpacity(0.18), Colors.transparent],
+                  colors: [const Color(0xFF2C7BE5).withValues(alpha: 0.18), Colors.transparent],
                 ),
               ),
             ),
@@ -813,8 +818,8 @@ class _ClientHomeState extends State<ClientHome>
                             width: 38, height: 38,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFF2C7BE5).withOpacity(0.30),
-                              border: Border.all(color: const Color(0xFF4A9EFF).withOpacity(0.45), width: 2),
+                              color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                              border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
                               image: _profileImageUrl != null
                                   ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
                                   : _profileImagePath != null
@@ -829,7 +834,7 @@ class _ClientHomeState extends State<ClientHome>
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Bonjour', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, height: 1)),
+                              Text('Bonjour', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, height: 1)),
                               const SizedBox(height: 2),
                               Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
                             ],
@@ -848,10 +853,10 @@ class _ClientHomeState extends State<ClientHome>
                             width: 38, height: 38,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.08),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                              color: Colors.white.withValues(alpha: 0.08),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                             ),
-                            child: Icon(Icons.notifications_outlined, color: Colors.white.withOpacity(0.8), size: 18),
+                            child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 18),
                           ),
                           if (_notifCount > 0)
                             Positioned(
@@ -880,7 +885,7 @@ class _ClientHomeState extends State<ClientHome>
                   _statsLoaded
                       ? '$_cardCount carte${_cardCount > 1 ? 's' : ''} active${_cardCount > 1 ? 's' : ''} · $_rewardCount récompense${_rewardCount > 1 ? 's' : ''} disponible${_rewardCount > 1 ? 's' : ''}'
                       : '···',
-                  style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
                 ),
                 const SizedBox(height: 16),
                 // ── Pills (dans le même header, même grille)
@@ -933,10 +938,10 @@ class _ClientHomeState extends State<ClientHome>
           duration: const Duration(milliseconds: 200),
           height: 42,
           decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF2C7BE5).withOpacity(0.18) : Colors.white.withOpacity(0.06),
+            color: isActive ? const Color(0xFF2C7BE5).withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isActive ? const Color(0xFF4A9EFF).withOpacity(0.55) : Colors.white.withOpacity(0.08),
+              color: isActive ? const Color(0xFF4A9EFF).withValues(alpha: 0.55) : Colors.white.withValues(alpha: 0.08),
             ),
           ),
           child: Row(
@@ -953,7 +958,7 @@ class _ClientHomeState extends State<ClientHome>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(isActive ? 0.9 : 0.55),
+                    color: Colors.white.withValues(alpha: isActive ? 0.9 : 0.55),
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1045,8 +1050,8 @@ class _ClientHomeState extends State<ClientHome>
                   width: 86, height: 86,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF2C7BE5).withOpacity(0.15),
-                    border: Border.all(color: const Color(0xFF2C7BE5).withOpacity(0.35), width: 2.5),
+                    color: const Color(0xFF2C7BE5).withValues(alpha: 0.15),
+                    border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.35), width: 2.5),
                     image: _profileImageUrl != null
                         ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
                         : _profileImagePath != null
@@ -1253,7 +1258,7 @@ class _ClientHomeState extends State<ClientHome>
                 final p = await SharedPreferences.getInstance();
                 await p.setBool('dark_mode', val);
               },
-              activeColor: const Color(0xFF2C7BE5),
+              activeThumbColor: const Color(0xFF2C7BE5),
             ),
           ],
         ),
@@ -1268,11 +1273,11 @@ class _ClientHomeState extends State<ClientHome>
     // Couleurs exactes Figma : --nav-bg #ffffffb3 (blanc 70%), --nav-border #ede9e380 (50%)
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final navBg = isDark
-        ? const Color(0xFF1E1D2A).withOpacity(0.70)
-        : Colors.white.withOpacity(0.70);
+        ? const Color(0xFF1E1D2A).withValues(alpha: 0.70)
+        : Colors.white.withValues(alpha: 0.70);
     final navBorder = isDark
-        ? const Color(0xFF2A2840).withOpacity(0.50)
-        : const Color(0xFFEDE9E3).withOpacity(0.50);
+        ? const Color(0xFF2A2840).withValues(alpha: 0.50)
+        : const Color(0xFFEDE9E3).withValues(alpha: 0.50);
 
     return Positioned(
       bottom: 0, left: 0, right: 0,
@@ -1336,7 +1341,7 @@ class _ClientHomeState extends State<ClientHome>
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: bgColor.withOpacity(0.5), blurRadius: 14, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: bgColor.withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(0, 4))],
               ),
               child: Icon(Icons.qr_code_scanner_rounded, color: iconColor, size: 26),
             ),
@@ -1356,7 +1361,7 @@ class _ClientHomeState extends State<ClientHome>
           // Backdrop
           GestureDetector(
             onTap: _closeNotifs,
-            child: Container(color: Colors.black.withOpacity(0.4 * _notifAnim.value)),
+            child: Container(color: Colors.black.withValues(alpha: 0.4 * _notifAnim.value)),
           ),
           // Sheet
           Positioned(
@@ -1391,7 +1396,7 @@ class _ClientHomeState extends State<ClientHome>
                             onTap: _closeNotifs,
                             child: Container(
                               width: 30, height: 30,
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.1)),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.1)),
                               child: const Icon(Icons.close, color: Colors.white, size: 14),
                             ),
                           ),
@@ -1483,7 +1488,7 @@ class _ClientHomeState extends State<ClientHome>
             Container(
               width: 38, height: 38,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -1599,7 +1604,11 @@ class _NotifIconPainter extends CustomPainter {
       final angle = -pi / 2 + (pi * i / points);
       final x = 9 * s + r * s * cos(angle);
       final y = 9 * s + r * s * sin(angle);
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
     path.close();
     canvas.drawPath(path, starPaint);
@@ -1648,7 +1657,11 @@ class _NotifIconPainter extends CustomPainter {
       final angle = -pi / 2 + (pi * i / points);
       final x = 9 * s + r * s * cos(angle);
       final y = 6.5 * s + r * s * sin(angle);
-      if (i == 0) star.moveTo(x, y); else star.lineTo(x, y);
+      if (i == 0) {
+        star.moveTo(x, y);
+      } else {
+        star.lineTo(x, y);
+      }
     }
     star.close();
     canvas.drawPath(star, starPaint);
@@ -1664,7 +1677,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF3A82F6).withOpacity(0.06)
+      ..color = const Color(0xFF3A82F6).withValues(alpha: 0.06)
       ..strokeWidth = 1;
     for (double x = 0; x < size.width; x += 24) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);

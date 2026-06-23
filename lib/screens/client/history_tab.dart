@@ -20,7 +20,6 @@ class _HistoryTabState extends State<HistoryTab> {
   Color get _kBorder => context.cBorder;
   Color get _kText   => context.cText;
   Color get _kSub    => context.cSub;
-  Color get _kBg     => context.cBg;
   Color get _kWhite  => context.cSurface;
 
   List<dynamic> _history = [];
@@ -70,8 +69,9 @@ class _HistoryTabState extends State<HistoryTab> {
       if (dt != null) {
         final itemDay = DateTime(dt.year, dt.month, dt.day);
         final diff    = today.difference(itemDay).inDays;
-        if (diff == 0)      day = "Aujourd'hui";
-        else if (diff == 1) day = 'Hier';
+        if (diff == 0) {
+          day = "Aujourd'hui";
+        } else if (diff == 1) day = 'Hier';
         else                day = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
       }
 

@@ -43,18 +43,18 @@ class CardPreviewScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.white.withOpacity(0.5), size: 16),
+                  Icon(Icons.info_outline, color: Colors.white.withValues(alpha: 0.5), size: 16),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Voici comment tes clients voient leur carte fidélité. L\'exemple affiche 3 tampons.',
-                      style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12, height: 1.4),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, height: 1.4),
                     ),
                   ),
                 ],
@@ -68,13 +68,13 @@ class CardPreviewScreen extends StatelessWidget {
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [accentColor, accentColor.withOpacity(0.75)],
+                  colors: [accentColor, accentColor.withValues(alpha: 0.75)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: [
-                  BoxShadow(color: accentColor.withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 10)),
+                  BoxShadow(color: accentColor.withValues(alpha: 0.4), blurRadius: 24, offset: const Offset(0, 10)),
                 ],
               ),
               child: Column(
@@ -90,7 +90,7 @@ class CardPreviewScreen extends StatelessWidget {
                           Text('CARTE FIDÉLITÉ',
                               style: TextStyle(
                                   fontSize: 9, fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.5, color: Colors.white.withOpacity(0.55))),
+                                  letterSpacing: 1.5, color: Colors.white.withValues(alpha: 0.55))),
                           const SizedBox(height: 4),
                           Text(businessName,
                               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
@@ -99,7 +99,7 @@ class CardPreviewScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(category,
@@ -111,9 +111,9 @@ class CardPreviewScreen extends StatelessWidget {
                       Container(
                         width: 56, height: 56,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
                         ),
                         child: Center(child: Text(emoji, style: const TextStyle(fontSize: 26))),
                       ),
@@ -133,7 +133,7 @@ class CardPreviewScreen extends StatelessWidget {
                       Expanded(
                         child: Text(
                           'Encore ${total - 3} tampons pour $reward',
-                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -148,7 +148,7 @@ class CardPreviewScreen extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: 3 / total,
                       minHeight: 4,
-                      backgroundColor: Colors.white.withOpacity(0.2),
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
                       valueColor: const AlwaysStoppedAnimation(Colors.white),
                     ),
                   ),
@@ -197,16 +197,16 @@ class CardPreviewScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.18),
+              color: accentColor.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: accentColor, size: 18),
@@ -216,7 +216,7 @@ class CardPreviewScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.45), fontWeight: FontWeight.w600)),
+                Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.45), fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(value, style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600)),
               ],
@@ -248,8 +248,8 @@ class _StampGrid extends StatelessWidget {
           width: stampSize, height: stampSize,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(stampSize * 0.3),
-            color: i < filled ? Colors.white.withOpacity(0.9) : Colors.transparent,
-            border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.5),
+            color: i < filled ? Colors.white.withValues(alpha: 0.9) : Colors.transparent,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.5),
           ),
           child: i < filled
               ? Center(child: Icon(Icons.check, size: stampSize * 0.5, color: accentColor))

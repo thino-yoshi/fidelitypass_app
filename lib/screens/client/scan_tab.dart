@@ -139,7 +139,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
             children: [
               const SizedBox(height: 12),
               // Titre
-              Text(
+              const Text(
                 'Scanner le QR du commerce',
                 style: TextStyle(
                   color: Colors.white,
@@ -149,7 +149,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
+              const Text(
                 'Pointe la caméra vers le QR code affiché en caisse',
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -199,7 +199,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.white24),
                   ),
@@ -250,7 +250,7 @@ class _OverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dark = Paint()..color = Colors.black.withOpacity(0.60);
+    final dark = Paint()..color = Colors.black.withValues(alpha: 0.60);
     final full = Rect.fromLTWH(0, 0, size.width, size.height);
 
     // Fond sombre avec trou transparent
@@ -335,7 +335,7 @@ class _ResultSheet extends StatelessWidget {
           Container(
             width: 68, height: 68,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
+              color: iconColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(iconData, color: iconColor, size: 36),

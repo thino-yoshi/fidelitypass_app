@@ -99,7 +99,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 36, height: 4, decoration: BoxDecoration(color: context.cBorder, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 18),
-          Container(width: 64, height: 64, decoration: BoxDecoration(color: _kGold.withOpacity(0.15), shape: BoxShape.circle),
+          Container(width: 64, height: 64, decoration: BoxDecoration(color: _kGold.withValues(alpha: 0.15), shape: BoxShape.circle),
               child: const Center(child: Text('🎁', style: TextStyle(fontSize: 30)))),
           const SizedBox(height: 14),
           Text('Récompense de $name', style: TextStyle(fontSize: 13, color: context.cSub)),
@@ -183,7 +183,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                     width: 48, height: 38,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: sel ? _kPrimary : _kPrimary.withOpacity(0.08),
+                      color: sel ? _kPrimary : _kPrimary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Text('+$n', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: sel ? Colors.white : _kPrimary)),
@@ -192,7 +192,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
               );
             }).toList()),
             if (willReward)
-              Padding(padding: const EdgeInsets.only(top: 10), child: Text('🎉 Atteindra la récompense', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kGold))),
+              const Padding(padding: EdgeInsets.only(top: 10), child: Text('🎉 Atteindra la récompense', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kGold))),
             const SizedBox(height: 16),
             SizedBox(width: double.infinity, child: ElevatedButton(
               onPressed: () => Navigator.pop(ctx, qty),
@@ -221,7 +221,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       child: Container(
         width: 48, height: 48,
         decoration: BoxDecoration(
-          color: enabled ? context.cBg : context.cBg.withOpacity(0.5),
+          color: enabled ? context.cBg : context.cBg.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: context.cBorder),
         ),
@@ -296,7 +296,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             onTap: () => Navigator.pop(context),
             child: Container(
               width: 34, height: 34,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withOpacity(0.1))),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
               child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22),
             ),
           ),
@@ -342,7 +342,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           left: 0, right: 0, bottom: 12,
           child: Center(child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(color: Colors.black.withOpacity(0.45), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(20)),
             child: const Text('Scanne le QR du client', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
           )),
         ),
@@ -431,7 +431,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(9)),
+                decoration: BoxDecoration(color: _kPrimary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(9)),
                 child: const Icon(Icons.add_rounded, size: 16, color: _kPrimary),
               ),
             ]),
@@ -454,11 +454,11 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     final c = (o.reward || isRedeem) ? _kGold : _kSuccess;
     final pct = o.total > 0 ? (o.count / o.total).clamp(0.0, 1.0) : 0.0;
     return Positioned.fill(child: Container(
-      color: c.withOpacity(0.96),
+      color: c.withValues(alpha: 0.96),
       child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 80, height: 80,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
           child: Icon(isRedeem ? Icons.redeem_rounded : (o.reward ? Icons.emoji_events_rounded : Icons.check_rounded), color: Colors.white, size: 42),
         ),
         const SizedBox(height: 18),
@@ -467,14 +467,14 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         const SizedBox(height: 6),
         if (isRedeem)
           Text('${o.rewardLabel} · ${o.name}', textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w600))
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13, fontWeight: FontWeight.w600))
         else ...[
           Text('${o.name} · ${o.count}/${o.total}',
-              style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w600)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           SizedBox(width: 180, child: ClipRRect(
             borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(value: pct, minHeight: 4, backgroundColor: Colors.white.withOpacity(0.25), valueColor: const AlwaysStoppedAnimation(Colors.white)),
+            child: LinearProgressIndicator(value: pct, minHeight: 4, backgroundColor: Colors.white.withValues(alpha: 0.25), valueColor: const AlwaysStoppedAnimation(Colors.white)),
           )),
         ],
       ])),

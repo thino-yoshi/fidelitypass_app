@@ -107,7 +107,7 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: widget.accentColor.withOpacity(0.1),
+                    color: widget.accentColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: exporting
@@ -245,7 +245,7 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
                 belowBarData: BarAreaData(
                   show: true,
                   gradient: LinearGradient(
-                    colors: [blue.withOpacity(0.2), blue.withOpacity(0)],
+                    colors: [blue.withValues(alpha: 0.2), blue.withValues(alpha: 0)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -260,7 +260,7 @@ class _StatsChartWidgetState extends State<StatsChartWidget> {
                 belowBarData: BarAreaData(
                   show: true,
                   gradient: LinearGradient(
-                    colors: [purple.withOpacity(0.15), purple.withOpacity(0)],
+                    colors: [purple.withValues(alpha: 0.15), purple.withValues(alpha: 0)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 // ═══════════════════════════════════════════════════════
 // SPLASH SCREEN — remplace le SplashRouter dans main.dart
@@ -18,9 +17,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   // Couleurs
   static const kBg      = Color(0xFF0B1220);
-  static const kBlue    = Color(0xFF4A9EFF);
-  static const kBlue22  = Color(0x384A9EFF);
-  static const kBlue12  = Color(0x1F3A82F6);
 
   // Controllers
   late AnimationController _bgCtrl;
@@ -187,7 +183,9 @@ class _SplashScreenState extends State<SplashScreen>
     _scanCtrl.dispose();
     _dotsCtrl.dispose();
     _verCtrl.dispose();
-    for (final c in _dotCtrl) c.dispose();
+    for (final c in _dotCtrl) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -474,13 +472,13 @@ class _SplashScreenState extends State<SplashScreen>
     const w = 1.0;
     return [
       // Top left
-      Positioned(top: t, left: t, child: _Corner(size: s, color: c, top: true, left: true, width: w)),
+      const Positioned(top: t, left: t, child: _Corner(size: s, color: c, top: true, left: true, width: w)),
       // Top right
-      Positioned(top: t, right: t, child: _Corner(size: s, color: c, top: true, left: false, width: w)),
+      const Positioned(top: t, right: t, child: _Corner(size: s, color: c, top: true, left: false, width: w)),
       // Bottom left
-      Positioned(bottom: t, left: t, child: _Corner(size: s, color: c, top: false, left: true, width: w)),
+      const Positioned(bottom: t, left: t, child: _Corner(size: s, color: c, top: false, left: true, width: w)),
       // Bottom right
-      Positioned(bottom: t, right: t, child: _Corner(size: s, color: c, top: false, left: false, width: w)),
+      const Positioned(bottom: t, right: t, child: _Corner(size: s, color: c, top: false, left: false, width: w)),
     ];
   }
 }
@@ -518,7 +516,7 @@ class _CornerPainter extends CustomPainter {
     if (top && left) {
       path.moveTo(0, size.height);
       path.lineTo(0, r);
-      path.arcToPoint(Offset(r, 0), radius: const Radius.circular(r));
+      path.arcToPoint(const Offset(r, 0), radius: const Radius.circular(r));
       path.lineTo(size.width, 0);
     } else if (top && !left) {
       path.moveTo(0, 0);

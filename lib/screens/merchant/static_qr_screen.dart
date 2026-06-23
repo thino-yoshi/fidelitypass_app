@@ -89,7 +89,7 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(color: _kBorder),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 24, offset: const Offset(0, 8)),
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 24, offset: const Offset(0, 8)),
                           ],
                         ),
                         child: Column(
@@ -103,16 +103,16 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                                 eyeShape: QrEyeShape.square,
                                 color: widget.accentColor,
                               ),
-                              dataModuleStyle: QrDataModuleStyle(
+                              dataModuleStyle: const QrDataModuleStyle(
                                 dataModuleShape: QrDataModuleShape.square,
-                                color: const Color(0xFF1A1828),
+                                color: Color(0xFF1A1828),
                               ),
                             ),
                             const SizedBox(height: 16),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
-                                color: widget.accentColor.withOpacity(0.1),
+                                color: widget.accentColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(

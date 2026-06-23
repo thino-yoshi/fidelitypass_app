@@ -63,7 +63,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                 child: Text(
                   'Passer',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
+                    color: Colors.white.withValues(alpha: 0.4),
                     fontSize: 14,
                   ),
                 ),
@@ -90,7 +90,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                       decoration: BoxDecoration(
                         color: isActive
                             ? _accentColor
-                            : Colors.white.withOpacity(0.3),
+                            : Colors.white.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     );
@@ -164,7 +164,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                 'La plateforme de fidélité digitale pour votre commerce. Simple, efficace, sans carte papier.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 15,
                   height: 1.6,
                 ),
@@ -210,7 +210,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                 'Définissez le nombre de tampons pour une récompense. Vos clients scannent leur QR code à chaque visite.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 15,
                   height: 1.6,
                 ),
@@ -220,9 +220,9 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                 ),
                 child: Column(
                   children: [
@@ -240,11 +240,11 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                             shape: BoxShape.circle,
                             color: filled
                                 ? _accentColor
-                                : Colors.white.withOpacity(0.12),
+                                : Colors.white.withValues(alpha: 0.12),
                             border: Border.all(
                               color: filled
                                   ? _accentColor
-                                  : Colors.white.withOpacity(0.2),
+                                  : Colors.white.withValues(alpha: 0.2),
                               width: 1.5,
                             ),
                           ),
@@ -256,7 +256,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                       }),
                     ),
                     const SizedBox(height: 12),
-                    Text(
+                    const Text(
                       '3/6 tampons',
                       style: TextStyle(
                         color: _accentColor,
@@ -308,7 +308,7 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                 'Affichez votre QR code permanent en caisse. Les clients le scannent pour accumuler leurs tampons automatiquement.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 15,
                   height: 1.6,
                 ),
@@ -319,13 +319,13 @@ class _MerchantOnboardingScreenState extends State<MerchantOnboardingScreen> {
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                 ),
                 child: Icon(
                   Icons.qr_code,
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                   size: 72,
                 ),
               ),

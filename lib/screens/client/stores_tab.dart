@@ -17,7 +17,6 @@ class StoresTab extends StatefulWidget {
 }
 
 class _StoresTabState extends State<StoresTab> {
-  Color get _kBg    => context.cBg;
   Color get _kWhite => context.cSurface;
   Color get _kBorder => context.cBorder;
   Color get _kText  => context.cText;
@@ -58,16 +57,20 @@ class _StoresTabState extends State<StoresTab> {
       );
       if (res.statusCode == 200 || res.statusCode == 201) {
         await loadData();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Carte créée chez ${merchant['business_name']} !'),
           backgroundColor: _kPrimary,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ));
+        }
       } else {
         final body = jsonDecode(res.body);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(body['detail'] ?? 'Erreur'), backgroundColor: Colors.red));
+        }
       }
     } catch (e) {
       debugPrint('Erreur createCard: $e');
@@ -132,7 +135,7 @@ class _StoresTabState extends State<StoresTab> {
                 // Initiales
                 Container(
                   width: 44, height: 44,
-                  decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: _kPrimary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                   child: Center(child: Text(initials,
                       style: const TextStyle(color: _kPrimary, fontSize: 14, fontWeight: FontWeight.w800))),
                 ),
@@ -148,7 +151,7 @@ class _StoresTabState extends State<StoresTab> {
                 alreadyHas
                     ? Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: _kSuccess.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: _kSuccess.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.check_rounded, color: _kSuccess, size: 12),
                     SizedBox(width: 3),

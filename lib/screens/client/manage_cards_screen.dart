@@ -198,9 +198,9 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.09),
+                color: Colors.white.withValues(alpha: 0.09),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: const Icon(
                 Icons.arrow_back_ios_new_rounded,
@@ -227,8 +227,8 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                   '${_selected.isNotEmpty ? ' · ${_selected.length} sélectionnée${_selected.length > 1 ? 's' : ''}' : ''}',
                   style: TextStyle(
                     color: _selected.isNotEmpty
-                        ? const Color(0xFFE53E3E).withOpacity(0.85)
-                        : Colors.white.withOpacity(0.4),
+                        ? const Color(0xFFE53E3E).withValues(alpha: 0.85)
+                        : Colors.white.withValues(alpha: 0.4),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -250,13 +250,13 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                 decoration: BoxDecoration(
                   color: allSelected
-                      ? const Color(0xFFE53E3E).withOpacity(0.12)
-                      : Colors.white.withOpacity(0.08),
+                      ? const Color(0xFFE53E3E).withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(
                     color: allSelected
-                        ? const Color(0xFFE53E3E).withOpacity(0.35)
-                        : Colors.white.withOpacity(0.1),
+                        ? const Color(0xFFE53E3E).withValues(alpha: 0.35)
+                        : Colors.white.withValues(alpha: 0.1),
                   ),
                 ),
                 child: Text(
@@ -307,13 +307,13 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF2C7BE5).withOpacity(0.2)
-              : Colors.white.withOpacity(0.06),
+              ? const Color(0xFF2C7BE5).withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: active
-                ? const Color(0xFF4A9EFF).withOpacity(0.55)
-                : Colors.white.withOpacity(0.1),
+                ? const Color(0xFF4A9EFF).withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.1),
           ),
         ),
         child: Row(
@@ -431,8 +431,8 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
           boxShadow: [
             BoxShadow(
               color: selected
-                  ? const Color(0xFFE53E3E).withOpacity(0.45)
-                  : color.withOpacity(0.35),
+                  ? const Color(0xFFE53E3E).withValues(alpha: 0.45)
+                  : color.withValues(alpha: 0.35),
               blurRadius: selected ? 18 : 14,
               offset: const Offset(0, 5),
             ),
@@ -472,7 +472,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                                 style: TextStyle(
                                   fontSize: 7,
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.white.withOpacity(0.5),
+                                  color: Colors.white.withValues(alpha: 0.5),
                                   letterSpacing: 0.8,
                                 ),
                               ),
@@ -497,8 +497,8 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                           height: 30,
                           decoration: BoxDecoration(
                             color: full
-                                ? Colors.white.withOpacity(0.25)
-                                : Colors.white.withOpacity(0.15),
+                                ? Colors.white.withValues(alpha: 0.25)
+                                : Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Center(
@@ -531,7 +531,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                           ? '$reward !'
                           : '$stamps/$required ${isPoints ? 'pts' : 'tampons'}',
                       style: TextStyle(
-                        color: full ? Colors.white : Colors.white.withOpacity(0.75),
+                        color: full ? Colors.white : Colors.white.withValues(alpha: 0.75),
                         fontSize: 9,
                         fontWeight: full ? FontWeight.w700 : FontWeight.w400,
                       ),
@@ -552,7 +552,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                     duration: const Duration(milliseconds: 180),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE53E3E).withOpacity(0.28),
+                        color: const Color(0xFFE53E3E).withValues(alpha: 0.28),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Center(
@@ -593,9 +593,9 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
           height: 16,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
-            color: filled ? Colors.white.withOpacity(0.9) : Colors.transparent,
+            color: filled ? Colors.white.withValues(alpha: 0.9) : Colors.transparent,
             border: Border.all(
-                color: Colors.white.withOpacity(0.35), width: 1.2),
+                color: Colors.white.withValues(alpha: 0.35), width: 1.2),
           ),
           child: filled
               ? Icon(Icons.check, size: 9, color: color)
@@ -623,7 +623,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
           child: Text(
             '/ $required',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -638,7 +638,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Colors.white.withOpacity(opacity),
+          color: Colors.white.withValues(alpha: opacity),
         ),
       );
 
@@ -647,9 +647,9 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         child: LinearProgressIndicator(
           value: pct,
           minHeight: 3,
-          backgroundColor: Colors.white.withOpacity(0.2),
+          backgroundColor: Colors.white.withValues(alpha: 0.2),
           valueColor: AlwaysStoppedAnimation(
-              full ? Colors.white : Colors.white.withOpacity(0.85)),
+              full ? Colors.white : Colors.white.withValues(alpha: 0.85)),
         ),
       );
 }

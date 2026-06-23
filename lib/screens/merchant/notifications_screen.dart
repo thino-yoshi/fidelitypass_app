@@ -241,7 +241,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(width: 34, height: 34,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withOpacity(0.1))),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
               child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22)),
         ),
         const SizedBox(width: 12),
@@ -260,11 +260,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: _kNavy, borderRadius: BorderRadius.circular(14)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('APERÇU SUR MOBILE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.4), letterSpacing: 1)),
+        Text('APERÇU SUR MOBILE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.4), letterSpacing: 1)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(width: 32, height: 32, decoration: BoxDecoration(color: _kPrimary, borderRadius: BorderRadius.circular(9)),
                 child: Center(child: Text(_initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)))),
@@ -272,9 +272,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
               const SizedBox(height: 2),
-              Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.55), height: 1.4)),
+              Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.55), height: 1.4)),
               const SizedBox(height: 3),
-              Text("À l'instant · ${widget.merchantInfo?['business_name'] ?? ''}", style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.3))),
+              Text("À l'instant · ${widget.merchantInfo?['business_name'] ?? ''}", style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.3))),
             ])),
           ]),
         ),
@@ -290,7 +290,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: sel ? _kPrimary.withOpacity(0.08) : context.cSurface,
+          color: sel ? _kPrimary.withValues(alpha: 0.08) : context.cSurface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: sel ? _kPrimary : context.cBorder, width: sel ? 1.5 : 1),
         ),
@@ -399,7 +399,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(12), border: Border.all(color: context.cBorder)),
       child: Row(children: [
-        Container(width: 36, height: 36, decoration: BoxDecoration(color: _kGold.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+        Container(width: 36, height: 36, decoration: BoxDecoration(color: _kGold.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.schedule_rounded, color: _kGold, size: 18)),
         const SizedBox(width: 11),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -85,7 +85,7 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
             onTap: () => Navigator.pop(context),
             child: Container(
               width: 34, height: 34,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withOpacity(0.1))),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
               child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22),
             ),
           ),
@@ -116,12 +116,12 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFFB8860B), _kGold]),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: _kGold.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6))],
+          boxShadow: [BoxShadow(color: _kGold.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
         ),
         child: Row(children: [
           Container(
             width: 40, height: 40,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(12)),
             child: const Center(child: Text('🎁', style: TextStyle(fontSize: 20))),
           ),
           const SizedBox(width: 12),
@@ -129,11 +129,11 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
             Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 2),
             Text('${rewards.length} récompense${rewards.length > 1 ? "s" : ""} disponible${rewards.length > 1 ? "s" : ""}',
-                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.85))),
+                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.85))),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(20)),
             child: Text('${rewards.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.white)),
           ),
         ]),
@@ -337,21 +337,21 @@ class _RewardQRModalState extends State<_RewardQRModal> {
       decoration: const BoxDecoration(color: _kNavy, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       padding: EdgeInsets.fromLTRB(24, 14, 24, 30 + MediaQuery.of(context).padding.bottom),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(2))),
+        Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 18),
         if (_redeemed) ...[
-          Container(width: 76, height: 76, decoration: BoxDecoration(color: const Color(0xFF27AE60).withOpacity(0.2), shape: BoxShape.circle),
+          Container(width: 76, height: 76, decoration: BoxDecoration(color: const Color(0xFF27AE60).withValues(alpha: 0.2), shape: BoxShape.circle),
               child: const Icon(Icons.check_rounded, color: Color(0xFF27AE60), size: 40)),
           const SizedBox(height: 18),
           const Text('Récompense utilisée ✓', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          Text(widget.description, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+          Text(widget.description, style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
         ] else ...[
           const Text('🎁 RÉCOMPENSE', style: TextStyle(color: _kGold2, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
           const SizedBox(height: 4),
           Text(widget.description, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text('chez ${widget.merchantName}', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+          Text('chez ${widget.merchantName}', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(14),
@@ -362,9 +362,9 @@ class _RewardQRModalState extends State<_RewardQRModal> {
           ),
           const SizedBox(height: 16),
           Text('Montre ce QR au commerce pour\nutiliser ta récompense', textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12, height: 1.5)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12, height: 1.5)),
           const SizedBox(height: 8),
-          Text('🔒 Renouvellement dans ${_timeLeft}s', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+          Text('🔒 Renouvellement dans ${_timeLeft}s', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
         ],
       ]),
     );

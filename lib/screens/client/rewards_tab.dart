@@ -80,7 +80,7 @@ class RewardsPage extends StatelessWidget {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.3),
+                      color: Colors.grey.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -163,7 +163,7 @@ class RewardsPage extends StatelessWidget {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFBBF24).withOpacity(0.12),
+                                color: const Color(0xFFFBBF24).withValues(alpha: 0.12),
                                 blurRadius: 10,
                               ),
                             ],

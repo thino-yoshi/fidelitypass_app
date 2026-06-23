@@ -20,7 +20,7 @@ class MerchantRedirectScreen extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF4A9EFF).withOpacity(0.12),
+                  color: const Color(0xFF4A9EFF).withValues(alpha: 0.12),
                   border: Border.all(
                     color: const Color(0xFF4A9EFF),
                     width: 2,
@@ -52,7 +52,7 @@ class MerchantRedirectScreen extends StatelessWidget {
                 'Pour choisir votre abonnement et\nconfigurer votre compte, rendez-vous\nsur notre site.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.4),
+                  color: Colors.white.withValues(alpha: 0.4),
                   fontSize: 13,
                   height: 1.6,
                 ),
@@ -65,10 +65,10 @@ class MerchantRedirectScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF0E1E35),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
-                child: Column(
-                  children: const [
+                child: const Column(
+                  children: [
                     _RedirectFeature(
                       icon: Icons.inventory_2_outlined,
                       label: 'Choix de votre abonnement',
@@ -129,7 +129,7 @@ class MerchantRedirectScreen extends StatelessWidget {
                 child: Text(
                   'Retour',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.35),
+                    color: Colors.white.withValues(alpha: 0.35),
                     fontSize: 13,
                   ),
                 ),
@@ -161,7 +161,7 @@ class _RedirectFeature extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: const Color(0xFF4A9EFF).withOpacity(0.12),
+              color: const Color(0xFF4A9EFF).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: const Color(0xFF4A9EFF), size: 14),
@@ -170,7 +170,7 @@ class _RedirectFeature extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.72),
+              color: Colors.white.withValues(alpha: 0.72),
               fontSize: 13,
             ),
           ),

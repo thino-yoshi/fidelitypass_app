@@ -200,7 +200,7 @@ class _CardsTabState extends State<CardsTab> {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: style.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -292,7 +292,7 @@ class _CardsTabState extends State<CardsTab> {
                           shape: BoxShape.circle,
                           color: filled ? stampFill : Colors.transparent,
                           border: Border.all(
-                              color: stampFill.withOpacity(0.27), width: 1.5),
+                              color: stampFill.withValues(alpha: 0.27), width: 1.5),
                         ),
                         child: filled
                             ? Center(
@@ -423,7 +423,7 @@ class _CardsTabState extends State<CardsTab> {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: style.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
@@ -570,7 +570,7 @@ class _CardsTabState extends State<CardsTab> {
         Container(
           width: 38, height: 38,
           decoration: BoxDecoration(
-            color: full ? textColor.withOpacity(0.25) : textColor.withOpacity(0.18),
+            color: full ? textColor.withValues(alpha: 0.25) : textColor.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(11),
           ),
           child: logoUrl != null
@@ -594,7 +594,7 @@ class _CardsTabState extends State<CardsTab> {
   Widget _orb(double size, Color tint, double opacity) {
     return Container(
       width: size, height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: tint.withOpacity(opacity)),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: tint.withValues(alpha: opacity)),
     );
   }
 
@@ -606,7 +606,7 @@ class _CardsTabState extends State<CardsTab> {
       child: LinearProgressIndicator(
         value: pct,
         minHeight: 2,
-        backgroundColor: Colors.white.withOpacity(0.1),
+        backgroundColor: Colors.white.withValues(alpha: 0.1),
         valueColor: AlwaysStoppedAnimation(accent),
       ),
     );
@@ -645,7 +645,7 @@ Widget lcProgressBar(double pct, Color accent) {
     child: LinearProgressIndicator(
       value: pct,
       minHeight: 2,
-      backgroundColor: Colors.white.withOpacity(0.1),
+      backgroundColor: Colors.white.withValues(alpha: 0.1),
       valueColor: AlwaysStoppedAnimation(accent),
     ),
   );
@@ -685,7 +685,7 @@ class LoyaltyCardFace extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: style.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -764,7 +764,7 @@ class LoyaltyCardFace extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: filled ? accent : Colors.transparent,
-              border: Border.all(color: accent.withOpacity(0.27), width: 1.5),
+              border: Border.all(color: accent.withValues(alpha: 0.27), width: 1.5),
             ),
             child: filled ? Center(child: Icon(Icons.check, size: size * 0.5, color: lcContrastOn(accent))) : null,
           );
@@ -811,7 +811,7 @@ class LoyaltyCardFace extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 6, left: 4),
             child: Text('PTS',
-                style: TextStyle(fontFamily: style.fontFamily, color: accent.withOpacity(0.75), fontSize: 14, fontWeight: FontWeight.w700)),
+                style: TextStyle(fontFamily: style.fontFamily, color: accent.withValues(alpha: 0.75), fontSize: 14, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -934,7 +934,7 @@ class CardStyle {
   }
 
   /// Couleur de remplissage des tampons cochés (basée sur textColor pour bon contraste).
-  Color get stampFillColor => effectiveTextColor.withOpacity(0.9);
+  Color get stampFillColor => effectiveTextColor.withValues(alpha: 0.9);
 
   factory CardStyle.fromDesign(
     dynamic design, {
@@ -1097,7 +1097,7 @@ class _RewardBadge extends StatelessWidget {
           color: context.qSurface,
           borderRadius: BorderRadius.circular(13),
           border: Border.all(color: const Color(0xFFFBBF24), width: 1.5),
-          boxShadow: [BoxShadow(color: const Color(0xFFFBBF24).withOpacity(0.12), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: const Color(0xFFFBBF24).withValues(alpha: 0.12), blurRadius: 10)],
         ),
         child: Row(
           children: [
@@ -1184,7 +1184,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   Timer? _pollTimer;        // ← polling détection tampon
   int _initialStamps = 0;   // ← valeur de référence au moment d'ouverture
   late AnimationController _confettiCtrl;
-  bool _showConfetti = false;
+  final bool _showConfetti = false;
 
   // ── Flip 3D ──────────────────────────────────────────────────────────────────
   late AnimationController _flipCtrl;
@@ -1312,7 +1312,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   void _showQRZoom(BuildContext context, Color color) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.85),
+      barrierColor: Colors.black.withValues(alpha: 0.85),
       builder: (_) => Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -1328,7 +1328,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 30, spreadRadius: 5)],
+                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 30, spreadRadius: 5)],
                   ),
                   child: QrImageView(
                     data: dynamicToken ?? '',
@@ -1342,7 +1342,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               Text(
                 '🔒 Renouvellement dans ${timeLeft}s',
                 style: TextStyle(
-                  color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.7),
+                  color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withValues(alpha: 0.7),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1350,7 +1350,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               const SizedBox(height: 8),
               Text(
                 'Appuie n\'importe où pour fermer',
-                style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11),
               ),
             ],
           ),
@@ -1381,7 +1381,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
           decoration: BoxDecoration(
             color: const Color(0xFF111726),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
           ),
           child: Column(
             children: [
@@ -1395,9 +1395,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                     decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
+                        color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withOpacity(0.15))),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.15))),
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.share_rounded, color: Colors.white, size: 12),
                       SizedBox(width: 5),
@@ -1417,7 +1417,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 16)]),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16)]),
                     child: loadingQR
                         ? SizedBox(width: 150, height: 150, child: Center(child: CircularProgressIndicator(color: color, strokeWidth: 2)))
                         : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 150, foregroundColor: const Color(0xFF0B1220)),
@@ -1426,18 +1426,18 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 12),
               Text('🔒 Renouvellement dans ${timeLeft}s',
-                  style: TextStyle(fontSize: 11, color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.5), fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: 11, color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withValues(alpha: 0.5), fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               ClipRRect(
                   borderRadius: BorderRadius.circular(99),
                   child: LinearProgressIndicator(
                       value: timeLeft / 60,
                       minHeight: 2,
-                      backgroundColor: Colors.white.withOpacity(0.12),
-                      valueColor: AlwaysStoppedAnimation(timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withOpacity(0.4)))),
+                      backgroundColor: Colors.white.withValues(alpha: 0.12),
+                      valueColor: AlwaysStoppedAnimation(timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withValues(alpha: 0.4)))),
               const SizedBox(height: 10),
               Text('Tapez la carte pour voir les infos',
-                  style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -1460,15 +1460,15 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: Stack(
             children: [
               Positioned.fill(child: widget.style.buildBackground()),
-              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.07)))),
-              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withOpacity(0.05)))),
+              Positioned(top: -30, right: -20, child: Container(width: 120, height: 120, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withValues(alpha: 0.07)))),
+              Positioned(bottom: -40, left: -20, child: Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: txt.withValues(alpha: 0.05)))),
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -1486,7 +1486,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
                                 width: 36, height: 36,
-                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
                                 child: Center(child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800))),
                               ),
                             ),
@@ -1500,9 +1500,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                       ),
                       child: Column(
                         children: [
@@ -1515,7 +1515,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Center(child: Text('Tapez pour voir la carte', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.6), fontWeight: FontWeight.w600))),
+                    Center(child: Text('Tapez pour voir la carte', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.6), fontWeight: FontWeight.w600))),
                   ],
                 ),
               ),
@@ -1532,7 +1532,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       children: [
         Container(
           width: 36, height: 36,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: Colors.white, size: 16),
         ),
         const SizedBox(width: 12),
@@ -1540,7 +1540,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white.withOpacity(0.7))),
+              Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.7))),
               const SizedBox(height: 2),
               Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
             ],
@@ -1585,7 +1585,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                   child: Container(
                     width: 36, height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1610,7 +1610,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                         width: 30, height: 30,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                         ),
                         child: const Icon(Icons.close, color: Colors.white, size: 14),
                       ),
@@ -1684,7 +1684,7 @@ class _ConfettiPainter extends CustomPainter {
       final x = p.x * size.width;
       final y = p.startY * size.height - t * size.height * p.speed;
       final opacity = (1.0 - t * 0.8).clamp(0.0, 1.0);
-      final paint = Paint()..color = p.color.withOpacity(opacity);
+      final paint = Paint()..color = p.color.withValues(alpha: opacity);
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(t * p.spin * pi * 4);

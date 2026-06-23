@@ -4,7 +4,6 @@ import '../../config/app_colors.dart';
 class AbonnementScreen extends StatelessWidget {
   const AbonnementScreen({super.key});
 
-  static const _blue      = Color(0xFF2C7BE5);
   static const _blueLight = Color(0xFF4A9EFF);
   static const _green     = Color(0xFF27AE60);
   static const _error     = Color(0xFFE24B4A);
@@ -36,9 +35,9 @@ class AbonnementScreen extends StatelessWidget {
               child: Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
+                  color: Colors.white.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                 ),
                 child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 14),
               ),
@@ -66,16 +65,16 @@ class AbonnementScreen extends StatelessWidget {
                   begin: Alignment.topLeft, end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _blueLight.withOpacity(0.35)),
+                border: Border.all(color: _blueLight.withValues(alpha: 0.35)),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFF1A56DB).withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8)),
+                  BoxShadow(color: const Color(0xFF1A56DB).withValues(alpha: 0.4), blurRadius: 24, offset: const Offset(0, 8)),
                 ],
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _blueLight.withOpacity(0.22),
+                    color: _blueLight.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text('✦ Plan actuel', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _blueLight)),
@@ -83,9 +82,9 @@ class AbonnementScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 const Text('Pro', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 const SizedBox(height: 4),
-                Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  const Text('29€', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
-                  const Padding(
+                const Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text('29€', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+                  Padding(
                     padding: EdgeInsets.only(bottom: 5, left: 4),
                     child: Text('/mois', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: Colors.white54)),
                   ),
@@ -102,13 +101,13 @@ class AbonnementScreen extends StatelessWidget {
                     Container(
                       width: 18, height: 18,
                       decoration: BoxDecoration(
-                        color: _blueLight.withOpacity(0.22),
+                        color: _blueLight.withValues(alpha: 0.22),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.check_rounded, size: 11, color: _blueLight),
                     ),
                     const SizedBox(width: 8),
-                    Text(f, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.85))),
+                    Text(f, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.85))),
                   ]),
                 )),
               ]),
@@ -144,10 +143,10 @@ class AbonnementScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: _green.withOpacity(0.12),
+                    color: _green.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text('Actif', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _green)),
+                  child: const Text('Actif', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _green)),
                 ),
               ]),
             ),
@@ -235,7 +234,7 @@ class AbonnementScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: kWhite,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _error.withOpacity(0.5), width: 1.5),
+                  border: Border.all(color: _error.withValues(alpha: 0.5), width: 1.5),
                 ),
                 child: const Center(
                   child: Text(
@@ -260,7 +259,7 @@ class AbonnementScreen extends StatelessWidget {
         Container(
           width: 18, height: 18,
           decoration: BoxDecoration(
-            color: active ? _green.withOpacity(0.12) : context.cBorder,
+            color: active ? _green.withValues(alpha: 0.12) : context.cBorder,
             shape: BoxShape.circle,
           ),
           child: Icon(

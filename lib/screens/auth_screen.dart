@@ -259,12 +259,12 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               ? Column(children: [
             SizedBox(
               height: (size.height * 0.55 - 20) / 2,
-              child: FloatingCards(reverse: false, isTablet: true),
+              child: const FloatingCards(reverse: false, isTablet: true),
             ),
             const SizedBox(height: 20),
             SizedBox(
               height: (size.height * 0.55 - 20) / 2,
-              child: FloatingCards(reverse: true, isTablet: true),
+              child: const FloatingCards(reverse: true, isTablet: true),
             ),
           ])
               : const FloatingCards(reverse: false, isTablet: false),
@@ -304,7 +304,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                 Text('Rejoins des milliers de clients\net commerçants sur Qarta',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.38),
+                      color: Colors.white.withValues(alpha: 0.38),
                       fontSize: _fs(context, 12, tablet: 14),
                     )),
                 const SizedBox(height: 22),
@@ -333,7 +333,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(vertical: tablet ? 18 : 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      side: BorderSide(color: Colors.white.withOpacity(0.18)),
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
                     ),
                     child: Text('Se connecter', style: TextStyle(
                       fontSize: _fs(context, 15, tablet: 17),
@@ -344,10 +344,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                 const SizedBox(height: 13),
 
                 Row(children: [
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
+                  Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
                   Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('ou', style: TextStyle(color: Colors.white.withOpacity(0.28), fontSize: 11))),
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
+                      child: Text('ou', style: TextStyle(color: Colors.white.withValues(alpha: 0.28), fontSize: 11))),
+                  Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
                 ]),
                 const SizedBox(height: 13),
 
@@ -355,11 +355,11 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                   child: OutlinedButton(
                     onPressed: googleLoading ? null : _doGoogle,
                     style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.07),
+                      backgroundColor: Colors.white.withValues(alpha: 0.07),
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                     ),
                     child: googleLoading
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -386,8 +386,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   // ═══════════════════════════════════════
   Widget _buildLogin() {
     final tablet = _isTablet(context);
-    bool _showPass = false;
-    String _loginTab = 'client'; // 'client' | 'merchant'
+    bool showPass = false;
+    String loginTab = 'client'; // 'client' | 'merchant'
 
     return StatefulBuilder(
       builder: (context, setS) => Stack(
@@ -412,8 +412,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                         child: Column(children: [
                           Container(
                             width: 64, height: 64,
-                            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF1A2E50)),
-                            child: Center(child: Text('Q', style: TextStyle(
+                            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1A2E50)),
+                            child: const Center(child: Text('Q', style: TextStyle(
                                 color: kBlue, fontSize: 32, fontWeight: FontWeight.w700))),
                           ),
                           const SizedBox(height: 12),
@@ -421,7 +421,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                               color: Colors.white, fontSize: _fs(context, 20, tablet: 24), fontWeight: FontWeight.w700)),
                           const SizedBox(height: 4),
                           Text('Connecte-toi à ton compte Qarta',
-                              style: TextStyle(color: Colors.white.withOpacity(0.38), fontSize: _fs(context, 12, tablet: 14))),
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.38), fontSize: _fs(context, 12, tablet: 14))),
                         ]),
                       ),
                       const SizedBox(height: 20),
@@ -451,18 +451,18 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       // Champ mot de passe avec bouton Voir
                       TextField(
                         controller: loginPassCtrl,
-                        obscureText: !_showPass,
+                        obscureText: !showPass,
                         style: TextStyle(color: Colors.white, fontSize: _fs(context, 14, tablet: 16)),
                         decoration: InputDecoration(
                           hintText: '••••••••',
-                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
-                          prefixIcon: Icon(Icons.lock_outline, color: Colors.white38, size: 18),
+                          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.25)),
+                          prefixIcon: const Icon(Icons.lock_outline, color: Colors.white38, size: 18),
                           suffixIcon: GestureDetector(
-                            onTap: () => setS(() => _showPass = !_showPass),
+                            onTap: () => setS(() => showPass = !showPass),
                             child: Padding(
                               padding: const EdgeInsets.only(right: 14),
-                              child: Text(_showPass ? 'Cacher' : 'Voir',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 11)),
+                              child: Text(showPass ? 'Cacher' : 'Voir',
+                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 11)),
                             ),
                           ),
                           suffixIconConstraints: const BoxConstraints(),
@@ -470,9 +470,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                           fillColor: const Color(0xFF0E1E35),
                           contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: _isTablet(context) ? 18 : 14),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
-                              borderSide: BorderSide(color: Colors.white.withOpacity(0.12))),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
-                              borderSide: BorderSide(color: Colors.white.withOpacity(0.12))),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
                           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
                               borderSide: const BorderSide(color: kBlue, width: 1.5)),
                         ),
@@ -507,10 +507,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       const SizedBox(height: 14),
 
                       Row(children: [
-                        Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
+                        Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
                         Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('ou', style: TextStyle(color: Colors.white.withOpacity(0.28), fontSize: 11))),
-                        Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
+                            child: Text('ou', style: TextStyle(color: Colors.white.withValues(alpha: 0.28), fontSize: 11))),
+                        Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
                       ]),
                       const SizedBox(height: 14),
 
@@ -518,11 +518,11 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                         child: OutlinedButton(
                           onPressed: googleLoading ? null : _doGoogle,
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.07),
+                            backgroundColor: Colors.white.withValues(alpha: 0.07),
                             foregroundColor: Colors.white,
                             padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 13),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                           ),
                           child: googleLoading
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -541,7 +541,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                           child: RichText(
                             text: TextSpan(
                               text: 'Pas encore de compte ? ',
-                              style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: _fs(context, 12, tablet: 14)),
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: _fs(context, 12, tablet: 14)),
                               children: const [
                                 TextSpan(text: 'S\'inscrire',
                                     style: TextStyle(color: kBlue, fontWeight: FontWeight.w500)),
@@ -622,7 +622,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           color: Colors.white, fontSize: _fs(context, 20, tablet: 24), fontWeight: FontWeight.w700)),
       const SizedBox(height: 4),
       Text('Choisis ton profil pour commencer', style: TextStyle(
-          color: Colors.white.withOpacity(0.38), fontSize: _fs(context, 12, tablet: 14))),
+          color: Colors.white.withValues(alpha: 0.38), fontSize: _fs(context, 12, tablet: 14))),
       const SizedBox(height: 22),
 
       tablet
@@ -676,12 +676,12 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     final tablet = _isTablet(context);
     return StatefulBuilder(
       builder: (context, setS) {
-        bool _isValidEmail(String email) =>
+        bool isValidEmail(String email) =>
             RegExp(r'^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$').hasMatch(email.trim());
 
         final allFilled = prenomCtrl.text.trim().isNotEmpty
             && nomCtrl.text.trim().isNotEmpty
-            && _isValidEmail(emailCtrl.text)
+            && isValidEmail(emailCtrl.text)
             && passCtrl.text.isNotEmpty
             && (regType != 'merchant' || codeCtrl.text.trim().isNotEmpty);
 
@@ -690,7 +690,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               color: Colors.white, fontSize: _fs(context, 20, tablet: 24), fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text('Gratuit · 30 secondes · zéro CB',
-              style: TextStyle(color: Colors.white.withOpacity(0.38), fontSize: _fs(context, 12, tablet: 14))),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.38), fontSize: _fs(context, 12, tablet: 14))),
           const SizedBox(height: 20),
 
           Row(children: [
@@ -711,14 +711,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             style: TextStyle(color: Colors.white, fontSize: _fs(context, 14, tablet: 16)),
             decoration: InputDecoration(
               hintText: 'Adresse email',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.25)),
               prefixIcon: const Icon(Icons.email_outlined, color: Colors.white38, size: 18),
               suffixIcon: emailCtrl.text.isNotEmpty
                   ? Icon(
-                _isValidEmail(emailCtrl.text)
+                isValidEmail(emailCtrl.text)
                     ? Icons.check_circle_outline
                     : Icons.error_outline,
-                color: _isValidEmail(emailCtrl.text)
+                color: isValidEmail(emailCtrl.text)
                     ? const Color(0xFF22C55E)
                     : const Color(0xFFE24B4A),
                 size: 18,
@@ -728,14 +728,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               fillColor: const Color(0xFF0E1E35),
               contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: _isTablet(context) ? 18 : 14),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.12))),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
                   borderSide: BorderSide(
                     color: emailCtrl.text.isNotEmpty
-                        ? _isValidEmail(emailCtrl.text)
+                        ? isValidEmail(emailCtrl.text)
                         ? const Color(0xFF22C55E)
                         : const Color(0xFFE24B4A)
-                        : Colors.white.withOpacity(0.12),
+                        : Colors.white.withValues(alpha: 0.12),
                   )),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
                   borderSide: const BorderSide(color: kBlue, width: 1.5)),
@@ -804,7 +804,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             child: TextButton(
               onPressed: () => setState(() { regStep = 1; error = ''; }),
               child: Text('Retour',
-                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13)),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 13)),
             ),
           ),
         ]);
@@ -829,7 +829,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             width: tablet ? 90 : 72, height: tablet ? 90 : 72,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: kBlue.withOpacity(0.15),
+              color: kBlue.withValues(alpha: 0.15),
               border: Border.all(color: kBlue, width: 2),
             ),
             child: Center(
@@ -844,7 +844,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         const SizedBox(height: 8),
         Text('Ton compte Qarta est prêt.\nCommence à scanner dès maintenant.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: _fs(context, 13, tablet: 15), height: 1.6)),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: _fs(context, 13, tablet: 15), height: 1.6)),
         const SizedBox(height: 26),
 
         if (error.isNotEmpty) ...[
@@ -882,7 +882,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           color: selected ? kBlue : const Color(0xFF0E1E35),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? kBlue : Colors.white.withOpacity(0.1),
+            color: selected ? kBlue : Colors.white.withValues(alpha: 0.1),
             width: 1.5,
           ),
         ),
@@ -892,7 +892,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               duration: const Duration(milliseconds: 250),
               width: 46, height: 46,
               decoration: BoxDecoration(
-                color: selected ? Colors.white.withOpacity(0.2) : const Color(0xFF1A2E50),
+                color: selected ? Colors.white.withValues(alpha: 0.2) : const Color(0xFF1A2E50),
                 borderRadius: BorderRadius.circular(13),
               ),
               child: Center(child: Icon(icon,
@@ -907,7 +907,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                     fontSize: _fs(context, 15, tablet: 17), fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(subtitle, style: TextStyle(
-                    color: selected ? const Color(0xFF0D1526).withOpacity(0.65) : Colors.white.withOpacity(0.38),
+                    color: selected ? const Color(0xFF0D1526).withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.38),
                     fontSize: _fs(context, 11, tablet: 12))),
               ]),
             ),
@@ -916,15 +916,15 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               width: 22, height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: selected ? const Color(0xFF0D1526) : Colors.white.withOpacity(0.08),
+                color: selected ? const Color(0xFF0D1526) : Colors.white.withValues(alpha: 0.08),
                 border: Border.all(
-                  color: selected ? const Color(0xFF0D1526) : Colors.white.withOpacity(0.15),
+                  color: selected ? const Color(0xFF0D1526) : Colors.white.withValues(alpha: 0.15),
                   width: 1.5,
                 ),
               ),
               child: Center(child: Icon(Icons.check,
                   size: 13,
-                  color: selected ? kBlue : Colors.white.withOpacity(0.2))),
+                  color: selected ? kBlue : Colors.white.withValues(alpha: 0.2))),
             ),
           ]),
           if (tags != null) ...[
@@ -932,7 +932,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             Wrap(spacing: 6, children: tags.map((tag) => Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
-                color: kBlue.withOpacity(0.15),
+                color: kBlue.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(tag, style: const TextStyle(
@@ -954,15 +954,15 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       style: TextStyle(color: Colors.white, fontSize: _fs(context, 14, tablet: 16)),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: _fs(context, 14, tablet: 16)),
+        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.25), fontSize: _fs(context, 14, tablet: 16)),
         prefixIcon: Icon(icon, color: Colors.white38, size: _isTablet(context) ? 22 : 18),
         filled: true,
         fillColor: const Color(0xFF0E1E35),
         contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: _isTablet(context) ? 18 : 14),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.12))),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.12))),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
             borderSide: const BorderSide(color: kBlue, width: 1.5)),
       ),
@@ -1001,7 +1001,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           ),
           child: Text(label, textAlign: TextAlign.center,
               style: TextStyle(
-                  color: active ? kDark : Colors.white.withOpacity(0.4),
+                  color: active ? kDark : Colors.white.withValues(alpha: 0.4),
                   fontSize: 13, fontWeight: active ? FontWeight.w600 : FontWeight.w500)),
         ),
       ),
@@ -1012,7 +1012,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     final s = _isTablet(context) ? 36.0 : 28.0;
     return Container(
       width: s, height: s,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF1A2E50)),
+      decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1A2E50)),
       child: Center(child: Text('Q', style: TextStyle(
           color: kBlue, fontSize: _isTablet(context) ? 20 : 16, fontWeight: FontWeight.w700))),
     );
@@ -1029,10 +1029,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     const t = 20.0;
     const w = 1.5;
     return [
-      Positioned(top: t, left: t, child: _Corner(size: s, color: c, top: true, left: true, width: w)),
-      Positioned(top: t, right: t, child: _Corner(size: s, color: c, top: true, left: false, width: w)),
-      Positioned(bottom: t, left: t, child: _Corner(size: s, color: c, top: false, left: true, width: w)),
-      Positioned(bottom: t, right: t, child: _Corner(size: s, color: c, top: false, left: false, width: w)),
+      const Positioned(top: t, left: t, child: _Corner(size: s, color: c, top: true, left: true, width: w)),
+      const Positioned(top: t, right: t, child: _Corner(size: s, color: c, top: true, left: false, width: w)),
+      const Positioned(bottom: t, left: t, child: _Corner(size: s, color: c, top: false, left: true, width: w)),
+      const Positioned(bottom: t, right: t, child: _Corner(size: s, color: c, top: false, left: false, width: w)),
     ];
   }
 
@@ -1046,13 +1046,13 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           Container(
             width: 28, height: 28,
             decoration: BoxDecoration(
-              color: const Color(0xFF4A9EFF).withOpacity(0.12),
+              color: const Color(0xFF4A9EFF).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: const Color(0xFF4A9EFF), size: 14),
           ),
           const SizedBox(width: 10),
-          Text(label, style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 13)),
+          Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 13)),
         ],
       ),
     );
@@ -1082,7 +1082,7 @@ class _CornerPainter extends CustomPainter {
     final p = Paint()..color = color..strokeWidth = width..style = PaintingStyle.stroke;
     const r = 3.0;
     final path = Path();
-    if (top && left) { path.moveTo(0, size.height); path.lineTo(0, r); path.arcToPoint(Offset(r, 0), radius: const Radius.circular(r)); path.lineTo(size.width, 0); }
+    if (top && left) { path.moveTo(0, size.height); path.lineTo(0, r); path.arcToPoint(const Offset(r, 0), radius: const Radius.circular(r)); path.lineTo(size.width, 0); }
     else if (top) { path.moveTo(0, 0); path.lineTo(size.width - r, 0); path.arcToPoint(Offset(size.width, r), radius: const Radius.circular(r)); path.lineTo(size.width, size.height); }
     else if (left) { path.moveTo(0, 0); path.lineTo(0, size.height - r); path.arcToPoint(Offset(r, size.height), radius: const Radius.circular(r)); path.lineTo(size.width, size.height); }
     else { path.moveTo(size.width, 0); path.lineTo(size.width, size.height - r); path.arcToPoint(Offset(size.width - r, size.height), radius: const Radius.circular(r)); path.lineTo(0, size.height); }
@@ -1195,11 +1195,11 @@ class _FloatingCardsState extends State<FloatingCards> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(
-          colors: [card.color.withOpacity(0.9), card.color.withOpacity(0.5)],
+          colors: [card.color.withValues(alpha: 0.9), card.color.withValues(alpha: 0.5)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         boxShadow: [BoxShadow(
-          color: card.color.withOpacity(0.35),
+          color: card.color.withValues(alpha: 0.35),
           blurRadius: 30,
           offset: const Offset(0, 15),
         )],

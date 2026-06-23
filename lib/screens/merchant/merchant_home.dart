@@ -5,7 +5,6 @@ import '../../config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../main.dart';
-import '../../widgets/user_avatar.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
 import 'program_screen.dart';
@@ -13,7 +12,6 @@ import 'history_screen.dart';
 import 'notifications_screen.dart';
 import 'clients_screen.dart';
 import 'static_qr_screen.dart';
-import 'card_preview_screen.dart';
 import 'merchant_onboarding.dart';
 import 'abonnement_screen.dart';
 import 'stats_screen.dart';
@@ -266,7 +264,7 @@ class _MerchantHomeState extends State<MerchantHome> {
           top: -60, right: -20,
           child: Container(width: 180, height: 180,
             decoration: BoxDecoration(shape: BoxShape.circle,
-              gradient: RadialGradient(colors: [_kPrimary.withOpacity(0.25), Colors.transparent], stops: const [0, 0.7]))),
+              gradient: RadialGradient(colors: [_kPrimary.withValues(alpha: 0.25), Colors.transparent], stops: const [0, 0.7]))),
         ),
         Center(child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
@@ -280,9 +278,9 @@ class _MerchantHomeState extends State<MerchantHome> {
                 child: Container(
                   width: 44, height: 44,
                   decoration: BoxDecoration(
-                    color: _kPrimary.withOpacity(0.35),
+                    color: _kPrimary.withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: _kBlueLight.withOpacity(0.45), width: 1.5)),
+                    border: Border.all(color: _kBlueLight.withValues(alpha: 0.45), width: 1.5)),
                   child: Center(child: Text(_initials,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kBlueLight))),
                 ),
@@ -297,7 +295,7 @@ class _MerchantHomeState extends State<MerchantHome> {
                     Container(width: 6, height: 6, decoration: const BoxDecoration(color: _kSuccess, shape: BoxShape.circle)),
                     const SizedBox(width: 5),
                     Text('Connecté · ${active ? "Plan Pro" : "Plan Free"}',
-                      style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.5))),
+                      style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.5))),
                   ]),
                 ]),
               ),
@@ -308,10 +306,10 @@ class _MerchantHomeState extends State<MerchantHome> {
                 child: Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: Colors.white.withOpacity(0.12))),
-                  child: Icon(Icons.notifications_outlined, color: Colors.white.withOpacity(0.85), size: 18),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.12))),
+                  child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.85), size: 18),
                 ),
               ),
             ]),
@@ -338,7 +336,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.07),
+            color: Colors.white.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: _kNavyCard),
           ),
@@ -346,7 +344,7 @@ class _MerchantHomeState extends State<MerchantHome> {
             Text(val, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Colors.white, height: 1)),
             const SizedBox(height: 2),
             Text(label, textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 8, color: Colors.white.withOpacity(0.42))),
+              style: TextStyle(fontSize: 8, color: Colors.white.withValues(alpha: 0.42))),
           ]),
         ),
       ),
@@ -441,7 +439,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFF1A3A6B), Color(0xFF0F2044)]),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _kBlueLight.withOpacity(0.2)),
+          border: Border.all(color: _kBlueLight.withValues(alpha: 0.2)),
         ),
         child: Row(children: [
           const Text('G', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF4285F4))),
@@ -450,12 +448,12 @@ class _MerchantHomeState extends State<MerchantHome> {
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white))),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(color: _kGold.withOpacity(0.25), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: _kGold.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(20)),
             child: const Text('+5 pts offerts',
                 style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFFFBBF24))),
           ),
           const SizedBox(width: 6),
-          Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.5), size: 16),
+          Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.5), size: 16),
         ]),
       ),
     );
@@ -467,7 +465,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     final isDark = context.isDark;
     final bg     = isDark ? _kNavyCard : const Color(0xFFEFF5FE);
     final border = isDark ? const Color(0xFF2A3D5A) : const Color(0xFFD6E6FB);
-    final iconBg = isDark ? _kPrimary.withOpacity(0.25) : const Color(0xFFDBEAFB);
+    final iconBg = isDark ? _kPrimary.withValues(alpha: 0.25) : const Color(0xFFDBEAFB);
 
     Widget pill(String key, String label) {
       final active = _retPeriod == key;
@@ -597,7 +595,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(val, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _kBlueLight, height: 1)),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.65))),
+          Text(label, style: TextStyle(fontSize: 9.5, color: Colors.white.withValues(alpha: 0.65))),
           if (deltaChip != null) deltaChip,
         ]),
       ),
@@ -812,7 +810,7 @@ class _MerchantHomeState extends State<MerchantHome> {
             decoration: BoxDecoration(
               color: _kBlueLight,
               borderRadius: BorderRadius.circular(18),
-              boxShadow: [BoxShadow(color: _kBlueLight.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 6))],
+              boxShadow: [BoxShadow(color: _kBlueLight.withValues(alpha: 0.5), blurRadius: 18, offset: const Offset(0, 6))],
             ),
             child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 26),
           ),
@@ -891,26 +889,26 @@ class _MerchantProfilSheet extends StatelessWidget {
             Text('MON COMMERCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
             const SizedBox(height: 8),
             _section(kWhite, kBorder, [
-              _row(context, kBorder, kText, kSub, Icons.description_outlined, _kPrimary.withOpacity(0.12), _kPrimary, 'Informations', 'Nom, adresse', () => Navigator.pop(context)),
-              _row(context, kBorder, kText, kSub, Icons.credit_card_outlined, _kSuccess.withOpacity(0.12), _kSuccess, 'Ma carte fidélité', 'Tampons, récompense',
+              _row(context, kBorder, kText, kSub, Icons.description_outlined, _kPrimary.withValues(alpha: 0.12), _kPrimary, 'Informations', 'Nom, adresse', () => Navigator.pop(context)),
+              _row(context, kBorder, kText, kSub, Icons.credit_card_outlined, _kSuccess.withValues(alpha: 0.12), _kSuccess, 'Ma carte fidélité', 'Tampons, récompense',
                   () { Navigator.pop(context); onNavigateToProgram?.call(); }, noBorder: true),
             ]),
             const SizedBox(height: 14),
             Text('MARKETING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
             const SizedBox(height: 8),
             _section(kWhite, kBorder, [
-              _row(context, kBorder, kText, kSub, Icons.notifications_outlined, _kGold.withOpacity(0.12), _kGold, 'Notifications push', 'Promos, rappels',
+              _row(context, kBorder, kText, kSub, Icons.notifications_outlined, _kGold.withValues(alpha: 0.12), _kGold, 'Notifications push', 'Promos, rappels',
                   () { Navigator.pop(context); onNavigateToNotifs?.call(); }),
-              _row(context, kBorder, kText, kSub, Icons.qr_code_2_rounded, _kPrimary.withOpacity(0.12), _kPrimary, 'QR Code boutique', 'Afficher en caisse',
+              _row(context, kBorder, kText, kSub, Icons.qr_code_2_rounded, _kPrimary.withValues(alpha: 0.12), _kPrimary, 'QR Code boutique', 'Afficher en caisse',
                   () { Navigator.pop(context); onNavigateToQR?.call(); }),
-              _row(context, kBorder, kText, kSub, Icons.show_chart_rounded, _kPurple.withOpacity(0.12), _kPurple, 'Statistiques', 'Analyse de l\'activité',
+              _row(context, kBorder, kText, kSub, Icons.show_chart_rounded, _kPurple.withValues(alpha: 0.12), _kPurple, 'Statistiques', 'Analyse de l\'activité',
                   () => Navigator.pop(context), noBorder: true),
             ]),
             const SizedBox(height: 14),
             Text('COMPTE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
             const SizedBox(height: 8),
             _section(kWhite, kBorder, [
-              _row(context, kBorder, kText, kSub, Icons.star_outline_rounded, _kError.withOpacity(0.12), _kError, 'Abonnement', 'Plan Pro · Actif',
+              _row(context, kBorder, kText, kSub, Icons.star_outline_rounded, _kError.withValues(alpha: 0.12), _kError, 'Abonnement', 'Plan Pro · Actif',
                   () { Navigator.pop(context); onNavigateToAbonnement?.call(); }),
               _row(context, kBorder, kText, kSub, Icons.help_outline_rounded, kBg, kSub, 'Aide & Support', 'FAQ, nous contacter',
                   () => Navigator.pop(context), noBorder: true),
@@ -925,7 +923,7 @@ class _MerchantProfilSheet extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(children: [
                     Container(width: 32, height: 32,
-                        decoration: BoxDecoration(color: _kPurple.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: _kPurple.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                         child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF7C3AED), size: 16)),
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -939,7 +937,7 @@ class _MerchantProfilSheet extends StatelessWidget {
                         final p = await SharedPreferences.getInstance();
                         await p.setBool('dark_mode', val);
                       },
-                      activeColor: _kPrimary,
+                      activeThumbColor: _kPrimary,
                     ),
                   ]),
                 ),
@@ -951,7 +949,7 @@ class _MerchantProfilSheet extends StatelessWidget {
               child: Container(
                 width: double.infinity, height: 46,
                 decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _kError.withOpacity(0.4))),
+                    border: Border.all(color: _kError.withValues(alpha: 0.4))),
                 child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.logout_rounded, color: _kError, size: 16),
                   SizedBox(width: 8),

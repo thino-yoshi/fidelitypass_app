@@ -193,7 +193,7 @@ class _StatsScreenState extends State<StatsScreen> {
             onTap: () => Navigator.pop(context),
             child: Container(
               width: 34, height: 34,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withOpacity(0.1))),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
               child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22),
             ),
           ),
@@ -217,7 +217,7 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(children: [
           Text(val, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
           const SizedBox(height: 2),
-          Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.5))),
+          Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.5))),
         ]),
       ),
     );
@@ -230,25 +230,25 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text("VUE D'ENSEMBLE · 30 DERNIERS JOURS",
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.5), letterSpacing: 0.7)),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.5), letterSpacing: 0.7)),
         const SizedBox(height: 12),
         Row(children: [
           kpi('$visites', 'Total visites'),
           kpi('$clients', 'Clients', border: Border(
-            left: BorderSide(color: Colors.white.withOpacity(0.1)),
-            right: BorderSide(color: Colors.white.withOpacity(0.1)))),
+            left: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            right: BorderSide(color: Colors.white.withValues(alpha: 0.1)))),
           kpi('$actifs', 'Membres actifs'),
         ]),
         const SizedBox(height: 14),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Taux de rétention des membres', style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.4))),
-          Text('$ret% reviennent', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.6))),
+          Text('Taux de rétention des membres', style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.4))),
+          Text('$ret% reviennent', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6))),
         ]),
         const SizedBox(height: 5),
         ClipRRect(
           borderRadius: BorderRadius.circular(99),
           child: LinearProgressIndicator(value: ret / 100, minHeight: 5,
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
               valueColor: const AlwaysStoppedAnimation(_kBlueLight)),
         ),
       ]),
@@ -352,7 +352,7 @@ class _StatsScreenState extends State<StatsScreen> {
         if (hasData)
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFFFF8EC), borderRadius: BorderRadius.circular(10), border: Border.all(color: _kGold.withOpacity(0.2))),
+            decoration: BoxDecoration(color: const Color(0xFFFFF8EC), borderRadius: BorderRadius.circular(10), border: Border.all(color: _kGold.withValues(alpha: 0.2))),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Icon(Icons.info_outline_rounded, color: _kGold, size: 14),
               const SizedBox(width: 8),
@@ -418,7 +418,7 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: (trend >= 0 ? _kSuccess : _kError).withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: (trend >= 0 ? _kSuccess : _kError).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
             child: Text('${trend >= 0 ? "↑ +" : "↓ "}$trend sur la période',
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: trend >= 0 ? _kSuccess : _kError)),
           ),
@@ -537,7 +537,7 @@ class _LinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (data.length < 2) return;
-    final maxV = 100.0;
+    const maxV = 100.0;
     final dx = size.width / (data.length - 1);
     Offset pt(int i) => Offset(i * dx, size.height - (data[i] / maxV) * size.height);
 

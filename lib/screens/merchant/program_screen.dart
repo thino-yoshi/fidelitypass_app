@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 
@@ -24,7 +23,6 @@ class _ProgramScreenState extends State<ProgramScreen> {
   static const _errorColor    = Color(0xFFE24B4A);
   static const _successColor  = Color(0xFF27AE60);
 
-  Color get _kBg     => context.cBg;
   Color get _kWhite  => context.cSurface;
   Color get _kBorder => context.cBorder;
   Color get _kText   => context.cText;
@@ -83,7 +81,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                     onTap: () { if (newStamps > 1) setD(() => newStamps--); },
                     child: Container(
                       width: 36, height: 36,
-                      decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(color: _blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                       child: const Icon(Icons.remove_rounded, color: _blue, size: 18),
                     ),
                   ),
@@ -102,7 +100,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                     onTap: () { setD(() => newStamps++); },
                     child: Container(
                       width: 36, height: 36,
-                      decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(color: _blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                       child: const Icon(Icons.add_rounded, color: _blue, size: 18),
                     ),
                   ),
@@ -230,7 +228,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                       onTap: () { if (stampsRequired > 2) setState(() => stampsRequired--); },
                       child: Container(
                         width: 44, height: 44,
-                        decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(color: _blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                         child: const Icon(Icons.remove_rounded, color: _blue, size: 22),
                       ),
                     ),
@@ -250,7 +248,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                       onTap: () { if (stampsRequired < 50) setState(() => stampsRequired++); },
                       child: Container(
                         width: 44, height: 44,
-                        decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(color: _blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                         child: const Icon(Icons.add_rounded, color: _blue, size: 22),
                       ),
                     ),
@@ -270,7 +268,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _blue.withOpacity(0.08),
+                    color: _blue.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -284,7 +282,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _kText)),
                             const SizedBox(height: 2),
                             Text(
-                              '${rewardCtrl.text.isEmpty ? "Votre récompense" : rewardCtrl.text}',
+                              rewardCtrl.text.isEmpty ? "Votre récompense" : rewardCtrl.text,
                               style: const TextStyle(fontSize: 13, color: _blue, fontWeight: FontWeight.w600),
                             ),
                           ],
@@ -361,7 +359,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                               children: [
                                 Container(
                                   width: 38, height: 38,
-                                  decoration: BoxDecoration(color: _blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                                  decoration: BoxDecoration(color: _blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                                   child: Center(child: Text(
                                     '${r['stamps_required']}',
                                     style: const TextStyle(color: _blue, fontWeight: FontWeight.w900, fontSize: 14),
@@ -381,7 +379,7 @@ class _ProgramScreenState extends State<ProgramScreen> {
                                   child: Container(
                                     width: 30, height: 30,
                                     decoration: BoxDecoration(
-                                      color: _errorColor.withOpacity(0.1),
+                                      color: _errorColor.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: const Icon(Icons.close_rounded, color: _errorColor, size: 15),

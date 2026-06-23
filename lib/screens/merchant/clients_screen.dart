@@ -18,7 +18,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
   String _search = '';
 
   static const _blue = Color(0xFF2C7BE5);
-  Color get _kBg    => context.cBg;
   Color get _kWhite => context.cSurface;
   Color get _kBorder => context.cBorder;
   Color get _kText  => context.cText;
@@ -192,7 +191,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B).withOpacity(0.12),
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Icon(Icons.emoji_events_rounded, size: 13, color: Color(0xFFF59E0B)),
@@ -295,7 +294,7 @@ class _ClientSheetState extends State<_ClientSheet> {
                   decoration: BoxDecoration(
                     color: _blue,
                     borderRadius: BorderRadius.circular(14),
-                    boxShadow: [BoxShadow(color: _blue.withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 6))],
+                    boxShadow: [BoxShadow(color: _blue.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 6))],
                   ),
                   child: const Center(
                     child: Text("Confirmer l'ajout",
@@ -404,11 +403,11 @@ class _ClientSheetState extends State<_ClientSheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withOpacity(0.12),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        '$rewardDescription',
+                        rewardDescription,
                         style: const TextStyle(fontSize: 13, color: Color(0xFFF59E0B), fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
                       ),
@@ -432,11 +431,11 @@ class _ClientSheetState extends State<_ClientSheet> {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [cardColor, cardColor.withOpacity(0.7)],
+                  colors: [cardColor, cardColor.withValues(alpha: 0.7)],
                   begin: Alignment.topLeft, end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: cardColor.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                boxShadow: [BoxShadow(color: cardColor.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
               ),
               child: Column(children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -444,9 +443,9 @@ class _ClientSheetState extends State<_ClientSheet> {
                     Container(
                       width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
+                        color: Colors.white.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                       ),
                       child: Center(child: Text(initials,
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white))),
@@ -456,17 +455,17 @@ class _ClientSheetState extends State<_ClientSheet> {
                       Text(businessName,
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
                       Text('Carte fidélité',
-                          style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.6))),
+                          style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.6))),
                     ]),
                   ]),
                   Container(
                     width: 34, height: 34,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                     ),
-                    child: Icon(Icons.qr_code_rounded, size: 16, color: Colors.white.withOpacity(0.8)),
+                    child: Icon(Icons.qr_code_rounded, size: 16, color: Colors.white.withValues(alpha: 0.8)),
                   ),
                 ]),
                 const SizedBox(height: 12),
@@ -475,9 +474,9 @@ class _ClientSheetState extends State<_ClientSheet> {
                   children: List.generate(stampsRequired, (i) => Container(
                     width: 22, height: 22,
                     decoration: BoxDecoration(
-                      color: i < stamps ? Colors.white.withOpacity(0.9) : Colors.transparent,
+                      color: i < stamps ? Colors.white.withValues(alpha: 0.9) : Colors.transparent,
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: Colors.white.withOpacity(i < stamps ? 0 : 0.35), width: 1.5),
+                      border: Border.all(color: Colors.white.withValues(alpha: i < stamps ? 0 : 0.35), width: 1.5),
                     ),
                     child: i < stamps ? Icon(Icons.check_rounded, size: 12, color: cardColor) : null,
                   )),
@@ -489,13 +488,13 @@ class _ClientSheetState extends State<_ClientSheet> {
                       stamps >= stampsRequired
                           ? 'Récompense disponible !'
                           : 'Encore ${stampsRequired - stamps} tampons pour\n$rewardDescription',
-                      style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.75), height: 1.4),
+                      style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.75), height: 1.4),
                     ),
                   ),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     Text('$stamps/$stampsRequired',
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                    Text('tampons', style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.5))),
+                    Text('tampons', style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.5))),
                   ]),
                 ]),
                 const SizedBox(height: 8),
@@ -503,15 +502,15 @@ class _ClientSheetState extends State<_ClientSheet> {
                   borderRadius: BorderRadius.circular(99),
                   child: LinearProgressIndicator(
                     value: stampsRequired > 0 ? (stamps / stampsRequired).clamp(0.0, 1.0) : 0,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    valueColor: AlwaysStoppedAnimation(Colors.white.withOpacity(0.85)),
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation(Colors.white.withValues(alpha: 0.85)),
                     minHeight: 4,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text('👤 $clientName',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.5))),
+                    style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.5))),
               ]),
             ),
             const SizedBox(height: 20),
@@ -543,7 +542,7 @@ class _ClientSheetState extends State<_ClientSheet> {
                 decoration: BoxDecoration(
                   color: _blue,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(color: _blue.withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 6))],
+                  boxShadow: [BoxShadow(color: _blue.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 6))],
                 ),
                 child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 16),
