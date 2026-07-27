@@ -422,10 +422,10 @@ class _CardsTabState extends State<CardsTab> {
   // ── Carte Points (layout aligné sur qarta.be) ────────────────────────────────
 
   Widget _buildPointsCard(Map card, CardStyle style) {
-    final points       = card['points_count'] as int? ?? 0;
     final required     = style.pointsGoal
         ?? card['merchants']?['points_required'] as int?
         ?? card['merchants']?['stamps_required'] as int? ?? 100;
+    final points       = (card['points_count'] as int? ?? 0).clamp(0, required);
     final businessName = card['merchants']?['business_name'] as String? ?? '';
     final reward       = (style.rewardDescription ??
                           card['merchants']?['reward_description'] as String? ??
@@ -813,8 +813,8 @@ class LoyaltyCardFace extends StatelessWidget {
   }
 
   List<Widget> _points(Color textColor, Color accent, String reward) {
-    final points = card['points_count'] as int? ?? 0;
     final required = style.pointsGoal ?? card['merchants']?['points_required'] as int? ?? card['merchants']?['stamps_required'] as int? ?? 100;
+    final points = (card['points_count'] as int? ?? 0).clamp(0, required);
     final pct = (points / required).clamp(0.0, 1.0);
     final full = points >= required;
     final remaining = required - points;
