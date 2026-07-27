@@ -1187,6 +1187,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   String? dynamicToken;
   int timeLeft = 60;
   bool loadingQR = true;
+  String? qrError;
   Timer? _timer;
   Timer? _pollTimer;        // ← polling détection tampon
   int _initialStamps = 0;   // ← valeur de référence au moment d'ouverture
@@ -1294,7 +1295,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
 
   Future<void> fetchDynamicQR() async {
     AppLogger.client('QRModal → génération QR dynamique (cardId: ${widget.card['id']})');
-    setState(() { loadingQR = true; dynamicToken = null; });
+    setState(() { loadingQR = true; dynamicToken = null; qrError = null; });
     final r = await ApiService.instance.getDynamicQR(widget.card['id'] as String);
     if (!mounted) return;
     if (r.isOk) {
@@ -1305,11 +1306,12 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
         dynamicToken = tok;
         timeLeft     = exp;
         loadingQR    = false;
+        qrError      = null;
       });
       startTimer();
     } else {
       AppLogger.error('QRModal → getDynamicQR erreur: ${r.error}');
-      setState(() => loadingQR = false);
+      setState(() { loadingQR = false; qrError = r.error ?? 'Erreur de génération du QR'; });
     }
   }
 
@@ -1439,7 +1441,22 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16)]),
                     child: loadingQR
                         ? SizedBox(width: 150, height: 150, child: Center(child: CircularProgressIndicator(color: color, strokeWidth: 2)))
-                        : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 150, foregroundColor: const Color(0xFF0B1220)),
+                        : qrError != null
+                            ? SizedBox(width: 150, height: 150, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                const Icon(Icons.wifi_off_rounded, color: Color(0xFFE24B4A), size: 32),
+                                const SizedBox(height: 8),
+                                Text('Erreur réseau', style: TextStyle(color: Colors.black.withValues(alpha: 0.6), fontSize: 11)),
+                                const SizedBox(height: 8),
+                                GestureDetector(
+                                  onTap: fetchDynamicQR,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                                    child: const Text('Réessayer', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  ),
+                                ),
+                              ]))
+                            : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 150, foregroundColor: const Color(0xFF0B1220)),
                   ),
                 ),
               ),
