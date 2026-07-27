@@ -625,7 +625,7 @@ class _ClientHomeState extends State<ClientHome>
       builder: (ctx) {
         // Auto-fermeture après 3,5 s
         Future.delayed(const Duration(milliseconds: 3500), () {
-          if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+          if (ctx.mounted && Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
         });
         return Dialog(
           backgroundColor: Colors.transparent,
