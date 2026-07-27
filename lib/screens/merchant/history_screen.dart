@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import '../../utils/logger.dart';
 import 'fiche_client_screen.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -12,7 +13,17 @@ const double _kMaxContentWidth = 500;
 class HistoryScreen extends StatefulWidget {
   final String token;
   final Map? merchantInfo;
-  const HistoryScreen({super.key, required this.token, this.merchantInfo});
+  final List<dynamic> initialHistory;
+  final List<dynamic> initialClients;
+  final Map? initialCardDesign;
+  const HistoryScreen({
+    super.key,
+    required this.token,
+    this.merchantInfo,
+    this.initialHistory  = const [],
+    this.initialClients  = const [],
+    this.initialCardDesign,
+  });
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -29,16 +40,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialHistory.isNotEmpty) {
+      _applyHistory(widget.initialHistory);
+    } else {
+      _load();
+    }
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final r = await ApiService.instance.getMerchantScanHistory();
-    if (!mounted) return;
-    final h = r.isOk ? r.value : [];
-    // Détecte les "nouveaux" : 1ʳᵉ apparition (scan le plus ancien) d'un client.
-    final earliest = <String, dynamic>{}; // client_id → scan le plus ancien
+  void _applyHistory(List<dynamic> h) {
+    final earliest = <String, dynamic>{};
     for (final s in h) {
       final cid = (s['client_id'] ?? '').toString();
       if (cid.isEmpty) continue;
@@ -52,6 +62,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
         .map((s) => s['id'].toString())
         .toSet();
     setState(() { _history = h; _newScanIds = ids; _loading = false; });
+  }
+
+  Future<void> _load() async {
+    AppLogger.merchant('HistoryScreen → chargement historique...');
+    setState(() => _loading = true);
+    final r = await ApiService.instance.getMerchantScanHistory();
+    if (!mounted) return;
+    if (r.isErr) { AppLogger.error('HistoryScreen → erreur: ${r.error}'); setState(() => _loading = false); return; }
+    AppLogger.merchant('HistoryScreen → ${r.value.length} scan(s) chargé(s)');
+    _applyHistory(r.value);
   }
 
   bool _isNew(dynamic scan) => _newScanIds.contains(scan['id'].toString());
@@ -245,16 +265,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _openClient(dynamic scan, Map client, String name, String? avatarUrl) {
     final clientId = (scan['client_id'] ?? '').toString();
-    final cardId = (scan['card_id'] ?? '').toString();
+    final cardId   = (scan['card_id']   ?? '').toString();
     if (clientId.isEmpty || cardId.isEmpty) return;
+    AppLogger.merchant('HistoryScreen → fiche client: $name (clientId: $clientId)');
+
+    final clientScans = _history
+        .where((s) => (s['client_id'] ?? '').toString() == clientId)
+        .toList();
+
+    final cardData = widget.initialClients.cast<Map>().firstWhere(
+      (c) => (c['id'] ?? '').toString() == cardId,
+      orElse: () => <String, dynamic>{},
+    );
+    final stamps = cardData.isNotEmpty
+        ? (cardData['stamps_count'] as int? ?? 0)
+        : (clientScans.isNotEmpty ? (clientScans.first['stamps_count'] as int? ?? 0) : 0);
+
     Navigator.push(context, MaterialPageRoute(builder: (_) => FicheClientScreen(
-      token: widget.token,
-      clientId: clientId,
-      cardId: cardId,
-      clientName: name,
-      clientEmail: client['email'] as String?,
-      clientPic: avatarUrl,
-      merchantInfo: widget.merchantInfo ?? {},
+      token:             widget.token,
+      clientId:          clientId,
+      cardId:            cardId,
+      clientName:        name,
+      clientEmail:       client['email'] as String?,
+      clientPic:         avatarUrl,
+      merchantInfo:      widget.merchantInfo ?? {},
+      initialScans:      clientScans.isNotEmpty ? clientScans : null,
+      initialStamps:     stamps,
+      initialJoinDate:   cardData.isNotEmpty
+          ? DateTime.tryParse(cardData['created_at'] as String? ?? '')
+          : null,
+      initialNote:       cardData.isNotEmpty ? (cardData['merchant_note'] as String? ?? '') : null,
+      initialCardDesign: widget.initialCardDesign,
     )));
   }
 

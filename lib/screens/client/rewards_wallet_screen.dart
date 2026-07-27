@@ -15,8 +15,15 @@ const double _kMaxContentWidth = 500;
 class RewardsWalletScreen extends StatefulWidget {
   final String token;
   final String userName;
-  final VoidCallback? onChanged; // pour rafraîchir l'accueil après utilisation
-  const RewardsWalletScreen({super.key, required this.token, this.userName = '', this.onChanged});
+  final List<dynamic> initialRewards;
+  final VoidCallback? onChanged;
+  const RewardsWalletScreen({
+    super.key,
+    required this.token,
+    this.userName = '',
+    this.initialRewards = const [],
+    this.onChanged,
+  });
 
   @override
   State<RewardsWalletScreen> createState() => _RewardsWalletScreenState();
@@ -29,7 +36,12 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialRewards.isNotEmpty) {
+      _rewards = List<dynamic>.from(widget.initialRewards);
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -114,27 +126,28 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFFB8860B), _kGold]),
+          color: _kNavy,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: _kGold.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+          border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.35), width: 1.5),
+          boxShadow: [BoxShadow(color: _kNavy.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
         ),
         child: Row(children: [
           Container(
             width: 40, height: 40,
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(12)),
-            child: const Center(child: Text('🎁', style: TextStyle(fontSize: 20))),
+            decoration: BoxDecoration(color: const Color(0xFF4A9EFF).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.star_rounded, color: Color(0xFF4A9EFF), size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 2),
             Text('${rewards.length} récompense${rewards.length > 1 ? "s" : ""} disponible${rewards.length > 1 ? "s" : ""}',
-                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.85))),
+                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.65))),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(20)),
-            child: Text('${rewards.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.white)),
+            decoration: BoxDecoration(color: const Color(0xFF4A9EFF).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+            child: Text('${rewards.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF4A9EFF))),
           ),
         ]),
       ),
@@ -333,9 +346,11 @@ class _RewardQRModalState extends State<_RewardQRModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(color: _kNavy, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      padding: EdgeInsets.fromLTRB(24, 14, 24, 30 + MediaQuery.of(context).padding.bottom),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 0, 12, 16 + MediaQuery.of(context).padding.bottom),
+      child: Container(
+      decoration: const BoxDecoration(color: _kNavy, borderRadius: BorderRadius.all(Radius.circular(28))),
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 30),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 18),
@@ -347,7 +362,7 @@ class _RewardQRModalState extends State<_RewardQRModal> {
           const SizedBox(height: 6),
           Text(widget.description, style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
         ] else ...[
-          const Text('🎁 RÉCOMPENSE', style: TextStyle(color: _kGold2, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
+          const Text('RÉCOMPENSE', style: TextStyle(color: _kGold2, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
           const SizedBox(height: 4),
           Text(widget.description, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
@@ -367,6 +382,6 @@ class _RewardQRModalState extends State<_RewardQRModal> {
           Text('🔒 Renouvellement dans ${_timeLeft}s', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
         ],
       ]),
-    );
+    ));
   }
 }

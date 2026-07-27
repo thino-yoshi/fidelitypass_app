@@ -7,7 +7,6 @@ import '../../services/api_service.dart';
 import '../../main.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
-import 'program_screen.dart';
 import 'history_screen.dart';
 import 'notifications_screen.dart';
 import 'clients_screen.dart';
@@ -18,7 +17,9 @@ import 'stats_screen.dart';
 import 'info_commerce_screen.dart';
 import 'carte_editor_screen.dart';
 import 'google_auto_screen.dart';
+import 'merchant_inbox_screen.dart';
 import '../client/cards_tab.dart' show LoyaltyCardFace, CardStyle;
+import '../../utils/logger.dart';
 
 // ─── Design tokens (alignés sur le mockup dashboard v10) ────────────────────
 const _kPrimary   = Color(0xFF2C7BE5);
@@ -36,7 +37,24 @@ const double _kMaxContentWidth = 500;
 class MerchantHome extends StatefulWidget {
   final String token;
   final String merchantName;
-  const MerchantHome({super.key, required this.token, required this.merchantName});
+  final Map? initialProfile;
+  final Map? initialStats;
+  final List<dynamic> initialRecentClients;
+  final List<dynamic> initialDaily;
+  final List<dynamic> initialScanHistory;
+  final Map? initialCardDesign;
+
+  const MerchantHome({
+    super.key,
+    required this.token,
+    required this.merchantName,
+    this.initialProfile,
+    this.initialStats,
+    this.initialRecentClients  = const [],
+    this.initialDaily          = const [],
+    this.initialScanHistory    = const [],
+    this.initialCardDesign,
+  });
 
   @override
   State<MerchantHome> createState() => _MerchantHomeState();
@@ -88,17 +106,36 @@ class _MerchantHomeState extends State<MerchantHome> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    AppLogger.merchant('MerchantHome chargé → merchantName: ${widget.merchantName}');
+    if (widget.initialProfile != null) {
+      // Données préchargées depuis le splash → affichage immédiat sans spinner
+      merchantInfo   = widget.initialProfile;
+      stats          = widget.initialStats;
+      _recentClients = List<dynamic>.from(widget.initialRecentClients);
+      _daily         = List<dynamic>.from(widget.initialDaily);
+      _scanHistory   = List<dynamic>.from(widget.initialScanHistory);
+      _cardDesign    = widget.initialCardDesign;
+      loading        = false;
+      AppLogger.merchant('Données préchargées appliquées → ${merchantInfo?['business_name']}');
+    } else {
+      _loadData();
+    }
     _checkOnboarding();
   }
 
   Future<void> _checkOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     final done = prefs.getBool('merchant_onboarding_done') ?? false;
-    if (!done && mounted) setState(() => _showOnboarding = true);
+    if (!done && mounted) {
+      AppLogger.merchant('Onboarding → première visite, affichage tutoriel');
+      setState(() => _showOnboarding = true);
+    } else {
+      AppLogger.merchant('Onboarding → déjà complété, skip');
+    }
   }
 
   Future<void> _loadData() async {
+    AppLogger.merchant('Chargement profil + stats...');
     setState(() => loading = true);
     final api = ApiService.instance;
 
@@ -106,6 +143,16 @@ class _MerchantHomeState extends State<MerchantHome> {
     final statsResult   = await api.getMerchantStats();
 
     if (mounted) {
+      if (profileResult.isOk) {
+        AppLogger.merchant('Profil → business_name: ${profileResult.value['business_name']}, category: ${profileResult.value['category']}');
+      } else {
+        AppLogger.error('Profil → erreur : ${profileResult.error}');
+      }
+      if (statsResult.isOk) {
+        AppLogger.merchant('Stats → clients: ${statsResult.value['total_clients']}, tampons: ${statsResult.value['total_stamps']}, récompenses: ${statsResult.value['total_rewards']}');
+      } else {
+        AppLogger.error('Stats → erreur : ${statsResult.error}');
+      }
       setState(() {
         merchantInfo = profileResult.isOk ? profileResult.value : null;
         stats        = statsResult.isOk   ? statsResult.value   : null;
@@ -118,24 +165,37 @@ class _MerchantHomeState extends State<MerchantHome> {
   }
 
   Future<void> _loadCardDesign() async {
+    AppLogger.merchant('Chargement design carte...');
     final r = await ApiService.instance.getMerchantCardDesign();
     if (mounted && r.isOk) {
+      final hasDesign = r.value != null;
+      AppLogger.merchant('Design carte → ${hasDesign ? "trouvé" : "aucun design créé"}');
       setState(() => _cardDesign = r.value?['card_design'] as Map?);
+    } else if (r.isErr) {
+      AppLogger.error('Design carte → erreur : ${r.error}');
     }
   }
 
   Future<void> _loadRecentClients() async {
-    final r = await ApiService.instance.getMerchantClients(limit: 3);
+    final r = await ApiService.instance.getMerchantClients();
     if (mounted && r.isOk) {
-      setState(() => _recentClients = r.value.take(3).toList());
+      AppLogger.merchant('Clients → ${r.value.length} chargé(s)');
+      setState(() => _recentClients = r.value);
     }
   }
 
   Future<void> _loadDaily() async {
+    AppLogger.merchant('Chargement stats 30j + historique scans...');
     final r = await ApiService.instance.getDailyStats();
-    if (mounted && r.isOk) setState(() => _daily = r.value);
+    if (mounted && r.isOk) {
+      AppLogger.merchant('Stats daily → ${r.value.length} jours reçus');
+      setState(() => _daily = r.value);
+    }
     final h = await ApiService.instance.getMerchantScanHistory();
-    if (mounted && h.isOk) setState(() => _scanHistory = h.value);
+    if (mounted && h.isOk) {
+      AppLogger.merchant('Historique scans → ${h.value.length} entrées');
+      setState(() => _scanHistory = h.value);
+    }
   }
 
   // Taux de retour estimé : % de clients revenus ≥ 2× sur la période, à partir
@@ -154,6 +214,24 @@ class _MerchantHomeState extends State<MerchantHome> {
     final returning = counts.values.where((c) => c >= 2).length;
     final pct = total > 0 ? (returning / total * 100).round() : 0;
     return (pct: pct, returning: returning, total: total);
+  }
+
+  int _retentionPrevPct(String period) {
+    final days = period == 'sem' ? 7 : 30;
+    final now  = DateTime.now();
+    final from = now.subtract(Duration(days: days * 2));
+    final to   = now.subtract(Duration(days: days));
+    final counts = <String, int>{};
+    for (final s in _scanHistory) {
+      final t = DateTime.tryParse(s['scanned_at'] as String? ?? '');
+      if (t == null || t.isBefore(from) || !t.isBefore(to)) continue;
+      final cid = (s['client_id'] ?? '').toString();
+      if (cid.isEmpty) continue;
+      counts[cid] = (counts[cid] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return 0;
+    final returning = counts.values.where((c) => c >= 2).length;
+    return (returning / counts.length * 100).round();
   }
 
   // ─── Agrégation KPIs selon la période sélectionnée ──────────────────────────
@@ -183,9 +261,29 @@ class _MerchantHomeState extends State<MerchantHome> {
     };
   }
 
+  Future<void> _navigateToCarteEditor() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _cardDesign = result;
+        final newName = result['cardName'] as String?;
+        if (newName != null && newName.isNotEmpty && merchantInfo != null) {
+          merchantInfo = Map.from(merchantInfo!)..['business_name'] = newName;
+        }
+      });
+    }
+  }
+
   void _logout() async {
+    AppLogger.auth('Logout merchant → déconnexion');
     await AuthService.logout();
     if (!mounted) return;
+    AppLogger.nav('Logout → retour AuthScreen');
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
   }
 
@@ -204,7 +302,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         token: widget.token,
         merchantInfo: merchantInfo,
         onLogout: _logout,
-        onNavigateToProgram: () => setState(() => _tab = 4),
+        onNavigateToProgram: null,
         onNavigateToNotifs: () => Navigator.push(context, MaterialPageRoute(
           builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo))),
         onNavigateToQR: () => Navigator.push(context, MaterialPageRoute(
@@ -218,9 +316,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         )).then((updated) {
           if (updated != null && mounted) setState(() => merchantInfo = updated as Map);
         }),
-        onNavigateToCarteEditor: () => Navigator.push(context, MaterialPageRoute(
-          builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
-        )),
+        onNavigateToCarteEditor: _navigateToCarteEditor,
       ),
     );
   }
@@ -251,7 +347,7 @@ class _MerchantHomeState extends State<MerchantHome> {
               onDone: () async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setBool('merchant_onboarding_done', true);
-                if (mounted) setState(() { _showOnboarding = false; _tab = 4; });
+                if (mounted) setState(() => _showOnboarding = false);
               },
             ),
           ],
@@ -310,19 +406,6 @@ class _MerchantHomeState extends State<MerchantHome> {
                   ]),
                 ]),
               ),
-              // Cloche notifications
-              GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo))),
-                child: Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.12))),
-                  child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.85), size: 18),
-                ),
-              ),
             ]),
           ),
           // Bande stats globales
@@ -367,14 +450,21 @@ class _MerchantHomeState extends State<MerchantHome> {
   Widget _buildTabContent() {
     switch (_tab) {
       case 0: return _buildDashboard();
-      case 1: return ClientsScreen(token: widget.token, merchantInfo: merchantInfo);
-      case 2: return HistoryScreen(token: widget.token, merchantInfo: merchantInfo);
+      case 1: return ClientsScreen(
+          token:               widget.token,
+          merchantInfo:        merchantInfo,
+          cardDesign:          _cardDesign,
+          initialClients:      _recentClients,
+          initialScanHistory:  _scanHistory,
+        );
+      case 2: return HistoryScreen(
+          token:              widget.token,
+          merchantInfo:       merchantInfo,
+          initialHistory:     _scanHistory,
+          initialClients:     _recentClients,
+          initialCardDesign:  _cardDesign,
+        );
       case 3: return NotificationsScreen(token: widget.token, merchantInfo: merchantInfo);
-      case 4: return ProgramScreen(
-        token: widget.token,
-        merchantInfo: merchantInfo,
-        onSaved: () async { setState(() { loading = true; _tab = 0; }); await _loadData(); },
-      );
       default: return _buildDashboard();
     }
   }
@@ -394,9 +484,10 @@ class _MerchantHomeState extends State<MerchantHome> {
               textAlign: TextAlign.center, style: TextStyle(color: _kSub, fontSize: 14, height: 1.5)),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () => setState(() => _tab = 4),
-            icon: const Icon(Icons.settings_outlined, size: 16),
-            label: const Text('Configurer mon programme'),
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Configurez votre programme sur qarta.be'), duration: Duration(seconds: 3))),
+            icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+            label: const Text('Configurer sur qarta.be'),
             style: ElevatedButton.styleFrom(
               backgroundColor: _kPrimary, foregroundColor: Colors.white, elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -469,7 +560,10 @@ class _MerchantHomeState extends State<MerchantHome> {
 
   // ── Carte "Taux de retour" (rétention) ─────────────────────────────────────
   Widget _retentionCard() {
-    final r = _retention(_retPeriod);
+    final r       = _retention(_retPeriod);
+    final prevPct = _retentionPrevPct(_retPeriod);
+    final delta   = r.pct - prevPct;
+    final deltaStr = delta > 0 ? '+$delta%' : (delta < 0 ? '$delta%' : '= même');
     final isDark = context.isDark;
     final bg     = isDark ? _kNavyCard : const Color(0xFFEFF5FE);
     final border = isDark ? const Color(0xFF2A3D5A) : const Color(0xFFD6E6FB);
@@ -508,8 +602,8 @@ class _MerchantHomeState extends State<MerchantHome> {
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${r.pct}%', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: _kPrimary, height: 1)),
-            Text('${r.returning}/${r.total} ${_retPeriod == 'sem' ? "cette sem." : "ce mois"}',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: _kSub)),
+            Text('$deltaStr ${_retPeriod == 'sem' ? "cette sem." : "ce mois"}',
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: delta < 0 ? _kError : _kSuccess)),
           ]),
         ]),
         const SizedBox(height: 9),
@@ -556,25 +650,17 @@ class _MerchantHomeState extends State<MerchantHome> {
     );
   }
 
-  // ── Grille de 4 KPIs ────────────────────────────────────────────────────────
+  // ── Grille de 3 KPIs (1 ligne) ──────────────────────────────────────────────
   Widget _kpiGrid(Map<String, int?> agg) {
-    return Column(children: [
-      IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _kpiCard('0', 'Clients ${_period == 'today' ? "aujourd'hui" : 'actifs'}', null),
-          const SizedBox(width: 8),
-          _kpiCard('${agg['scans'] ?? 0}', 'Tampons ajoutés', agg['scansDelta']),
-        ]),
-      ),
-      const SizedBox(height: 8),
-      IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _kpiCard('${agg['rewards'] ?? 0}', 'Récompenses débloquées', agg['rewardsDelta']),
-          const SizedBox(width: 8),
-          _kpiCard('0', 'Nouveaux clients', null),
-        ]),
-      ),
-    ]);
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _kpiCard('0', 'Clients ${_period == 'today' ? "aujourd'hui" : 'actifs'}', null),
+        const SizedBox(width: 8),
+        _kpiCard('${agg['scans'] ?? 0}', 'Tampons ajoutés', agg['scansDelta']),
+        const SizedBox(width: 8),
+        _kpiCard('0', 'Nouveaux clients', null),
+      ]),
+    );
   }
 
   Widget _kpiCard(String val, String label, int? delta) {
@@ -742,7 +828,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       'merchants': merchantInfo ?? {},
     };
     final style = CardStyle.fromDesign(
-      _cardDesign,
+      _cardDesign,- 
       merchantLogoUrl: merchantInfo?['logo_url'] as String?,
       fallbackColor: _kPrimary,
     );
@@ -751,13 +837,13 @@ class _MerchantHomeState extends State<MerchantHome> {
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('Ma carte fidélité', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _kText)),
         GestureDetector(
-          onTap: () => setState(() => _tab = 4),
+          onTap: _navigateToCarteEditor,
           child: const Text('Modifier', style: TextStyle(fontSize: 10, color: _kPrimary, fontWeight: FontWeight.w600)),
         ),
       ]),
       const SizedBox(height: 8),
       GestureDetector(
-        onTap: () => setState(() => _tab = 4),
+        onTap: _navigateToCarteEditor,
         child: LoyaltyCardFace(
           card: card,
           style: style,
@@ -798,7 +884,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     final active = _tab == idx;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _tab = idx),
+        onTap: () { AppLogger.merchant('Onglet → $label'); setState(() => _tab = idx); },
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, color: active ? _kPrimary : _kSub, size: 22),
           const SizedBox(height: 3),
@@ -871,27 +957,27 @@ class _MerchantProfilSheet extends StatelessWidget {
             child: Center(child: Container(width: 36, height: 4,
                 decoration: BoxDecoration(color: kBorder, borderRadius: BorderRadius.circular(2))))),
         // Header
-        Container(
-          color: _kPrimary, width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Row(children: [
             Container(
-              width: 60, height: 60,
-              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white38, width: 2)),
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: _kPrimary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _kPrimary.withValues(alpha: 0.2)),
+              ),
               child: Center(child: Text(initials,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white))),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _kPrimary))),
             ),
-            const SizedBox(height: 10),
-            Text(name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
-              child: const Text('✦ Plan Pro', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
-            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
+              Text('Mon commerce', style: TextStyle(fontSize: 11, color: kSub)),
+            ])),
           ]),
         ),
+        Divider(height: 1, color: kBorder),
 
         // Body
         Flexible(child: SingleChildScrollView(
@@ -914,22 +1000,15 @@ class _MerchantProfilSheet extends StatelessWidget {
               _row(context, kBorder, kText, kSub, Icons.qr_code_2_rounded, _kPrimary.withValues(alpha: 0.12), _kPrimary, 'QR Code boutique', 'Afficher en caisse',
                   () { Navigator.pop(context); onNavigateToQR?.call(); }),
               _row(context, kBorder, kText, kSub, Icons.show_chart_rounded, _kPurple.withValues(alpha: 0.12), _kPurple, 'Statistiques', 'Analyse de l\'activité',
-                  () => Navigator.pop(context), noBorder: true),
+                  () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => StatsScreen(token: token, merchantInfo: merchantInfo))); }, noBorder: true),
             ]),
             const SizedBox(height: 14),
-            Text('COMPTE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
+            Text('AIDE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),
             const SizedBox(height: 8),
             _section(kWhite, kBorder, [
-              _row(context, kBorder, kText, kSub, Icons.star_outline_rounded, _kError.withValues(alpha: 0.12), _kError, 'Abonnement', 'Plan Pro · Actif',
-                  () { Navigator.pop(context); onNavigateToAbonnement?.call(); }),
               _row(context, kBorder, kText, kSub, Icons.help_outline_rounded, kBg, kSub, 'Aide & Support', 'FAQ, nous contacter',
-                  () => Navigator.pop(context), noBorder: true),
-            ]),
-            const SizedBox(height: 14),
-            // Dark mode
-            Container(
-              decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-              child: ValueListenableBuilder<ThemeMode>(
+                  () => Navigator.pop(context)),
+              ValueListenableBuilder<ThemeMode>(
                 valueListenable: themeNotifier,
                 builder: (_, mode, __) => Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -954,7 +1033,7 @@ class _MerchantProfilSheet extends StatelessWidget {
                   ]),
                 ),
               ),
-            ),
+            ]),
             const SizedBox(height: 16),
             GestureDetector(
               onTap: onLogout,

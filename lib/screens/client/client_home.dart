@@ -19,11 +19,20 @@ import 'rewards_wallet_screen.dart';
 import 'manage_cards_screen.dart';
 import 'scan_tab.dart';
 import '../../config/app_colors.dart';
+import '../../utils/logger.dart';
 
 class ClientHome extends StatefulWidget {
   final String token;
   final String userName;
-  const ClientHome({super.key, required this.token, required this.userName});
+  final List<dynamic> initialCards;
+  final List<dynamic> initialHistory;
+  const ClientHome({
+    super.key,
+    required this.token,
+    required this.userName,
+    this.initialCards = const [],
+    this.initialHistory = const [],
+  });
 
   @override
   State<ClientHome> createState() => _ClientHomeState();
@@ -35,11 +44,14 @@ class _ClientHomeState extends State<ClientHome>
   int _cardCount = 0;
   int _totalStamps = 0;
   int _rewardCount = 0;
+  List<dynamic> _rewards = [];
   int _notifCount = 3;
   bool _rewardPillActive = false; // true pendant l'ouverture de la modal récompenses
   List<dynamic> _cards = [];
+  List<dynamic> _history = [];
   bool _statsLoaded = false;
   bool _notifOpen = false;
+  DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
 
   List<Map> _notifs = [];
@@ -63,9 +75,20 @@ class _ClientHomeState extends State<ClientHome>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // ← détecte resume/pause de l'app
+    AppLogger.client('ClientHome chargé → userName: ${widget.userName}');
+    WidgetsBinding.instance.addObserver(this);
     _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
-    _loadStats();
+    if (widget.initialCards.isNotEmpty) {
+      _applyCards(widget.initialCards);
+    } else {
+      _loadStats();
+    }
+    _loadRewardsCount();
+    if (widget.initialHistory.isNotEmpty) {
+      _history = List<dynamic>.from(widget.initialHistory);
+    } else {
+      _loadHistory();
+    }
     _loadNotifs();
     _loadProfileImage();
     _loadPhone();
@@ -75,12 +98,14 @@ class _ClientHomeState extends State<ClientHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // L'app revient au premier plan → on recharge les cartes pour récupérer
-    // les modifs de design faites par le commerçant sur qarta.be entre-temps.
     if (state == AppLifecycleState.resumed) {
-      debugPrint('🔄 [ClientHome] App resumed → reload cards');
-      _loadStats();
-      _loadNotifs();
+      final now = DateTime.now();
+      final stale = _lastCardsRefresh == null ||
+          now.difference(_lastCardsRefresh!).inMinutes >= 5;
+      if (stale) {
+        AppLogger.client('App revenue au premier plan → refresh complet');
+        _refreshAll();
+      }
     }
   }
 
@@ -421,17 +446,21 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   Future<void> _pickProfileImage() async {
+    AppLogger.client('Photo profil → ouverture galerie');
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
+    if (picked == null) {
+      AppLogger.client('Photo profil → annulée');
+      return;
+    }
 
-    // Affichage local immédiat
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile_image_path', picked.path);
     if (mounted) setState(() => _profileImagePath = picked.path);
+    AppLogger.client('Photo profil → affichage local immédiat');
 
-    // Upload vers le serveur
     try {
+      AppLogger.client('Photo profil → upload vers serveur...');
       final req = http.MultipartRequest(
         'POST',
         Uri.parse('$apiUrl/users/profile-picture'),
@@ -446,12 +475,18 @@ class _ClientHomeState extends State<ClientHome>
           final p = await SharedPreferences.getInstance();
           await p.setString('profile_image_url', url);
           setState(() => _profileImageUrl = url);
+          AppLogger.client('Photo profil → upload succès, url: $url');
         }
+      } else {
+        AppLogger.error('Photo profil → upload échoué : ${res.statusCode}');
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.error('Photo profil → exception : $e');
+    }
   }
 
   Future<void> _loadNotifs() async {
+    AppLogger.client('Chargement notifications client...');
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/notifications/client'),
@@ -459,6 +494,7 @@ class _ClientHomeState extends State<ClientHome>
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as List;
+        AppLogger.client('Notifications → ${data.length} reçues');
         final mapped = data.map((n) {
           final type = n['type'] as String? ?? 'promo';
           final style = _notifStyle[type] ?? _notifStyle['promo']!;
@@ -499,45 +535,64 @@ class _ClientHomeState extends State<ClientHome>
     setState(() => _tab = 3);
   }
 
+  void _applyCards(List<dynamic> data) {
+    int stamps = 0;
+    for (final c in data) stamps += c['stamps_count'] as int? ?? 0;
+    AppLogger.client('Cartes → ${data.length} carte(s), $stamps tampon(s) total');
+    if (mounted) {
+      setState(() {
+        _cards       = data;
+        _cardCount   = data.length;
+        _totalStamps = stamps;
+        _statsLoaded = true;
+      });
+    }
+    WidgetService.updateFromCards(data);
+    _lastCardsRefresh = DateTime.now();
+  }
+
+  Future<void> _refreshAll() async {
+    AppLogger.client('Refresh → cartes + historique + récompenses + notifs');
+    await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
+  }
+
   Future<void> _loadStats() async {
     final r = await ApiService.instance.getMyCards();
     if (!mounted || r.isErr) return;
-
     final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
-    int stamps = 0;
-    for (final c in data) {
-      stamps += c['stamps_count'] as int? ?? 0;
-    }
-    setState(() {
-      _cards       = data;
-      _cardCount   = data.length;
-      _totalStamps = stamps;
-      _statsLoaded = true;
-    });
-    WidgetService.updateFromCards(data);
-    _loadRewardsCount();
+    _applyCards(data);
   }
 
-  /// Nb de récompenses DISPONIBLES (table rewards) → pill "Récompenses".
+  Future<void> _loadHistory() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/cards/my-history'),
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
+      );
+      if (mounted && res.statusCode == 200) {
+        setState(() => _history = jsonDecode(res.body) as List);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadRewardsCount() async {
     final r = await ApiService.instance.getMyRewards();
-    if (mounted && r.isOk) setState(() => _rewardCount = r.value.length);
+    if (mounted && r.isOk) {
+      setState(() { _rewards = r.value; _rewardCount = r.value.length; });
+    }
   }
 
   // ── Le commerçant a ajouté des tampons pendant que le QR était ouvert ────────
   Future<void> _onStampEvent(StampEvent e) async {
-    await _loadStats();                       // recharge les cartes (tampons à jour)
+    AppLogger.client('StampEvent reçu → cardId: ${e.cardId}, delta: ${e.delta}, reward: ${e.reward}, merchant: ${e.merchantName}');
+    await _refreshAll();
     if (!mounted) return;
     setState(() {
-      _tab = 0;                               // retour à l'onglet Cartes
-      // Remonter la carte scannée tout en haut de la liste
+      _tab = 0;
       final idx = _cards.indexWhere((c) => c['id'] == e.cardId);
-      if (idx > 0) {
-        final card = _cards.removeAt(idx);
-        _cards.insert(0, card);
-      }
+      if (idx > 0) { final card = _cards.removeAt(idx); _cards.insert(0, card); }
     });
-    _showStampPopup(e);                        // petite fenêtre centrale
+    _showStampPopup(e);
   }
 
   void _showStampPopup(StampEvent e) {
@@ -704,8 +759,10 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _logout() async {
+    AppLogger.auth('Logout client → déconnexion');
     await AuthService.logout();
     if (!mounted) return;
+    AppLogger.nav('Logout → retour AuthScreen');
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
   }
 
@@ -770,7 +827,6 @@ class _ClientHomeState extends State<ClientHome>
   // ── HEADER (inclut les pills) ──────────────────────────────────────────────
 
   Widget _buildHeader() {
-    final cartesActive = _tab == 0 && !_rewardPillActive;
     return Container(
       color: context.qNavy,
       child: Stack(
@@ -879,43 +935,75 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                // ── Sous-titre
-                Text(
-                  _statsLoaded
-                      ? '$_cardCount carte${_cardCount > 1 ? 's' : ''} active${_cardCount > 1 ? 's' : ''} · $_rewardCount récompense${_rewardCount > 1 ? 's' : ''} disponible${_rewardCount > 1 ? 's' : ''}'
-                      : '···',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
-                ),
-                const SizedBox(height: 16),
-                // ── Pills (dans le même header, même grille)
-                Row(
-                  children: [
-                    _sumPill(
-                      val: '$_cardCount',
-                      label: _cardCount > 1 ? 'Cartes' : 'Carte',
-                      isActive: cartesActive,
-                      onTap: () => setState(() => _tab = 0),
-                    ),
-                    const SizedBox(width: 8),
-                    _sumPill(
-                      val: '$_rewardCount',
-                      label: _rewardCount > 1 ? 'Récompenses' : 'Récompense',
-                      isActive: _rewardPillActive,
-                      onTap: () async {
-                        setState(() => _rewardPillActive = true);
-                        await Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => RewardsWalletScreen(
-                            token: widget.token,
-                            userName: widget.userName,
-                            onChanged: _loadRewardsCount,
+                const SizedBox(height: 20),
+                // ── Pills avec indicateur glissant
+                SizedBox(
+                  height: 42,
+                  child: Stack(children: [
+                    Positioned.fill(child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                    )),
+                    AnimatedAlign(
+                      alignment: _rewardPillActive ? Alignment.centerRight : Alignment.centerLeft,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      child: FractionallySizedBox(
+                        widthFactor: 0.5,
+                        heightFactor: 1.0,
+                        child: Container(
+                          margin: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2C7BE5).withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.55)),
                           ),
-                        ));
-                        if (mounted) setState(() => _rewardPillActive = false);
-                        _loadRewardsCount();
-                      },
+                        ),
+                      ),
                     ),
-                  ],
+                    Row(children: [
+                      Expanded(child: GestureDetector(
+                        onTap: () => setState(() { _rewardPillActive = false; _tab = 0; }),
+                        child: Center(child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('$_cardCount', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, height: 1)),
+                            const SizedBox(width: 5),
+                            Text(_cardCount > 1 ? 'Cartes' : 'Carte',
+                                maxLines: 1,
+                                style: TextStyle(color: Colors.white.withValues(alpha: !_rewardPillActive ? 0.9 : 0.55), fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        )),
+                      )),
+                      Expanded(child: GestureDetector(
+                        onTap: () async {
+                          setState(() => _rewardPillActive = true);
+                          await Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => RewardsWalletScreen(
+                              token: widget.token,
+                              userName: widget.userName,
+                              initialRewards: _rewards,
+                              onChanged: _refreshAll,
+                            ),
+                          ));
+                          if (mounted) setState(() => _rewardPillActive = false);
+                        },
+                        child: Center(child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('$_rewardCount', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, height: 1)),
+                            const SizedBox(width: 5),
+                            Text(_rewardCount > 1 ? 'Récompenses' : 'Récompense',
+                                maxLines: 1,
+                                style: TextStyle(color: Colors.white.withValues(alpha: _rewardPillActive ? 0.9 : 0.55), fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        )),
+                      )),
+                    ]),
+                  ]),
                 ),
               ],
             ),
@@ -925,65 +1013,21 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  Widget _sumPill({
-    required String val,
-    required String label,
-    bool isActive = false,
-    VoidCallback? onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 42,
-          decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF2C7BE5).withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isActive ? const Color(0xFF4A9EFF).withValues(alpha: 0.55) : Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                val,
-                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, height: 1),
-              ),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: isActive ? 0.9 : 0.55),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ── TAB CONTENT ────────────────────────────────────────────────────────────
 
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent);
       case 1:
         return ScanTab(
           token: widget.token,
-          onCardAdded: () { _loadStats(); setState(() => _tab = 0); },
+          onCardAdded: () { _refreshAll(); setState(() => _tab = 0); },
+          onBack: () => setState(() => _tab = 0),
         );
       case 2:
-        return HistoryTab(token: widget.token);
+        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshAll);
       case 3:
         return _buildProfilTab();
       default:
@@ -1109,8 +1153,9 @@ class _ClientHomeState extends State<ClientHome>
                 MaterialPageRoute(
                   builder: (_) => ManageCardsScreen(
                     token: widget.token,
+                    userName: widget.userName,
                     cards: _cards,
-                    onRefresh: _loadStats,
+                    onRefresh: _refreshAll,
                   ),
                 ),
               ),
@@ -1309,7 +1354,7 @@ class _ClientHomeState extends State<ClientHome>
     final active = _tab == idx;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _tab = idx),
+        onTap: () { AppLogger.client('Onglet → ${["Cartes","Scan","Historique","Profil"][idx]}'); setState(() => _tab = idx); },
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

@@ -17,7 +17,13 @@ class FicheClientScreen extends StatefulWidget {
   final String clientName;
   final String? clientEmail;
   final String? clientPic;
-  final Map merchantInfo;     // business_name, stamps_required, reward_description, logo_url…
+  final Map merchantInfo;
+  // Données préchargées (évite 3 appels API au chargement)
+  final List<dynamic>? initialScans;
+  final int? initialStamps;
+  final DateTime? initialJoinDate;
+  final String? initialNote;
+  final Map? initialCardDesign;
 
   const FicheClientScreen({
     super.key,
@@ -28,6 +34,11 @@ class FicheClientScreen extends StatefulWidget {
     required this.merchantInfo,
     this.clientEmail,
     this.clientPic,
+    this.initialScans,
+    this.initialStamps,
+    this.initialJoinDate,
+    this.initialNote,
+    this.initialCardDesign,
   });
 
   @override
@@ -49,13 +60,48 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
       (_cardDesign?['stamps_required'] as int?) ??
       10;
 
+  bool get _isPoints => (widget.merchantInfo['program_type'] as String?) == 'points';
+
+  int get _pointsPerEuro =>
+      (widget.merchantInfo['points_per_euro'] as int?) ??
+      ((_cardDesign?['pointsPerEuro'] as num?)?.toInt()) ??
+      10;
+
   @override
   void initState() {
     super.initState();
     _noteCtrl.addListener(() {
       if (!_noteDirty) setState(() => _noteDirty = true);
     });
-    _load();
+    if (widget.initialScans != null) {
+      _applyData(
+        scans:      widget.initialScans!,
+        stamps:     widget.initialStamps ?? 0,
+        joinDate:   widget.initialJoinDate,
+        note:       widget.initialNote ?? '',
+        cardDesign: widget.initialCardDesign,
+      );
+    } else {
+      _load();
+    }
+  }
+
+  void _applyData({
+    required List<dynamic> scans,
+    required int stamps,
+    DateTime? joinDate,
+    String note = '',
+    Map? cardDesign,
+  }) {
+    _noteCtrl.text = note;
+    setState(() {
+      _scans     = scans.map<Map>((s) => Map<String, dynamic>.from(s as Map)).toList();
+      _stamps    = stamps;
+      _joinDate  = joinDate;
+      _cardDesign = cardDesign;
+      _noteDirty = false;
+      _loading   = false;
+    });
   }
 
   @override
@@ -154,11 +200,14 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
       final reached = r.value['reward_reached'] == true;
       await _load();
       if (!mounted) return;
+      final unit = _isPoints ? 'point' : 'tampon';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         backgroundColor: reached ? kGold : kSuccess,
         content: Text(reached
             ? '🎉 Récompense débloquée pour ${widget.clientName} !'
-            : (delta > 0 ? '+$delta tampon${delta > 1 ? 's' : ''} ajouté${delta > 1 ? 's' : ''}' : 'Dernier tampon annulé')),
+            : (delta > 0
+                ? '+$delta $unit${delta > 1 ? 's' : ''} ajouté${delta > 1 ? 's' : ''}'
+                : 'Dernier $unit annulé')),
       ));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -182,60 +231,129 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
   }
 
   void _openStampSheet() {
+    final isPoints = _isPoints;
+    final ppe = _pointsPerEuro;
     int qty = 1;
+    final amountCtrl = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Container(
-          decoration: BoxDecoration(
-            color: ctx.cSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + MediaQuery.of(ctx).padding.bottom),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: ctx.cBorder, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 18),
-            Text('Ajouter des tampons', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ctx.cText)),
-            const SizedBox(height: 4),
-            Text('${widget.clientName} · $_stamps/$_required actuellement',
-                style: TextStyle(fontSize: 12, color: ctx.cSub)),
-            const SizedBox(height: 22),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              _stepBtn(ctx, '−', () { if (qty > 1) setSheet(() => qty--); }),
-              SizedBox(width: 70, child: Text('$qty', textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, color: ctx.cText))),
-              _stepBtn(ctx, '+', () { if (qty < 20) setSheet(() => qty++); }),
-            ]),
-            const SizedBox(height: 4),
-            Text('tampon(s) à ajouter', style: TextStyle(fontSize: 11, color: ctx.cSub)),
-            const SizedBox(height: 8),
-            Wrap(spacing: 8, children: [1, 2, 3, 5].map((n) =>
-                GestureDetector(
-                  onTap: () => setSheet(() => qty = n),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        builder: (ctx, setSheet) {
+          final parsed = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
+          final pointsToAdd = isPoints ? (parsed * ppe).round() : qty;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: ctx.cSurface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + MediaQuery.of(ctx).padding.bottom),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: ctx.cBorder, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 18),
+                Text(isPoints ? 'Ajouter des points' : 'Ajouter des tampons',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ctx.cText)),
+                const SizedBox(height: 4),
+                Text('${widget.clientName} · $_stamps/$_required actuellement',
+                    style: TextStyle(fontSize: 12, color: ctx.cSub)),
+                const SizedBox(height: 22),
+
+                if (isPoints) ...[
+                  // ── Mode points : saisie montant en euros ──
+                  Container(
                     decoration: BoxDecoration(
-                      color: qty == n ? kPrimary : ctx.cFill,
-                      borderRadius: BorderRadius.circular(20)),
-                    child: Text('+$n', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                        color: qty == n ? Colors.white : ctx.cSub)),
+                      color: ctx.cFill,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: ctx.cBorder),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Row(children: [
+                      Text('€', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: ctx.cSub)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: amountCtrl,
+                          autofocus: true,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: ctx.cText),
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            hintText: '0',
+                            hintStyle: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: ctx.cSub),
+                          ),
+                          onChanged: (_) => setSheet(() {}),
+                        ),
+                      ),
+                    ]),
                   ),
-                )).toList()),
-            const SizedBox(height: 22),
-            SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimary, foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-              onPressed: () { Navigator.pop(ctx); _adjust(qty); },
-              child: const Text("Confirmer l'ajout", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            )),
-            const SizedBox(height: 6),
-            TextButton(onPressed: () => Navigator.pop(ctx),
-                child: Text('Annuler', style: TextStyle(color: ctx.cSub))),
-          ]),
-        ),
+                  const SizedBox(height: 10),
+                  AnimatedOpacity(
+                    opacity: pointsToAdd > 0 ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kPrimary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kPrimary.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Icons.stars_rounded, size: 18, color: kPrimary),
+                        const SizedBox(width: 8),
+                        Text('= $pointsToAdd point${pointsToAdd > 1 ? 's' : ''} ($ppe pts/€)',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kPrimary)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Montant de l\'achat en euros', style: TextStyle(fontSize: 11, color: ctx.cSub)),
+                ] else ...[
+                  // ── Mode tampons : stepper ──
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    _stepBtn(ctx, '−', () { if (qty > 1) setSheet(() => qty--); }),
+                    SizedBox(width: 70, child: Text('$qty', textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, color: ctx.cText))),
+                    _stepBtn(ctx, '+', () { if (qty < 20) setSheet(() => qty++); }),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text('tampon(s) à ajouter', style: TextStyle(fontSize: 11, color: ctx.cSub)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, children: [1, 2, 3, 5].map((n) =>
+                      GestureDetector(
+                        onTap: () => setSheet(() => qty = n),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: qty == n ? kPrimary : ctx.cFill,
+                            borderRadius: BorderRadius.circular(20)),
+                          child: Text('+$n', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                              color: qty == n ? Colors.white : ctx.cSub)),
+                        ),
+                      )).toList()),
+                ],
+
+                const SizedBox(height: 22),
+                SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimary, foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                  onPressed: (isPoints ? pointsToAdd > 0 : true)
+                      ? () { Navigator.pop(ctx); _adjust(pointsToAdd); }
+                      : null,
+                  child: const Text("Confirmer l'ajout", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                )),
+                const SizedBox(height: 6),
+                TextButton(onPressed: () => Navigator.pop(ctx),
+                    child: Text('Annuler', style: TextStyle(color: ctx.cSub))),
+              ]),
+            ),
+          );
+        },
       ),
     );
   }
@@ -270,8 +388,6 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
                         const SizedBox(height: 12),
                         _freqCard(),
                         const SizedBox(height: 12),
-                        _progressCard(),
-                        const SizedBox(height: 16),
                         _sectionTitle('Aperçu carte (vue client)'),
                         const SizedBox(height: 8),
                         _cardPreview(),
@@ -358,7 +474,7 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
         );
     return Row(children: [
       card('$_visits', 'Visites', context.cText),
-      card('$_stamps', 'Tampons', kBlueLight),
+      card('$_stamps', _isPoints ? 'Points' : 'Tampons', kBlueLight),
       card('$_rewardsCount', 'Récomp.', kGold),
     ]);
   }
@@ -397,48 +513,6 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
           child: Text(_isActive ? 'Actif' : 'Inactif',
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _isActive ? kSuccess : Colors.white70)),
         ),
-      ]),
-    );
-  }
-
-  Widget _progressCard() {
-    final remaining = (_required - _stamps).clamp(0, _required);
-    final pct = _required > 0 ? (_stamps / _required).clamp(0.0, 1.0) : 0.0;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.cSurface, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.cBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Progression carte', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.cText)),
-          Text('$_stamps / $_required', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: kPrimary)),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 7, runSpacing: 7, children: List.generate(_required, (i) {
-          final done = i < _stamps;
-          return Container(
-            width: 26, height: 26, alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: done ? kPrimary : context.cFill,
-              border: Border.all(color: done ? kPrimary : context.cBorder, width: 1.5)),
-            child: done
-                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                : Text('${i + 1}', style: TextStyle(fontSize: 10, color: context.cSub, fontWeight: FontWeight.w600)),
-          );
-        })),
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: LinearProgressIndicator(value: pct, minHeight: 6,
-              backgroundColor: context.cFill, valueColor: const AlwaysStoppedAnimation(kPrimary)),
-        ),
-        const SizedBox(height: 6),
-        Text(remaining == 0
-            ? '🎉 Récompense disponible !'
-            : 'Encore $remaining tampon${remaining > 1 ? 's' : ''} pour 1 récompense offerte',
-            style: TextStyle(fontSize: 10.5, color: context.cSub)),
       ]),
     );
   }
@@ -504,13 +578,12 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
     for (var i = 0; i < _scans.length && i < 12; i++) {
       final s = _scans[i];
       final reward = s['reward_reached'] == true;
-      final manual = s['manual'] == true;
       final cnt = s['stamps_count'] as int? ?? 0;
       final t = DateTime.tryParse(s['scanned_at'] as String? ?? '')?.toLocal();
       final color = reward ? kGold : kPrimary;
       final label = reward
           ? 'Récompense débloquée'
-          : '${manual ? 'Tampon (manuel)' : 'Tampon ajouté'} · $cnt/$_required';
+          : (_isPoints ? 'Points ajoutés · $cnt/$_required' : 'Tampon ajouté · $cnt/$_required');
       items.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(children: [
@@ -542,7 +615,8 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
         onPressed: _busy ? null : _openStampSheet,
         icon: const Icon(Icons.qr_code_2_rounded, size: 18),
-        label: const Text('Ajouter des tampons manuellement', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        label: Text(_isPoints ? 'Ajouter des points manuellement' : 'Ajouter des tampons manuellement',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
       )),
       const SizedBox(height: 8),
       SizedBox(width: double.infinity, height: 46, child: OutlinedButton.icon(
@@ -551,7 +625,8 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
         onPressed: (_busy || _stamps == 0) ? null : () => _adjust(-1),
         icon: const Icon(Icons.undo_rounded, size: 17),
-        label: const Text('Annuler le dernier tampon', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+        label: Text(_isPoints ? 'Annuler le dernier point' : 'Annuler le dernier tampon',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
       )),
       const SizedBox(height: 8),
       SizedBox(width: double.infinity, height: 46, child: OutlinedButton.icon(
