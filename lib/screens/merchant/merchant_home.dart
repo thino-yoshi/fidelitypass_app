@@ -94,6 +94,8 @@ class _MerchantHomeState extends State<MerchantHome> {
     return _categoryStyles[cat] ?? {'emoji': '🏪', 'color': _kPrimary};
   }
 
+  bool get _isPoints => (merchantInfo?['program_type'] as String?) == 'points';
+
   String get _businessName => merchantInfo?['business_name'] as String? ?? widget.merchantName;
 
   String get _initials {
@@ -134,9 +136,9 @@ class _MerchantHomeState extends State<MerchantHome> {
     }
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool showSpinner = true}) async {
     AppLogger.merchant('Chargement profil + stats...');
-    setState(() => loading = true);
+    if (showSpinner) setState(() => loading = true);
     final api = ApiService.instance;
 
     final profileResult = await api.getMerchantProfile();
@@ -501,7 +503,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     final agg = _periodAgg();
 
     return RefreshIndicator(
-      onRefresh: _loadData,
+      onRefresh: () => _loadData(showSpinner: false),
       color: _kPrimary,
       child: Center(child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
@@ -656,7 +658,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _kpiCard('0', 'Clients ${_period == 'today' ? "aujourd'hui" : 'actifs'}', null),
         const SizedBox(width: 8),
-        _kpiCard('${agg['scans'] ?? 0}', 'Tampons ajoutés', agg['scansDelta']),
+        _kpiCard('${agg['scans'] ?? 0}', _isPoints ? 'Points ajoutés' : 'Tampons ajoutés', agg['scansDelta']),
         const SizedBox(width: 8),
         _kpiCard('0', 'Nouveaux clients', null),
       ]),
@@ -756,7 +758,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(child: Text('Évolution des tampons',
+          Expanded(child: Text(_isPoints ? 'Évolution des points' : 'Évolution des tampons',
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText))),
           GestureDetector(
@@ -795,7 +797,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         ),
         const SizedBox(height: 8),
         Row(children: [
-          _legend(_kPrimary, 'Tampons'),
+          _legend(_kPrimary, _isPoints ? 'Points' : 'Tampons'),
           const SizedBox(width: 14),
           _legend(_kSuccess, 'Récompenses'),
         ]),
@@ -828,7 +830,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       'merchants': merchantInfo ?? {},
     };
     final style = CardStyle.fromDesign(
-      _cardDesign,- 
+      _cardDesign,
       merchantLogoUrl: merchantInfo?['logo_url'] as String?,
       fallbackColor: _kPrimary,
     );
