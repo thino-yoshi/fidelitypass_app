@@ -697,18 +697,7 @@ class _ClientHomeState extends State<ClientHome>
   void _onRewardAnimationDone() {
     if (!mounted) return;
     setState(() => _animatingCardId = null);
-    _refreshAll(); // Refresh après l'animation : la carte remise à 0 s'affiche normalement
-    setState(() => _rewardPillActive = true);
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => RewardsWalletScreen(
-        token: widget.token,
-        userName: widget.userName,
-        initialRewards: _rewards,
-        onChanged: _refreshAll,
-      ),
-    )).then((_) {
-      if (mounted) setState(() => _rewardPillActive = false);
-    });
+    _refreshAll();
   }
 
   void _showChangePassword() {
