@@ -87,8 +87,10 @@ class _CardsTabState extends State<CardsTab> {
 
   // Les cartes arrivent déjà enrichies depuis client_home._loadStats()
   List<dynamic> get _rewardCards => widget.cards.where((c) {
-    final val  = c['stamps_count'] as int? ?? 0;
     final type = c['merchants']?['program_type'] as String? ?? 'stamps';
+    final val  = type == 'points'
+        ? (c['points_count'] as int? ?? 0)
+        : (c['stamps_count'] as int? ?? 0);
     final req  = type == 'points'
         ? (c['merchants']?['points_required'] as int? ?? 100)
         : (c['merchants']?['stamps_required'] as int? ?? 10);
@@ -407,7 +409,7 @@ class _CardsTabState extends State<CardsTab> {
   // ── Carte Points (layout aligné sur qarta.be) ────────────────────────────────
 
   Widget _buildPointsCard(Map card, CardStyle style) {
-    final points       = card['stamps_count'] as int? ?? 0;
+    final points       = card['points_count'] as int? ?? 0;
     final required     = style.pointsGoal
         ?? card['merchants']?['points_required'] as int?
         ?? card['merchants']?['stamps_required'] as int? ?? 100;
@@ -798,7 +800,7 @@ class LoyaltyCardFace extends StatelessWidget {
   }
 
   List<Widget> _points(Color textColor, Color accent, String reward) {
-    final points = card['stamps_count'] as int? ?? 0;
+    final points = card['points_count'] as int? ?? 0;
     final required = style.pointsGoal ?? card['merchants']?['points_required'] as int? ?? card['merchants']?['stamps_required'] as int? ?? 100;
     final pct = (points / required).clamp(0.0, 1.0);
     final full = points >= required;
