@@ -694,10 +694,13 @@ class _ClientHomeState extends State<ClientHome>
     });
   }
 
-  void _onRewardAnimationDone() {
+  Future<void> _onRewardAnimationDone() async {
+    if (!mounted) return;
+    // Refresh AVANT de retirer l'anim : la carte réapparaît directement avec
+    // les bonnes valeurs (ex. 90/300 de surplus) sans flash intermédiaire.
+    await _refreshAll();
     if (!mounted) return;
     setState(() => _animatingCardId = null);
-    _refreshAll();
   }
 
   void _showChangePassword() {
