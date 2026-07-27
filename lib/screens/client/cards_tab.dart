@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import '../../utils/logger.dart';
 
 /// Événement émis quand le commerçant ajoute des tampons/points à une carte
 /// pendant que le client a son QR ouvert (détecté par polling).
@@ -95,6 +96,9 @@ class _CardsTabState extends State<CardsTab> {
   }).toList();
 
   void _showQRModal(Map card, CardStyle style) {
+    final name = card['merchants']?['business_name'] as String? ?? '?';
+    final id   = card['id'] as String? ?? '?';
+    AppLogger.client('CardsTab → carte sélectionnée: $name (id: $id)');
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -154,10 +158,13 @@ class _CardsTabState extends State<CardsTab> {
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
                 onTap: () => _showQRModal(card, style),
-                child: LoyaltyCardFace(
-                  card: card,
-                  style: style,
-                  userName: widget.userName,
+                child: SizedBox(
+                  height: 220,
+                  child: LoyaltyCardFace(
+                    card: card,
+                    style: style,
+                    userName: widget.userName,
+                  ),
                 ),
               ),
             );
@@ -1203,21 +1210,24 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    final merchantName = widget.card['merchants']?['business_name'] as String? ?? '?';
+    final isPoints0 = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
+    final stamps0   = isPoints0 ? (widget.card['points_count'] as int? ?? 0) : (widget.card['stamps_count'] as int? ?? 0);
+    final required0 = isPoints0 ? (widget.card['merchants']?['points_required'] as int? ?? 100) : (widget.card['merchants']?['stamps_required'] as int? ?? 10);
+    AppLogger.client('QRModal → ouvert pour $merchantName, état initial: $stamps0/$required0 (${isPoints0 ? "points" : "tampons"})');
     _confettiCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2500));
     _flipCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _flipAnim = Tween<double>(begin: 0, end: pi).animate(
       CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOut),
     );
     fetchDynamicQR();
-    final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
-    final stamps   = isPoints ? (widget.card['points_count'] as int? ?? 0) : (widget.card['stamps_count'] as int? ?? 0);
-    final required = isPoints ? (widget.card['merchants']?['points_required'] as int? ?? 100) : (widget.card['merchants']?['stamps_required'] as int? ?? 10);
-    _initialStamps = stamps; // ← mémoriser l'état initial
-    _startPolling();         // ← démarrer le polling
+    _initialStamps = stamps0; // ← mémoriser l'état initial
+    _startPolling();          // ← démarrer le polling
   }
 
   @override
   void dispose() {
+    AppLogger.client('QRModal → fermé, polling arrêté');
     _timer?.cancel();
     _pollTimer?.cancel();
     _confettiCtrl.dispose();
@@ -1227,6 +1237,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
 
   // ── Polling : détecte l'ajout d'un tampon en temps réel ──────────────────────
   void _startPolling() {
+    AppLogger.client('QRModal → polling démarré (toutes les 2s)');
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _checkForNewStamp());
   }
@@ -1257,6 +1268,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
         : ((total - _initialStamps) + newVal).clamp(0, total); // tampons ajoutés avant le wrap
     final merchantName = (widget.card['merchants']?['business_name'] as String?) ?? 'Le magasin';
 
+    AppLogger.client('QRModal → tampon détecté! +$delta chez $merchantName → $newVal/$total${reward ? " 🎉 RÉCOMPENSE" : ""}');
     _pollTimer?.cancel();
     if (!mounted) return;
 
@@ -1281,27 +1293,34 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   }
 
   Future<void> fetchDynamicQR() async {
+    AppLogger.client('QRModal → génération QR dynamique (cardId: ${widget.card['id']})');
     setState(() { loadingQR = true; dynamicToken = null; });
     final r = await ApiService.instance.getDynamicQR(widget.card['id'] as String);
     if (!mounted) return;
     if (r.isOk) {
+      final tok = r.value['dynamic_token'] as String?;
+      final exp = r.value['expires_in'] as int? ?? 60;
+      AppLogger.client('QRModal → QR généré ✓, expire dans ${exp}s, token: ${tok?.substring(0, 8) ?? "null"}...');
       setState(() {
-        dynamicToken = r.value['dynamic_token'] as String?;
-        timeLeft     = r.value['expires_in'] as int? ?? 60;
+        dynamicToken = tok;
+        timeLeft     = exp;
         loadingQR    = false;
       });
       startTimer();
     } else {
+      AppLogger.error('QRModal → getDynamicQR erreur: ${r.error}');
       setState(() => loadingQR = false);
     }
   }
 
   void startTimer() {
+    AppLogger.client('QRModal → timer QR démarré (${timeLeft}s)');
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       setState(() => timeLeft--);
       if (timeLeft <= 0) {
+        AppLogger.client('QRModal → QR expiré → renouvellement');
         t.cancel();
         fetchDynamicQR();
       }

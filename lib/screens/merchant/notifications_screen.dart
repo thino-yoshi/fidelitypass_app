@@ -5,6 +5,7 @@ import '../../config/app_colors.dart';
 import '../../config/api.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../utils/logger.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const _kPrimary   = Color(0xFF2C7BE5);
@@ -30,13 +31,13 @@ class _Tpl {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   static const _templates = [
-    _Tpl('promo', '🔥', 'Offre spéciale', "Annonce une promo flash pour aujourd'hui",
+    _Tpl('promo', '🏷️', 'Offre spéciale', "Annonce une promo flash pour aujourd'hui",
         'Offre spéciale ce soir !', '-20% sur tout ce soir de 18h à 22h. Venez nous voir !'),
-    _Tpl('rappel', '⏰', 'Rappel tampon', 'Rappelle aux clients proches de la récompense',
+    _Tpl('rappel', '✅', 'Rappel tampon', 'Rappelle aux clients proches de la récompense',
         'Plus que quelques tampons !', 'Vous êtes tout proche de votre récompense. Passez la chercher !'),
-    _Tpl('merci', '💙', 'Merci & fidélité', 'Remercie tes clients fidèles',
+    _Tpl('merci', '⭐', 'Merci & fidélité', 'Remercie tes clients fidèles',
         'Merci de votre fidélité 🙏', 'Un grand merci ! Une petite surprise vous attend à votre prochaine visite.'),
-    _Tpl('libre', '✏️', 'Message libre', 'Écris ton propre message', '', ''),
+    _Tpl('libre', '💬', 'Message libre', 'Écris ton propre message', '', ''),
   ];
 
   String _tpl = 'promo';
@@ -49,6 +50,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   List<dynamic> _clients = [];
   List<dynamic> _scheduled = [];
+  List<dynamic> _history = [];
   int _required = 10;
 
   @override
@@ -67,9 +69,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _load() async {
+    AppLogger.merchant('NotificationsScreen → chargement clients + planifiées...');
     final c = await ApiService.instance.getMerchantClients(limit: 200);
-    if (mounted && c.isOk) setState(() => _clients = c.value);
+    if (mounted && c.isOk) {
+      AppLogger.merchant('NotificationsScreen → ${c.value.length} client(s) chargé(s)');
+      setState(() => _clients = c.value);
+    }
     await _loadScheduled();
+    await _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final res = await http.get(Uri.parse('$apiUrl/notifications/history'),
+          headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'});
+      if (res.statusCode == 200 && mounted) {
+        setState(() => _history = jsonDecode(res.body) as List);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadScheduled() async {
@@ -110,6 +127,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (_when == 'plan' && _scheduledAt == null) {
       _toast("Choisis une date d'envoi", err: true); return;
     }
+    AppLogger.merchant('NotificationsScreen → envoi notif: template=$_tpl, audience=$_audience, when=$_when, titre="$title"');
     setState(() => _sending = true);
     final headers = {
       'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
@@ -139,13 +157,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
-        _toast(_when == 'plan' ? 'Notification planifiée ✓' : (data['message'] ?? 'Envoyée ✓').toString());
+        final msg = _when == 'plan' ? 'Notification planifiée ✓' : (data['message'] ?? 'Envoyée ✓').toString();
+        AppLogger.merchant('NotificationsScreen → envoi ✓ : $msg');
+        _toast(msg);
         setState(() { _when = 'now'; _scheduledAt = null; });
         _loadScheduled();
       } else {
+        AppLogger.error('NotificationsScreen → envoi erreur HTTP ${res.statusCode}: ${res.body}');
         _toast(_errOf(res), err: true);
       }
-    } catch (_) {
+    } catch (e) {
+      AppLogger.error('NotificationsScreen → envoi exception: $e');
       _toast('Erreur réseau', err: true);
     }
     if (mounted) setState(() => _sending = false);
@@ -224,6 +246,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 _sectionTitle('Notifications planifiées'),
                 const SizedBox(height: 8),
                 ..._scheduled.map(_scheduledItem),
+              ],
+              if (_history.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                _sectionTitle('Historique des envois'),
+                const SizedBox(height: 8),
+                ..._history.map(_historyItem),
               ],
             ],
           ),
@@ -420,5 +448,39 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String _fmt(DateTime d) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(d.day)}/${two(d.month)} à ${two(d.hour)}h${two(d.minute)}';
+  }
+
+  Widget _historyItem(dynamic item) {
+    final sentAt  = DateTime.tryParse(item['sent_at'] as String? ?? '')?.toLocal();
+    final sent    = (item['sent_count']   as int?) ?? 0;
+    final opened  = (item['opened_count'] as int?) ?? 0;
+    final openPct = sent > 0 ? (opened / sent * 100).round() : 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(12), border: Border.all(color: context.cBorder)),
+      child: Row(children: [
+        Container(width: 36, height: 36,
+            decoration: BoxDecoration(color: _kPrimary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.check_circle_outline_rounded, color: _kPrimary, size: 18)),
+        const SizedBox(width: 11),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(item['title'] as String? ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
+          const SizedBox(height: 2),
+          Text(sentAt != null ? _fmt(sentAt) : '',
+              style: TextStyle(fontSize: 10, color: context.cSub)),
+        ])),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: _kSuccess.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text('$openPct% ouverts',
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _kSuccess)),
+        ),
+      ]),
+    );
   }
 }

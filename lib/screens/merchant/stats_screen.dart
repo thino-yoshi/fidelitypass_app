@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import '../../utils/logger.dart';
 import 'notifications_screen.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -38,12 +39,19 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Future<void> _load() async {
+    AppLogger.merchant('StatsScreen → chargement stats...');
     final api = ApiService.instance;
     final s = await api.getMerchantStats();
     final d = await api.getDailyStats();
     final h = await api.getMerchantScanHistory();
     final c = await api.getMerchantClients(limit: 200);
     if (!mounted) return;
+    if (s.isOk) {
+      AppLogger.merchant('StatsScreen → stats globales: clients=${s.value['total_clients']}, scans=${s.value['total_scans']}, récompenses=${s.value['total_rewards']}');
+    } else {
+      AppLogger.error('StatsScreen → getMerchantStats erreur: ${s.error}');
+    }
+    AppLogger.merchant('StatsScreen → daily: ${d.isOk ? d.value.length : 0} jours, historique: ${h.isOk ? h.value.length : 0} scans, clients: ${c.isOk ? c.value.length : 0}');
     setState(() {
       _stats   = s.isOk ? s.value : null;
       _daily   = d.isOk ? d.value : [];

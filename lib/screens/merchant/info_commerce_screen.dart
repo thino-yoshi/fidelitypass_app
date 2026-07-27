@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import '../../utils/logger.dart';
 
 const _days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -30,6 +31,7 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
   void initState() {
     super.initState();
     final m = widget.merchantInfo;
+    AppLogger.merchant('InfoCommerceScreen → ouvert pour: ${m['business_name'] ?? '?'}');
     _name = TextEditingController(text: (m['business_name'] ?? '').toString());
     _address = TextEditingController(text: (m['address'] ?? '').toString());
     _phone = TextEditingController(text: (m['phone'] ?? '').toString());
@@ -79,6 +81,7 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
         backgroundColor: kError, content: Text('Le nom du commerce est requis')));
       return;
     }
+    AppLogger.merchant('InfoCommerceScreen → sauvegarde: nom="${_name.text.trim()}", adresse="${_address.text.trim()}", tél="${_phone.text.trim()}"');
     setState(() => _saving = true);
     final String hours;
     if (_open != null && _close != null) {
@@ -102,10 +105,12 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (r.isOk) {
+      AppLogger.merchant('InfoCommerceScreen → sauvegarde ✓');
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         backgroundColor: kSuccess, content: Text('Informations mises à jour ✓')));
       Navigator.pop(context, r.value);
     } else {
+      AppLogger.error('InfoCommerceScreen → sauvegarde erreur: ${r.error}');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         backgroundColor: kError, content: Text(r.error ?? 'Erreur')));
     }

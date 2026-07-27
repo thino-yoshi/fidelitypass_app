@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/api.dart';
 import 'auth_service.dart';
+import '../utils/logger.dart';
 
 // ─── Résultat typé ────────────────────────────────────────────────────────────
 
@@ -47,43 +48,56 @@ class ApiService {
   // ── Méthodes HTTP de base ──────────────────────────────────────────────────
 
   Future<ApiResult<dynamic>> _get(String path) async {
+    final sw = Stopwatch()..start();
     try {
+      AppLogger.api('GET $path');
       final res = await http
           .get(Uri.parse('$apiUrl$path'), headers: _hGet)
           .timeout(_timeout);
-      return _parse(res);
+      return _parse(res, sw);
     } catch (e) {
-      return ApiResult.err(_netMsg(e));
+      return ApiResult.err(_netMsg(e, path));
     }
   }
 
   Future<ApiResult<dynamic>> _post(String path, Map<String, dynamic> body) async {
+    final sw = Stopwatch()..start();
     try {
+      AppLogger.api('POST $path');
       final res = await http
           .post(Uri.parse('$apiUrl$path'), headers: _h, body: jsonEncode(body))
           .timeout(_timeout);
-      return _parse(res);
+      return _parse(res, sw);
     } catch (e) {
-      return ApiResult.err(_netMsg(e));
+      return ApiResult.err(_netMsg(e, path));
     }
   }
 
   Future<ApiResult<dynamic>> _delete(String path) async {
+    final sw = Stopwatch()..start();
     try {
+      AppLogger.api('DELETE $path');
       final res = await http
           .delete(Uri.parse('$apiUrl$path'), headers: _hGet)
           .timeout(_timeout);
-      return _parse(res);
+      return _parse(res, sw);
     } catch (e) {
-      return ApiResult.err(_netMsg(e));
+      return ApiResult.err(_netMsg(e, path));
     }
   }
 
-  ApiResult<dynamic> _parse(http.Response res) {
-    debugPrint('🌐 [API] ${res.request?.method} ${res.request?.url} → ${res.statusCode}');
-    if (res.statusCode != 200) debugPrint('   ↳ body: ${res.body}');
+  ApiResult<dynamic> _parse(http.Response res, Stopwatch sw) {
+    final ms = sw.elapsedMilliseconds;
+    final method = res.request?.method ?? '?';
+    final path = res.request?.url.path ?? '';
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      AppLogger.api('$method $path → ${res.statusCode} ✓ (${ms}ms)');
+    } else {
+      AppLogger.error('$method $path → ${res.statusCode} (${ms}ms) — ${res.body}');
+    }
 
     if (res.statusCode == 401) {
+      AppLogger.error('401 sur $path → logout forcé');
       AuthService.logout();
       return ApiResult.err('Session expirée — reconnectez-vous', code: 401);
     }
@@ -103,8 +117,8 @@ class ApiService {
     }
   }
 
-  String _netMsg(Object e) {
-    debugPrint('🔴 [API] Erreur réseau: $e');
+  String _netMsg(Object e, String path) {
+    AppLogger.error('Réseau $path → $e');
     if (e is SocketException) return 'Pas de connexion internet';
     if (e.toString().contains('TimeoutException')) return 'Le serveur ne répond pas';
     return 'Erreur réseau';
@@ -114,7 +128,7 @@ class ApiService {
 
   /// Profil du commerçant connecté (via /merchants/me).
   Future<ApiResult<Map<String, dynamic>>> getMerchantProfile() async {
-    debugPrint('🔑 [API] token présent: ${_token.isNotEmpty} / longueur: ${_token.length}');
+    AppLogger.api('token présent: ${_token.isNotEmpty} / longueur: ${_token.length}');
     final r = await _get('/merchants/me');
     if (r.isErr) return ApiResult.err(r.error!);
     return ApiResult.ok(r.data as Map<String, dynamic>);

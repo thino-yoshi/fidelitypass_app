@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../config/api.dart';
 import '../../config/app_colors.dart';
-import '../../services/auth_service.dart';
+import '../../utils/logger.dart';
 
 const _kPrimary = Color(0xFF2C7BE5);
 const _kGold    = Color(0xFFF59E0B);
 
 class HistoryTab extends StatefulWidget {
   final String token;
-  const HistoryTab({super.key, required this.token});
+  final List<dynamic> history;
+  final Future<void> Function() onRefresh;
+  const HistoryTab({super.key, required this.token, required this.history, required this.onRefresh});
 
   @override
   State<HistoryTab> createState() => _HistoryTabState();
@@ -22,37 +21,12 @@ class _HistoryTabState extends State<HistoryTab> {
   Color get _kSub    => context.cSub;
   Color get _kWhite  => context.cSurface;
 
-  List<dynamic> _history = [];
-  bool          _loading = true;
-  String        _filter  = 'all'; // 'all' | 'stamp' | 'reward'
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHistory();
-  }
-
-  Future<void> _loadHistory() async {
-    setState(() => _loading = true);
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/my-history'),
-        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-      );
-      if (mounted && res.statusCode == 200) {
-        setState(() { _history = jsonDecode(res.body); _loading = false; });
-      } else {
-        if (mounted) setState(() => _loading = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  String _filter = 'all'; // 'all' | 'stamp' | 'reward'
 
   // Convert API data to flat list of items sorted by date
   List<Map<String, dynamic>> _flatItems() {
     final items = <Map<String, dynamic>>[];
-    for (final scan in _history) {
+    for (final scan in widget.history) {
       final isReward  = scan['reward_reached'] == true;
       final type      = isReward ? 'reward' : 'stamp';
       final name      = scan['merchant']?['business_name'] as String? ?? 'Commerce';
@@ -107,34 +81,27 @@ class _HistoryTabState extends State<HistoryTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: _kPrimary));
-    }
-
     final allItems      = _flatItems();
     final filteredItems = _filtered(allItems);
     final grouped       = _byDay(filteredItems);
 
     return RefreshIndicator(
-      onRefresh: _loadHistory,
+      onRefresh: widget.onRefresh,
       color: _kPrimary,
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, 14, 16, 96 + MediaQuery.of(context).padding.bottom),
         children: [
 
           // ── Filter chips (Figma: Tout | Tampons | Récompenses) ─────────────
-          SizedBox(
-            height: 36,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _chip('all',    'Tout'),
-                const SizedBox(width: 6),
-                _chip('stamp',  'Tampons'),
-                const SizedBox(width: 6),
-                _chip('reward', 'Récompenses'),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _chip('all',    'Tout'),
+              const SizedBox(width: 6),
+              _chip('stamp',  'Tampons'),
+              const SizedBox(width: 6),
+              _chip('reward', 'Récompenses'),
+            ],
           ),
 
           const SizedBox(height: 12),
@@ -175,7 +142,10 @@ class _HistoryTabState extends State<HistoryTab> {
   Widget _chip(String key, String label) {
     final active = _filter == key;
     return GestureDetector(
-      onTap: () => setState(() => _filter = key),
+      onTap: () {
+        AppLogger.client('HistoryTab → filtre: $key');
+        setState(() => _filter = key);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),

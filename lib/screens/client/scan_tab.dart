@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import '../../utils/logger.dart';
 
 class ScanTab extends StatefulWidget {
   final String token;
   final VoidCallback onCardAdded;
+  final VoidCallback? onBack;
 
-  const ScanTab({super.key, required this.token, required this.onCardAdded});
+  const ScanTab({super.key, required this.token, required this.onCardAdded, this.onBack});
 
   @override
   State<ScanTab> createState() => _ScanTabState();
@@ -27,6 +29,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
   }
 
   void _startCamera() {
+    AppLogger.client('ScanTab → caméra initialisée');
     _controller = MobileScannerController(
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
@@ -65,10 +68,12 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null || raw.isEmpty) return;
 
+    AppLogger.client('ScanTab → QR détecté (brut): $raw');
     setState(() { _scanning = false; _loading = true; _error = null; });
     _controller?.stop();
 
     final token = _extractToken(raw);
+    AppLogger.client('ScanTab → token extrait: $token');
 
     final r = await ApiService.instance.joinMerchant(token);
     if (!mounted) return;
@@ -78,8 +83,10 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
       final alreadyMember = r.value['already_member'] as bool? ?? false;
       final merchant = r.value['merchant'] as Map<String, dynamic>? ?? {};
       final name = merchant['business_name'] as String? ?? '';
+      AppLogger.client('ScanTab → joinMerchant ✓ already_member: $alreadyMember, commerce: $name');
       _showResult(success: true, alreadyMember: alreadyMember, merchantName: name);
     } else {
+      AppLogger.error('ScanTab → joinMerchant erreur: ${r.error}');
       _showError(r.error ?? 'QR code invalide');
     }
   }
@@ -115,6 +122,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
 
   void _resetScan() {
     if (!mounted) return;
+    AppLogger.client('ScanTab → scan réinitialisé, caméra relancée');
     setState(() { _scanning = true; _error = null; });
     _controller?.start();
   }
@@ -138,15 +146,37 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
           child: Column(
             children: [
               const SizedBox(height: 12),
-              // Titre
-              const Text(
-                'Scanner le QR du commerce',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  shadows: [Shadow(color: Colors.black45, blurRadius: 6)],
-                ),
+              // En-tête avec bouton retour
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(children: [
+                  GestureDetector(
+                    onTap: widget.onBack,
+                    child: Container(
+                      width: 34, height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Scanner le QR du commerce',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        shadows: [Shadow(color: Colors.black45, blurRadius: 6)],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 46),
+                ]),
               ),
               const SizedBox(height: 6),
               const Text(

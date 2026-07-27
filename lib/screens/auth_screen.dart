@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../utils/logger.dart';
 import 'client/client_home.dart';
 import 'merchant/merchant_home.dart';
 import 'merchant_redirect_screen.dart';
@@ -41,8 +45,12 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   bool loading = false;
   bool googleLoading = false;
+  bool _rememberMe = false;
   String error = '';
   int passScore = 0;
+  String? _pendingEmail;
+  int _resendCooldown = 0;
+  Timer? _resendTimer;
 
   late AnimationController _orbCtrl;
   late Animation<double> _orbOpacity;
@@ -57,10 +65,85 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     super.initState();
     _orbCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 4000))..repeat(reverse: true);
     _orbOpacity = Tween(begin: 0.15, end: 0.26).animate(CurvedAnimation(parent: _orbCtrl, curve: Curves.easeInOut));
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final remember = prefs.getBool('remember_me') ?? false;
+    if (!remember) return;
+    final email    = prefs.getString('saved_email') ?? '';
+    final password = prefs.getString('saved_password') ?? '';
+    if (mounted && email.isNotEmpty) {
+      setState(() {
+        _rememberMe = true;
+        loginEmailCtrl.text = email;
+        loginPassCtrl.text  = password;
+      });
+    }
+  }
+
+  @override
+  void _showEnterEmailDialog() {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F1E35),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Ton adresse email', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'toi@email.com',
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+            filled: true,
+            fillColor: const Color(0xFF0B1220),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: TextStyle(color: Colors.white.withValues(alpha: 0.4)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: kBlue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () {
+              final email = ctrl.text.trim();
+              if (email.isEmpty) return;
+              Navigator.pop(ctx);
+              setState(() {
+                _pendingEmail = email;
+                codeCtrl.clear();
+                screen = 'register';
+                regStep = 4;
+                error = '';
+              });
+            },
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = 180);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_resendCooldown <= 1) {
+        _resendTimer?.cancel();
+        if (mounted) setState(() => _resendCooldown = 0);
+      } else {
+        if (mounted) setState(() => _resendCooldown--);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _orbCtrl.dispose();
     prenomCtrl.dispose(); emailCtrl.dispose(); passCtrl.dispose(); codeCtrl.dispose();
     loginEmailCtrl.dispose(); loginPassCtrl.dispose(); nomCtrl.dispose();
@@ -72,9 +155,11 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     final token = data['token'] ?? data['access_token'] ?? '';
     final name  = data['name'] ?? '';
     if (data['user_type'] == 'merchant') {
+      AppLogger.nav('→ MerchantHome ($name)');
       Navigator.pushReplacement(context, MaterialPageRoute(
           builder: (_) => MerchantHome(token: token, merchantName: name)));
     } else {
+      AppLogger.nav('→ ClientHome ($name)');
       Navigator.pushReplacement(context, MaterialPageRoute(
           builder: (_) => ClientHome(token: token, userName: name)));
     }
@@ -110,14 +195,27 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _doLogin() async {
+    AppLogger.auth('Login → tentative avec ${loginEmailCtrl.text.trim()}');
     setState(() { loading = true; error = ''; });
     try {
       final data = await AuthService.login(
         loginEmailCtrl.text.trim(),
         loginPassCtrl.text,
       );
+      AppLogger.auth('Login → succès, user_type: ${data['user_type']}');
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString('saved_email',    loginEmailCtrl.text.trim());
+        await prefs.setString('saved_password', loginPassCtrl.text);
+        await prefs.setBool('remember_me', true);
+      } else {
+        await prefs.remove('saved_email');
+        await prefs.remove('saved_password');
+        await prefs.setBool('remember_me', false);
+      }
       _navigate(data);
     } catch (e) {
+      AppLogger.error('Login → échec : $e');
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
     } finally {
       if (mounted) setState(() => loading = false);
@@ -125,40 +223,64 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _doRegister() async {
+    final email = emailCtrl.text.trim();
+    AppLogger.auth('Register → soumission formulaire pour $email');
     setState(() { loading = true; error = ''; });
     try {
       final data = await AuthService.register(
-        emailCtrl.text.trim(),
+        email,
         passCtrl.text,
         '${prenomCtrl.text.trim()} ${nomCtrl.text.trim()}'.trim(),
         'client',
       );
-      // Email confirmation activée → Supabase envoie un mail, session null
       if (data['pending_confirmation'] == true) {
+        AppLogger.auth('Register → OTP requis, passage à l\'étape 4');
         if (!mounted) return;
-        setState(() { error = ''; loading = false; });
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            backgroundColor: const Color(0xFF0E1E35),
-            title: const Text('Vérifie ton email', style: TextStyle(color: Colors.white)),
-            content: Text(
-              'Un lien de confirmation a été envoyé à ${emailCtrl.text.trim()}. '
-              'Clique sur le lien pour activer ton compte.',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK', style: TextStyle(color: Color(0xFF4A9EFF))),
-              ),
-            ],
-          ),
-        );
+        setState(() {
+          _pendingEmail = email;
+          codeCtrl.clear();
+          regStep = 4;
+          error = '';
+          loading = false;
+        });
+        _startResendCooldown();
         return;
       }
+      AppLogger.auth('Register → compte créé directement (pas d\'OTP)');
       _navigate(data);
     } catch (e) {
+      AppLogger.error('Register → échec : $e');
+      setState(() { error = e.toString().replaceAll('Exception: ', ''); });
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _doVerifyOTP() async {
+    final email = _pendingEmail ?? emailCtrl.text.trim();
+    AppLogger.auth('OTP → vérification code "${codeCtrl.text.trim()}" pour $email');
+    setState(() { loading = true; error = ''; });
+    try {
+      final res = await Supabase.instance.client.auth.verifyOTP(
+        email: email,
+        token: codeCtrl.text.trim(),
+        type: OtpType.signup,
+      );
+      if (!mounted) return;
+      if (res.session == null) {
+        AppLogger.error('OTP → session null après verifyOTP');
+        throw Exception('Vérification échouée — réessaie');
+      }
+      final token    = res.session!.accessToken;
+      final userType = AuthService.resolveUserType(res.user?.userMetadata);
+      final name     = '${prenomCtrl.text.trim()} ${nomCtrl.text.trim()}'.trim();
+      AppLogger.auth('OTP → vérification réussie ! user_type: $userType, name: $name');
+      await AuthService.saveSession(token, userType, name, email: email);
+      await AuthService.fetchAndSaveProfile(token);
+      await AuthService.saveFCMToken(token);
+      _navigate({'token': token, 'user_type': userType, 'name': name});
+    } catch (e) {
+      AppLogger.error('OTP → échec vérification : $e');
       setState(() { error = e.toString().replaceAll('Exception: ', ''); });
     } finally {
       if (mounted) setState(() => loading = false);
@@ -166,14 +288,17 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _doGoogle() async {
+    AppLogger.auth('Google OAuth → clic bouton "Continuer avec Google"');
     setState(() { googleLoading = true; error = ''; });
     try {
       final data = await AuthService.signInWithGoogle();
+      AppLogger.auth('Google OAuth → succès, user_type: ${data['user_type']}');
       _navigate(data);
     } catch (e) {
       if (e.toString().contains('annulée')) {
-        // L'utilisateur a fermé la fenêtre Google — pas une erreur à afficher
+        AppLogger.auth('Google OAuth → annulée par l\'utilisateur');
       } else {
+        AppLogger.error('Google OAuth → échec : $e');
         setState(() => error = e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
@@ -477,11 +602,37 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                               borderSide: const BorderSide(color: kBlue, width: 1.5)),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
 
-                      Align(alignment: Alignment.centerRight,
-                          child: Text('Mot de passe oublié ?',
-                              style: TextStyle(color: kBlue, fontSize: _fs(context, 12, tablet: 14), fontWeight: FontWeight.w600))),
+                      GestureDetector(
+                        onTap: () => setState(() => _rememberMe = !_rememberMe),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          SizedBox(
+                            width: 22, height: 22,
+                            child: Checkbox(
+                              value: _rememberMe,
+                              onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                              activeColor: kBlue,
+                              checkColor: kDark,
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Text('Se souvenir de moi',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.55),
+                                  fontSize: _fs(context, 12, tablet: 13))),
+                        ]),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text('Mot de passe oublié ?',
+                            style: TextStyle(color: kBlue, fontSize: _fs(context, 12, tablet: 14),
+                                fontWeight: FontWeight.w600)),
+                      ),
 
                       if (error.isNotEmpty) ...[
                         const SizedBox(height: 12),
@@ -550,6 +701,35 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: TextButton(
+                          onPressed: () {
+                            final email = loginEmailCtrl.text.trim();
+                            if (email.isNotEmpty) {
+                              setState(() {
+                                _pendingEmail = email;
+                                codeCtrl.clear();
+                                screen = 'register';
+                                regStep = 4;
+                                error = '';
+                              });
+                            } else {
+                              _showEnterEmailDialog();
+                            }
+                          },
+                          style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                          child: Text(
+                            'J\'ai déjà un code de vérification',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.28),
+                              fontSize: _fs(context, 11, tablet: 13),
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white.withValues(alpha: 0.18),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -582,7 +762,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                   children: [
                     const SizedBox(height: 20),
                     _backBtn(() {
-                      if (regStep > 1) {
+                      if (regStep == 4) {
+                        setState(() { regStep = 2; error = ''; codeCtrl.clear(); });
+                      } else if (regStep > 1) {
                         setState(() { regStep--; error = ''; });
                       } else {
                         setState(() { screen = 'landing'; error = ''; });
@@ -590,21 +772,25 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                     }),
                     const SizedBox(height: 20),
 
-                    Row(children: List.generate(3, (i) => Expanded(
-                      child: Container(
-                        margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: i < regStep ? kBlue : Colors.white12,
-                          borderRadius: BorderRadius.circular(2),
+                    Row(children: List.generate(regStep == 4 ? 4 : 3, (i) {
+                      final total = regStep == 4 ? 4 : 3;
+                      return Expanded(
+                        child: Container(
+                          margin: EdgeInsets.only(right: i < total - 1 ? 6 : 0),
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: i < regStep ? kBlue : Colors.white12,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                      ),
-                    ))),
+                      );
+                    })),
                     const SizedBox(height: 24),
 
                     if (regStep == 1) _buildStep1(),
                     if (regStep == 2) _buildStep2(),
                     if (regStep == 3) _buildStep3(),
+                    if (regStep == 4) _buildStep4(),
                   ],
                 ),
               ),
@@ -867,6 +1053,113 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStep4() {
+    final tablet = _isTablet(context);
+    final email   = _pendingEmail ?? emailCtrl.text.trim();
+    return StatefulBuilder(
+      builder: (context, setS) {
+        final canVerify = codeCtrl.text.trim().length == 8;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Vérifie ton email', style: TextStyle(
+              color: Colors.white, fontSize: _fs(context, 20, tablet: 24), fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Un code à 8 chiffres a été envoyé à',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.38), fontSize: _fs(context, 12, tablet: 14))),
+          const SizedBox(height: 2),
+          Text(email,
+              style: TextStyle(color: kBlue, fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w600)),
+          const SizedBox(height: 28),
+
+          _label('CODE DE VÉRIFICATION'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: codeCtrl,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            maxLength: 8,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (_) => setS(() {}),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: _fs(context, 24, tablet: 28),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 10,
+            ),
+            decoration: InputDecoration(
+              hintText: '--------',
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: 0.18),
+                fontSize: _fs(context, 24, tablet: 28),
+                letterSpacing: 10,
+              ),
+              counterText: '',
+              filled: true,
+              fillColor: const Color(0xFF0E1E35),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13),
+                  borderSide: const BorderSide(color: kBlue, width: 1.5)),
+            ),
+          ),
+
+          if (error.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _errorBox(error),
+          ],
+
+          const SizedBox(height: 24),
+
+          SizedBox(width: double.infinity,
+            child: ElevatedButton(
+              onPressed: (loading || !canVerify) ? null : _doVerifyOTP,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: canVerify ? kBlue : const Color(0xFF1A2E50),
+                foregroundColor: canVerify ? kDark : Colors.white30,
+                padding: EdgeInsets.symmetric(vertical: tablet ? 18 : 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+              child: loading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text('Confirmer mon compte',
+                  style: TextStyle(fontSize: _fs(context, 15, tablet: 17), fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: TextButton(
+              onPressed: (loading || _resendCooldown > 0) ? null : () async {
+                try {
+                  await Supabase.instance.client.auth.resend(
+                    type: OtpType.signup,
+                    email: email,
+                  );
+                  _startResendCooldown();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Code renvoyé !'),
+                      backgroundColor: Color(0xFF22C55E),
+                    ));
+                  }
+                } catch (_) {}
+              },
+              child: _resendCooldown > 0
+                  ? Text(
+                      'Renvoyer le code (${(_resendCooldown ~/ 60).toString().padLeft(2, '0')}:${(_resendCooldown % 60).toString().padLeft(2, '0')})',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.25), fontSize: _fs(context, 13, tablet: 14)),
+                    )
+                  : Text('Renvoyer le code',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: _fs(context, 13, tablet: 14))),
+            ),
+          ),
+        ]);
+      },
     );
   }
 
