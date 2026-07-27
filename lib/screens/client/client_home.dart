@@ -50,6 +50,7 @@ class _ClientHomeState extends State<ClientHome>
   List<dynamic> _cards = [];
   List<dynamic> _history = [];
   bool _statsLoaded = false;
+  String? _animatingCardId; // carte en cours d'animation "s'envole vers récompenses"
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
@@ -663,7 +664,27 @@ class _ClientHomeState extends State<ClientHome>
           ),
         );
       },
-    );
+    ).then((_) {
+      if (!mounted || !e.reward) return;
+      setState(() => _animatingCardId = e.cardId);
+    });
+  }
+
+  void _onRewardAnimationDone() {
+    if (!mounted) return;
+    setState(() => _animatingCardId = null);
+    // Ouvrir l'écran récompenses
+    setState(() => _rewardPillActive = true);
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => RewardsWalletScreen(
+        token: widget.token,
+        userName: widget.userName,
+        initialRewards: _rewards,
+        onChanged: _refreshAll,
+      ),
+    )).then((_) {
+      if (mounted) setState(() => _rewardPillActive = false);
+    });
   }
 
   void _showChangePassword() {
@@ -1019,7 +1040,7 @@ class _ClientHomeState extends State<ClientHome>
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, onAnimationDone: _onRewardAnimationDone);
       case 1:
         return ScanTab(
           token: widget.token,

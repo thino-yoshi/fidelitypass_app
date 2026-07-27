@@ -34,6 +34,8 @@ class CardsTab extends StatefulWidget {
   final List<dynamic> cards;
   final VoidCallback onRefresh;
   final void Function(StampEvent)? onStampEvent;
+  final String? cardIdToAnimate;
+  final VoidCallback? onAnimationDone;
 
   const CardsTab({
     super.key,
@@ -42,6 +44,8 @@ class CardsTab extends StatefulWidget {
     required this.cards,
     required this.onRefresh,
     this.onStampEvent,
+    this.cardIdToAnimate,
+    this.onAnimationDone,
   });
 
   @override
@@ -156,10 +160,11 @@ class _CardsTabState extends State<CardsTab> {
           ...List.generate(cards.length, (i) {
             final card  = cards[i];
             final style = _styleFromCard(card, i);
-            return Padding(
+            final isAnimating = card['id'] == widget.cardIdToAnimate;
+            final cardWidget = Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
-                onTap: () => _showQRModal(card, style),
+                onTap: isAnimating ? null : () => _showQRModal(card, style),
                 child: SizedBox(
                   height: 220,
                   child: LoyaltyCardFace(
@@ -170,6 +175,14 @@ class _CardsTabState extends State<CardsTab> {
                 ),
               ),
             );
+            if (isAnimating) {
+              return _FlyingCard(
+                key: ValueKey('flying_${card['id']}'),
+                onDone: widget.onAnimationDone ?? () {},
+                child: cardWidget,
+              );
+            }
+            return cardWidget;
           }),
         ],
       ),
@@ -1762,4 +1775,48 @@ class _Particle {
           const Color(0xFF7B4FBF),
           Colors.white,
         ][rng.nextInt(6)];
+}
+
+// ── Animation : carte qui rétrécit et s'envole vers le pill Récompenses ───────
+class _FlyingCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onDone;
+  const _FlyingCard({super.key, required this.child, required this.onDone});
+  @override
+  State<_FlyingCard> createState() => _FlyingCardState();
+}
+
+class _FlyingCardState extends State<_FlyingCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double>  _scale;
+  late final Animation<Offset>  _slide;
+  late final Animation<double>  _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl    = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
+    _scale   = Tween<double>(begin: 1.0, end: 0.05)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInCubic));
+    _slide   = Tween<Offset>(begin: Offset.zero, end: const Offset(0.35, -6.0))
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInCubic));
+    _opacity = Tween<double>(begin: 1.0, end: 0.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0.55, 1.0)));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ctrl.forward().whenComplete(widget.onDone);
+    });
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _opacity,
+    child: SlideTransition(
+      position: _slide,
+      child: ScaleTransition(scale: _scale, child: widget.child),
+    ),
+  );
 }
