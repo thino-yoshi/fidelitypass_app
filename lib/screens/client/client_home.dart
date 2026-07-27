@@ -586,12 +586,32 @@ class _ClientHomeState extends State<ClientHome>
   // ── Le commerçant a ajouté des tampons pendant que le QR était ouvert ────────
   Future<void> _onStampEvent(StampEvent e) async {
     AppLogger.client('StampEvent reçu → cardId: ${e.cardId}, delta: ${e.delta}, reward: ${e.reward}, merchant: ${e.merchantName}');
-    await _refreshAll();
     if (!mounted) return;
+
     setState(() {
       _tab = 0;
       final idx = _cards.indexWhere((c) => c['id'] == e.cardId);
-      if (idx > 0) { final card = _cards.removeAt(idx); _cards.insert(0, card); }
+      if (idx >= 0) {
+        // Copie mutable pour mettre à jour l'affichage sans refresh réseau
+        final card = Map<dynamic, dynamic>.from(_cards[idx] as Map);
+        // Si récompense atteinte : afficher la carte PLEINE (total/total) pour l'animation
+        // Si simple ajout : mettre à jour le compteur normalement
+        if (e.reward) {
+          if (e.isPoints) {
+            card['points_count'] = e.total;
+          } else {
+            card['stamps_count'] = e.total;
+          }
+        } else {
+          if (e.isPoints) {
+            card['points_count'] = e.newCount;
+          } else {
+            card['stamps_count'] = e.newCount;
+          }
+        }
+        _cards[idx] = card;
+        if (idx > 0) { final c = _cards.removeAt(idx); _cards.insert(0, c); }
+      }
     });
     _showStampPopup(e);
   }
@@ -665,15 +685,19 @@ class _ClientHomeState extends State<ClientHome>
         );
       },
     ).then((_) {
-      if (!mounted || !e.reward) return;
-      setState(() => _animatingCardId = e.cardId);
+      if (!mounted) return;
+      if (e.reward) {
+        setState(() => _animatingCardId = e.cardId);
+      } else {
+        _refreshAll(); // Cas normal : refresh après fermeture du popup
+      }
     });
   }
 
   void _onRewardAnimationDone() {
     if (!mounted) return;
     setState(() => _animatingCardId = null);
-    // Ouvrir l'écran récompenses
+    _refreshAll(); // Refresh après l'animation : la carte remise à 0 s'affiche normalement
     setState(() => _rewardPillActive = true);
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => RewardsWalletScreen(
