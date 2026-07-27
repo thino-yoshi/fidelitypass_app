@@ -1204,8 +1204,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   bool loadingQR = true;
   String? qrError;
   Timer? _timer;
-  Timer? _pollTimer;        // ← polling détection tampon
-  int _initialStamps = 0;   // ← valeur de référence au moment d'ouverture
+  Timer? _pollTimer;           // ← polling détection tampon
+  int    _initialStamps = 0;   // ← valeur de référence (utilisée pour le delta affiché)
+  String? _initialScanAt;      // ← horodatage du dernier scan à l'ouverture (base de comparaison)
   late AnimationController _confettiCtrl;
   final bool _showConfetti = false;
 
@@ -1237,7 +1238,14 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOut),
     );
     fetchDynamicQR();
-    _initialStamps = stamps0; // ← mémoriser l'état initial
+    _initialStamps = stamps0; // ← mémoriser pour le calcul du delta
+    // Récupérer le dernier scan_at pour détecter un nouveau scan (comparaison timestamp)
+    ApiService.instance.pollCard(widget.card['id'] as String).then((r) {
+      if (r.isOk && mounted) {
+        _initialScanAt = r.value['latest_scan_at'] as String?;
+        AppLogger.client('QRModal → scan initial: ${_initialScanAt ?? "aucun"}');
+      }
+    });
     _startPolling();          // ← démarrer le polling
   }
 
@@ -1259,29 +1267,29 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   }
 
   Future<void> _checkForNewStamp() async {
-    final r = await ApiService.instance.getMyCards();
+    final r = await ApiService.instance.pollCard(widget.card['id'] as String);
     if (!mounted || r.isErr) return;
-    final matching = r.value.where((c) => c['id'] == widget.card['id']).toList();
-    if (matching.isEmpty) return;
-    final updated = matching.first;
+    final v = r.value;
+
+    final latestScanAt = v['latest_scan_at'] as String?;
+    AppLogger.client('QRModal → poll: latestScanAt=$latestScanAt, initial=$_initialScanAt');
+
+    // Aucun nouveau scan : même horodatage (ou les deux sont null)
+    if (latestScanAt == _initialScanAt) return;
+
+    // Nouveau scan détecté via la scan_history (fiable même si points_count boucle)
     final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
     final total = isPoints
-        ? (updated['merchants']?['points_required'] as int? ?? widget.card['merchants']?['points_required'] as int? ?? 100)
-        : (updated['merchants']?['stamps_required'] as int? ?? widget.card['merchants']?['stamps_required'] as int? ?? 10);
+        ? (widget.card['merchants']?['points_required'] as int? ?? 100)
+        : (widget.card['merchants']?['stamps_required'] as int? ?? 10);
     final newVal = isPoints
-        ? (updated['points_count'] as int? ?? 0)
-        : (updated['stamps_count'] as int? ?? 0);
-
-    // Aucun changement → on continue à attendre.
-    if (newVal == _initialStamps) return;
-
-    // Changement détecté. Si le compteur a BAISSÉ, c'est que la carte a été
-    // complétée et remise à zéro (report du surplus) → récompense atteinte.
+        ? (v['points_count'] as int? ?? 0)
+        : (v['stamps_count'] as int? ?? 0);
+    final reward    = v['latest_reward_reached'] == true;
     final increased = newVal > _initialStamps;
-    final reward    = !increased;
-    final delta     = increased
-        ? (newVal - _initialStamps)
-        : ((total - _initialStamps) + newVal).clamp(0, total); // tampons ajoutés avant le wrap
+    final delta     = reward
+        ? (total - _initialStamps).clamp(0, total) // approx, non affiché pour les récompenses
+        : (increased ? newVal - _initialStamps : (total - _initialStamps + newVal).clamp(0, total));
     final merchantName = (widget.card['merchants']?['business_name'] as String?) ?? 'Le magasin';
 
     AppLogger.client('QRModal → tampon détecté! +$delta chez $merchantName → $newVal/$total${reward ? " 🎉 RÉCOMPENSE" : ""}');

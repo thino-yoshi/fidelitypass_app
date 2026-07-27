@@ -274,6 +274,13 @@ class ApiService {
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
+  /// Polling léger : retourne état actuel de la carte + horodatage du dernier scan.
+  Future<ApiResult<Map<String, dynamic>>> pollCard(String cardId) async {
+    final r = await _get('/cards/$cardId/poll');
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
   /// Token QR dynamique (expire en 60s) pour qu'un commerçant scanne.
   Future<ApiResult<Map<String, dynamic>>> getDynamicQR(String cardId) async {
     final r = await _get('/cards/qr/$cardId');
