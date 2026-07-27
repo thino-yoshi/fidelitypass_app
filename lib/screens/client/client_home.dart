@@ -593,7 +593,7 @@ class _ClientHomeState extends State<ClientHome>
       final idx = _cards.indexWhere((c) => c['id'] == e.cardId);
       if (idx >= 0) {
         // Copie mutable pour mettre à jour l'affichage sans refresh réseau
-        final card = Map<dynamic, dynamic>.from(_cards[idx] as Map);
+        final card = Map<String, dynamic>.from(_cards[idx] as Map);
         // Si récompense atteinte : afficher la carte PLEINE (total/total) pour l'animation
         // Si simple ajout : mettre à jour le compteur normalement
         if (e.reward) {
