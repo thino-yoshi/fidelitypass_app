@@ -712,7 +712,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   // Aligné sur le mockup : valeur au-dessus de chaque barre + labels jours.
   List<Map<String, dynamic>> _graphGroups() {
     if (_daily.isEmpty) return [];
-    const wd = ['L', 'M', 'M', 'J', 'V', 'S', 'D']; // lundi..dimanche
+    const wd = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     if (_graphRange == '7j') {
       final days = _daily.length >= 7 ? _daily.sublist(_daily.length - 7) : _daily;
       return days.map((d) {
@@ -768,7 +768,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       decoration: BoxDecoration(color: _kWhite, borderRadius: BorderRadius.circular(16), border: Border.all(color: _kBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(child: Text(_isPoints ? 'Évolution des points' : 'Évolution des tampons',
+          Expanded(child: Text('Fréquence des clients',
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText))),
           GestureDetector(
@@ -814,7 +814,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         ),
         const SizedBox(height: 8),
         Row(children: [
-          _legend(_kPrimary, _isPoints ? 'Points' : 'Tampons'),
+          _legend(_kPrimary, 'Clients'),
           const SizedBox(width: 14),
           _legend(_kSuccess, 'Récompenses'),
         ]),
