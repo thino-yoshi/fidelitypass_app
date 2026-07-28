@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -51,6 +52,8 @@ class _ClientHomeState extends State<ClientHome>
   List<dynamic> _history = [];
   bool _statsLoaded = false;
   String? _animatingCardId; // carte en cours d'animation "s'envole vers récompenses"
+  StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
+  Timer?     _stampBadgeTimer;
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
@@ -529,6 +532,7 @@ class _ClientHomeState extends State<ClientHome>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _notifAnim.dispose();
+    _stampBadgeTimer?.cancel();
     super.dispose();
   }
 
@@ -617,81 +621,57 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _showStampPopup(StampEvent e) {
-    final unit = e.isPoints ? 'point' : 'tampon';
-    final accent = e.reward ? const Color(0xFFFBBF24) : const Color(0xFF27AE60);
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (ctx) {
-        // Auto-fermeture après 3,5 s
-        Future.delayed(const Duration(milliseconds: 3500), () {
-          if (ctx.mounted && Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-        });
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 36),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
-            decoration: BoxDecoration(
-              color: context.qSurface,
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), shape: BoxShape.circle),
-                child: Icon(e.reward ? Icons.emoji_events_rounded : Icons.check_circle_rounded, color: accent, size: 34),
-              ),
-              const SizedBox(height: 16),
-              if (e.reward) ...[
-                Text('Récompense débloquée ! 🎉',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.qText)),
-                const SizedBox(height: 6),
-                Text('Chez ${e.merchantName}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: context.qSub)),
-              ] else ...[
-                Text(e.merchantName,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.qText)),
-                const SizedBox(height: 6),
-                RichText(textAlign: TextAlign.center, text: TextSpan(
-                  style: TextStyle(fontSize: 13, color: context.qSub, height: 1.4),
-                  children: [
-                    const TextSpan(text: 'a ajouté '),
-                    TextSpan(text: '${e.delta} $unit${e.delta > 1 ? "s" : ""}',
-                        style: TextStyle(fontWeight: FontWeight.w800, color: accent)),
-                    const TextSpan(text: ' sur votre carte 🎉'),
-                  ],
-                )),
-                const SizedBox(height: 4),
-                Text('${e.newCount}/${e.total}',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.qSub)),
-              ],
-              const SizedBox(height: 18),
-              SizedBox(width: double.infinity, child: ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2C7BE5), foregroundColor: Colors.white, elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                ),
-                child: const Text('Super !', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              )),
-            ]),
-          ),
-        );
-      },
-    ).then((_) {
+    _stampBadgeTimer?.cancel();
+    setState(() => _stampBadge = e);
+    _stampBadgeTimer = Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
+      setState(() => _stampBadge = null);
       if (e.reward) {
         setState(() => _animatingCardId = e.cardId);
       } else {
-        _refreshAll(); // Cas normal : refresh après fermeture du popup
+        _refreshAll();
       }
     });
+  }
+
+  Widget _buildStampBadge(StampEvent e) {
+    final unit   = e.isPoints ? 'pt' : 'tampon';
+    final accent = e.reward ? const Color(0xFFFBBF24) : const Color(0xFF27AE60);
+    final bg     = e.reward ? const Color(0xFFFFFBEB) : const Color(0xFFF0F9F4);
+    final txt    = e.reward ? const Color(0xFF92400E) : const Color(0xFF065F46);
+    final label  = e.reward
+        ? '🎉 Récompense chez ${e.merchantName}'
+        : '+${e.delta} ${unit}${e.delta > 1 ? "s" : ""} · ${e.merchantName}';
+
+    return Positioned(
+      top: 0, left: 0, right: 0,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: accent.withValues(alpha: 0.45)),
+                boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.18), blurRadius: 14, offset: const Offset(0, 4))],
+              ),
+              child: Row(children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: accent.withValues(alpha: 0.18), shape: BoxShape.circle),
+                  child: Icon(e.reward ? Icons.emoji_events_rounded : Icons.check_rounded, color: accent, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: txt))),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _onRewardAnimationDone() async {
@@ -855,6 +835,7 @@ class _ClientHomeState extends State<ClientHome>
             ),
             _buildBottomNav(),
             if (_notifOpen) _buildNotifOverlay(),
+            if (_stampBadge != null) _buildStampBadge(_stampBadge!),
           ],
         ),
       ),
