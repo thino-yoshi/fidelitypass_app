@@ -27,11 +27,13 @@ class _HistoryTabState extends State<HistoryTab> {
   List<Map<String, dynamic>> _flatItems() {
     final items = <Map<String, dynamic>>[];
     for (final scan in widget.history) {
-      final isReward  = scan['reward_reached'] == true;
-      final type      = isReward ? 'reward' : 'stamp';
-      final name      = scan['merchant']?['business_name'] as String? ?? 'Commerce';
-      final stamps    = scan['stamps_count'] as int? ?? 0;
-      final dt        = DateTime.tryParse(scan['scanned_at'] as String? ?? '')?.toLocal();
+      final isReward   = scan['reward_reached'] == true;
+      final type       = isReward ? 'reward' : 'stamp';
+      final name       = scan['merchant']?['business_name'] as String? ?? 'Commerce';
+      final isPoints   = (scan['merchant']?['program_type'] as String?) == 'points';
+      final stamps     = scan['stamps_count'] as int? ?? 0;
+      final delta      = (scan['delta'] as int?) ?? (isPoints ? stamps : 1);
+      final dt         = DateTime.tryParse(scan['scanned_at'] as String? ?? '')?.toLocal();
       final time      = dt != null
           ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
           : '';
@@ -53,10 +55,12 @@ class _HistoryTabState extends State<HistoryTab> {
         'type':  type,
         'name':  name,
         'time':  time,
-        'info':  isReward ? 'Récompense débloquée' : '$stamps tampons',
-        'color': isReward ? _kGold : _kPrimary,
-        'day':   day,
-        'dt':    dt,
+        'info':     isReward ? 'Récompense débloquée' : (isPoints ? '$stamps pts' : '$stamps tampons'),
+        'isPoints': isPoints,
+        'delta':    delta,
+        'color':    isReward ? _kGold : _kPrimary,
+        'day':      day,
+        'dt':       dt,
       });
     }
     return items;
@@ -165,6 +169,8 @@ class _HistoryTabState extends State<HistoryTab> {
   Widget _historyItem(Map<String, dynamic> item) {
     final color    = item['color'] as Color;
     final isReward = item['type'] == 'reward';
+    final isPoints = item['isPoints'] as bool? ?? false;
+    final delta    = item['delta'] as int? ?? 1;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 7),
@@ -199,7 +205,7 @@ class _HistoryTabState extends State<HistoryTab> {
             borderRadius: BorderRadius.circular(7),
           ),
           child: Text(
-            isReward ? 'Récompense' : '+1 tampon',
+            isReward ? 'Récompense' : (isPoints ? '+$delta pts' : '+1 tampon'),
             style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.w700,
               color: isReward ? const Color(0xFF92400E) : _kPrimary,
