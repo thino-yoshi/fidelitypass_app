@@ -110,25 +110,58 @@ class _StatsScreenState extends State<StatsScreen> {
     return (returning / counts.length * 100).round();
   }
 
-  /// Affluence : nb de scans par heure (0-23) sur les 30 derniers jours.
-  List<int> get _affluence {
-    final h = List.filled(24, 0);
-    for (final s in _histWithin(30)) {
-      final t = DateTime.tryParse(s['scanned_at'] as String? ?? '');
-      if (t != null) h[t.toLocal().hour]++;
-    }
-    return h;
-  }
+  /// Heures creuses : pour chacun des 7 derniers jours, identifie la tranche
+  /// horaire (8h-12h / 12h-16h / 16h-20h) avec le moins de visites.
+  List<Map<String, dynamic>> _creux7Days() {
+    const dayNames   = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const monthNames = ['jan', 'fév', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+    final slots = [
+      {'label': '8h–12h',  'from': 8,  'to': 12},
+      {'label': '12h–16h', 'from': 12, 'to': 16},
+      {'label': '16h–20h', 'from': 16, 'to': 20},
+    ];
 
-  /// Plage d'heures creuses (parmi les heures d'ouverture estimées 8h-22h).
-  String get _creux {
-    final a = _affluence;
-    int lo = 8, best = 1 << 30;
-    for (int hr = 8; hr <= 20; hr++) {
-      final w = a[hr] + a[hr + 1];
-      if (w < best) { best = w; lo = hr; }
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final result = <Map<String, dynamic>>[];
+
+    for (int d = 0; d < 7; d++) {
+      final day = today.subtract(Duration(days: d));
+      final label = d == 0 ? "Aujourd'hui"
+                  : d == 1 ? 'Hier'
+                  : '${dayNames[day.weekday]} ${day.day} ${monthNames[day.month - 1]}';
+
+      // Scans tombant sur ce jour calendaire
+      final dayScans = _history.where((s) {
+        final t = DateTime.tryParse(s['scanned_at'] as String? ?? '')?.toLocal();
+        return t != null && DateTime(t.year, t.month, t.day) == day;
+      }).toList();
+
+      // Comptage par tranche
+      final counts = <String, int>{'8h–12h': 0, '12h–16h': 0, '16h–20h': 0};
+      for (final s in dayScans) {
+        final t = DateTime.tryParse(s['scanned_at'] as String? ?? '')?.toLocal();
+        if (t == null) continue;
+        final h = t.hour;
+        for (final slot in slots) {
+          if (h >= (slot['from'] as int) && h < (slot['to'] as int)) {
+            counts[slot['label'] as String] = (counts[slot['label'] as String] ?? 0) + 1;
+            break;
+          }
+        }
+      }
+
+      // Tranche la plus calme (en cas d'égalité, prend la première)
+      final quietest = counts.entries.reduce((a, b) => a.value <= b.value ? a : b);
+
+      result.add({
+        'dayLabel':  label,
+        'slotLabel': quietest.key,
+        'count':     quietest.value,
+        'total':     dayScans.length,
+      });
     }
-    return '${lo}h–${lo + 2}h';
+    return result;
   }
 
   /// Indice de fidélisation par jour (0-100) = activité normalisée.
@@ -196,7 +229,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       const SizedBox(height: 10),
                       _activityCard(),
                       const SizedBox(height: 10),
-                      _affluenceCard(),
+                      _heuresCreusesCard(),
                       const SizedBox(height: 10),
                       _fidelityCard(),
                       const SizedBox(height: 10),
@@ -325,84 +358,77 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // ── Affluence par heure ─────────────────────────────────────────────────────
-  Widget _affluenceCard() {
-    final aff = _affluence;
-    // tranches d'ouverture 8h → 22h
-    const start = 8, end = 22;
-    final slice = aff.sublist(start, end);
-    final maxV = slice.fold<int>(1, (m, v) => v > m ? v : m);
-    final hasData = slice.any((v) => v > 0);
-    // seuil "creux" = sous 30% du max
-    final lowThresh = maxV * 0.3;
-
+  // ── Heures creuses – liste 7 jours ─────────────────────────────────────────
+  Widget _heuresCreusesCard() {
+    final days = _creux7Days();
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.cBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Affluence par heure', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
+          Text('Heures creuses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(20)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Container(width: 7, height: 7, decoration: BoxDecoration(color: _kGold, borderRadius: BorderRadius.circular(2))),
               const SizedBox(width: 4),
-              const Text('Heures creuses', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF92400E))),
+              const Text('7 derniers jours', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF92400E))),
             ]),
           ),
         ]),
         const SizedBox(height: 4),
-        Text('Nombre de visites par tranche horaire', style: TextStyle(fontSize: 9, color: context.cSub)),
+        Text('Créneau le moins actif chaque jour', style: TextStyle(fontSize: 9, color: context.cSub)),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 80,
-          child: !hasData
-              ? Center(child: Text('Pas encore assez de données', style: TextStyle(fontSize: 11, color: context.cSub)))
-              : Row(crossAxisAlignment: CrossAxisAlignment.end, children: List.generate(slice.length, (i) {
-                  final v = slice[i];
-                  final h = (v / maxV * 64).clamp(2.0, 64.0);
-                  final low = v <= lowThresh;
-                  final hr = start + i;
-                  return Expanded(child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                    child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                      Container(height: h, decoration: BoxDecoration(
-                          color: low ? _kGold : _kPrimary, borderRadius: BorderRadius.circular(2))),
-                      const SizedBox(height: 3),
-                      if (hr % 3 == 2)
-                        Text('${hr}h', style: TextStyle(fontSize: 7, color: context.cSub)),
-                    ]),
-                  ));
-                })),
+        ...days.map(_creuxRow),
+      ]),
+    );
+  }
+
+  Widget _creuxRow(Map<String, dynamic> d) {
+    final count    = d['count'] as int;
+    final total    = d['total'] as int;
+    final isEmpty  = count == 0;
+    final iconColor = isEmpty ? _kGold : _kPrimary;
+    final iconBg    = isEmpty ? const Color(0xFFFFF3CD) : const Color(0xFFE8F1FD);
+    final sub = isEmpty
+        ? '${d['slotLabel']} · aucune visite'
+        : '${d['slotLabel']} · $count visite${count > 1 ? 's' : ''} ($total au total)';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
+      decoration: BoxDecoration(
+        color: context.cBg,
+        border: Border.all(color: context.cBorder),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(children: [
+        Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+          child: Icon(Icons.schedule_rounded, size: 16, color: iconColor),
         ),
-        const SizedBox(height: 10),
-        // Insight creux
-        if (hasData)
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFFFF8EC), borderRadius: BorderRadius.circular(10), border: Border.all(color: _kGold.withValues(alpha: 0.2))),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.info_outline_rounded, color: _kGold, size: 14),
-              const SizedBox(width: 8),
-              Expanded(child: RichText(text: TextSpan(
-                style: const TextStyle(fontSize: 10, color: Color(0xFF7A4A08), height: 1.45),
-                children: [
-                  const TextSpan(text: 'Votre '),
-                  TextSpan(text: 'creux : $_creux', style: const TextStyle(fontWeight: FontWeight.w800)),
-                  const TextSpan(text: '. Une notification ciblée sur ce créneau peut lisser votre activité.'),
-                ],
-              ))),
-            ]),
-          ),
-        const SizedBox(height: 9),
-        SizedBox(width: double.infinity, child: ElevatedButton(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(d['dayLabel'] as String,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.cText)),
+          const SizedBox(height: 2),
+          Text(sub, style: TextStyle(fontSize: 10, color: context.cSub)),
+        ])),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(
               builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
-          style: ElevatedButton.styleFrom(backgroundColor: _kGold, foregroundColor: Colors.white, elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Lancer une offre heure creuse', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-        )),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+            decoration: BoxDecoration(
+              color: context.cBorder,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text('Relancer', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: context.cText)),
+          ),
+        ),
       ]),
     );
   }

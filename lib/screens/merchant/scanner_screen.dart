@@ -126,9 +126,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 36, height: 4, decoration: BoxDecoration(color: context.cBorder, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 18),
-          Container(width: 64, height: 64, decoration: BoxDecoration(color: _kGold.withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: const Center(child: Text('🎁', style: TextStyle(fontSize: 30)))),
-          const SizedBox(height: 14),
           Text('Récompense de $name', style: TextStyle(fontSize: 13, color: context.cSub)),
           const SizedBox(height: 4),
           Text(description, textAlign: TextAlign.center, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: context.cText)),
