@@ -110,8 +110,8 @@ class _StatsScreenState extends State<StatsScreen> {
     return (returning / counts.length * 100).round();
   }
 
-  /// Jour le plus calme sur 7 jours avec détail par tranche horaire.
-  Map<String, dynamic>? _quietestDay() {
+  /// Top 3 créneaux les plus calmes sur les 7 derniers jours (toutes combinaisons jour × tranche).
+  List<Map<String, dynamic>> _top3Creux() {
     const dayNames   = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     const monthNames = ['jan', 'fév', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
     final slotDefs = [
@@ -122,7 +122,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
     final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    Map<String, dynamic>? quietest;
+    final all   = <Map<String, dynamic>>[];
 
     for (int d = 0; d < 7; d++) {
       final day = today.subtract(Duration(days: d));
@@ -135,25 +135,18 @@ class _StatsScreenState extends State<StatsScreen> {
         return t != null && DateTime(t.year, t.month, t.day) == day;
       }).toList();
 
-      final counts = <String, int>{'8h–12h': 0, '12h–16h': 0, '16h–20h': 0};
-      for (final s in dayScans) {
-        final t = DateTime.tryParse(s['scanned_at'] as String? ?? '')?.toLocal();
-        if (t == null) continue;
-        final h = t.hour;
-        for (final slot in slotDefs) {
-          if (h >= (slot['from'] as int) && h < (slot['to'] as int)) {
-            counts[slot['label'] as String] = (counts[slot['label'] as String] ?? 0) + 1;
-            break;
-          }
-        }
-      }
-
-      final total = dayScans.length;
-      if (quietest == null || total < (quietest['total'] as int)) {
-        quietest = {'dayLabel': label, 'total': total, 'slots': counts};
+      for (final slot in slotDefs) {
+        final count = dayScans.where((s) {
+          final t = DateTime.tryParse(s['scanned_at'] as String? ?? '')?.toLocal();
+          if (t == null) return false;
+          return t.hour >= (slot['from'] as int) && t.hour < (slot['to'] as int);
+        }).length;
+        all.add({'dayLabel': label, 'slot': slot['label'], 'count': count});
       }
     }
-    return quietest;
+
+    all.sort((a, b) => (a['count'] as int).compareTo(b['count'] as int));
+    return all.take(3).toList();
   }
 
   /// Indice de fidélisation par jour (0-100) = activité normalisée.
@@ -350,15 +343,10 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // ── Heure creuse – jour le plus calme sur 7 jours ───────────────────────────
+  // ── Heures creuses – top 3 créneaux les plus calmes ─────────────────────────
   Widget _heuresCreusesCard() {
-    final day = _quietestDay();
-    if (day == null) return const SizedBox.shrink();
-
-    final slots     = day['slots'] as Map<String, int>;
-    final total     = day['total'] as int;
-    final dayLabel  = day['dayLabel'] as String;
-    final quietestSlot = slots.entries.reduce((a, b) => a.value <= b.value ? a : b);
+    final top3 = _top3Creux();
+    if (top3.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -366,66 +354,48 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── En-tête ──────────────────────────────────────────────────────────
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Heure creuse', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
+          Text('Heures creuses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(20)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Container(width: 7, height: 7, decoration: BoxDecoration(color: _kGold, borderRadius: BorderRadius.circular(2))),
               const SizedBox(width: 4),
-              const Text('Jour le plus calme', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF92400E))),
+              const Text('7 derniers jours', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF92400E))),
             ]),
           ),
         ]),
         const SizedBox(height: 3),
-        Text('Le jour avec le moins de visites sur les 7 derniers jours', style: TextStyle(fontSize: 9, color: context.cSub)),
-        const SizedBox(height: 14),
-
-        // ── Jour ─────────────────────────────────────────────────────────────
-        Row(children: [
-          Container(
-            width: 38, height: 38,
-            decoration: const BoxDecoration(color: Color(0xFFFFF3CD), shape: BoxShape.circle),
-            child: const Icon(Icons.wb_sunny_rounded, size: 18, color: _kGold),
-          ),
-          const SizedBox(width: 10),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(dayLabel, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.cText)),
-            Text('$total visite${total != 1 ? 's' : ''} au total', style: TextStyle(fontSize: 10, color: context.cSub)),
-          ]),
-        ]),
+        Text('Les 3 créneaux les moins fréquentés', style: TextStyle(fontSize: 9, color: context.cSub)),
         const SizedBox(height: 12),
 
-        // ── Tranches horaires ─────────────────────────────────────────────────
-        ...slots.entries.map((entry) {
-          final isCreux = entry.key == quietestSlot.key;
+        // ── Lignes top 3 ─────────────────────────────────────────────────────
+        ...top3.asMap().entries.map((e) {
+          final rank  = e.key;
+          final item  = e.value;
+          final count = item['count'] as int;
+          final colors = [_kGold, context.cSub, context.cSub];
+          final rankColor = colors[rank];
+
           return Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
             decoration: BoxDecoration(
-              color: isCreux ? const Color(0xFFFFF3CD) : context.cBg,
-              border: Border.all(color: isCreux ? Color(0xFFF59E0B) : context.cBorder),
+              color: rank == 0 ? const Color(0xFFFFF3CD) : context.cBg,
+              border: Border.all(color: rank == 0 ? _kGold : context.cBorder),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(children: [
-              Icon(Icons.schedule_rounded, size: 14, color: isCreux ? _kGold : context.cSub),
-              const SizedBox(width: 8),
-              Expanded(child: Text(entry.key, style: TextStyle(
-                fontSize: 11,
-                fontWeight: isCreux ? FontWeight.w700 : FontWeight.w500,
-                color: isCreux ? const Color(0xFF92400E) : context.cText,
-              ))),
-              Text('${entry.value} visite${entry.value != 1 ? 's' : ''}',
+              Text('${rank + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: rankColor)),
+              const SizedBox(width: 10),
+              Icon(Icons.schedule_rounded, size: 13, color: rank == 0 ? _kGold : context.cSub),
+              const SizedBox(width: 6),
+              Expanded(child: Text('${item['dayLabel']}  ·  ${item['slot']}',
+                style: TextStyle(fontSize: 11, fontWeight: rank == 0 ? FontWeight.w700 : FontWeight.w500,
+                  color: rank == 0 ? const Color(0xFF92400E) : context.cText))),
+              Text('$count visite${count != 1 ? 's' : ''}',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: isCreux ? _kGold : context.cSub)),
-              if (isCreux) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: _kGold, borderRadius: BorderRadius.circular(6)),
-                  child: const Text('Creux', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
-              ],
+                  color: rank == 0 ? _kGold : context.cSub)),
             ]),
           );
         }),
