@@ -35,6 +35,7 @@ class CardsTab extends StatefulWidget {
   final VoidCallback onRefresh;
   final void Function(StampEvent)? onStampEvent;
   final String? cardIdToAnimate;
+  final String? cardIdToSlideIn;
   final VoidCallback? onAnimationDone;
 
   const CardsTab({
@@ -45,6 +46,7 @@ class CardsTab extends StatefulWidget {
     required this.onRefresh,
     this.onStampEvent,
     this.cardIdToAnimate,
+    this.cardIdToSlideIn,
     this.onAnimationDone,
   });
 
@@ -161,6 +163,7 @@ class _CardsTabState extends State<CardsTab> {
             final card  = cards[i];
             final style = _styleFromCard(card, i);
             final isAnimating = card['id'] == widget.cardIdToAnimate;
+            final isSliding   = card['id'] == widget.cardIdToSlideIn;
             final cardWidget = Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
@@ -179,6 +182,12 @@ class _CardsTabState extends State<CardsTab> {
               return _FlyingCard(
                 key: ValueKey('flying_${card['id']}'),
                 onDone: widget.onAnimationDone ?? () {},
+                child: cardWidget,
+              );
+            }
+            if (isSliding) {
+              return _SlideInCard(
+                key: ValueKey('slidein_${card['id']}'),
                 child: cardWidget,
               );
             }
@@ -704,32 +713,36 @@ class LoyaltyCardFace extends StatelessWidget {
     final textColor = style.textColor;
     final accent = style.accentColor ?? const Color(0xFFFF2D78);
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          children: [
-            Positioned.fill(child: style.buildBackground()),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _header(title, textColor),
-                  const SizedBox(height: 8),
-                  if (isPoints) ..._points(textColor, accent, reward) else ..._stamps(textColor, accent, reward),
-                ],
-              ),
-            ),
-          ],
+    return LayoutBuilder(builder: (ctx, constraints) {
+      final fill = constraints.hasBoundedHeight;
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
         ),
-      ),
-    );
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            fit: fill ? StackFit.expand : StackFit.loose,
+            children: [
+              Positioned.fill(child: style.buildBackground()),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
+                child: Column(
+                  mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _header(title, textColor),
+                    const SizedBox(height: 8),
+                    if (isPoints) ..._points(textColor, accent, reward, fill) else ..._stamps(textColor, accent, reward),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   Widget _header(String title, Color textColor) => Row(
@@ -812,7 +825,7 @@ class LoyaltyCardFace extends StatelessWidget {
     ];
   }
 
-  List<Widget> _points(Color textColor, Color accent, String reward) {
+  List<Widget> _points(Color textColor, Color accent, String reward, [bool fill = false]) {
     final required = style.pointsGoal ?? card['merchants']?['points_required'] as int? ?? card['merchants']?['stamps_required'] as int? ?? 100;
     final points = (card['points_count'] as int? ?? 0).clamp(0, required);
     final pct = (points / required).clamp(0.0, 1.0);
@@ -837,7 +850,7 @@ class LoyaltyCardFace extends StatelessWidget {
           ),
         ],
       ),
-      const SizedBox(height: 10),
+      if (fill) const Spacer() else const SizedBox(height: 10),
       lcProgressBar(pct, accent),
       const SizedBox(height: 7),
       // ── Footer : "Encore X pts pour votre Y"  |  "{points} / {goal}"
@@ -1826,5 +1839,38 @@ class _FlyingCardState extends State<_FlyingCard> with SingleTickerProviderState
       position: _slide,
       child: ScaleTransition(scale: _scale, child: widget.child),
     ),
+  );
+}
+
+// ── Animation : nouvelle carte qui entre depuis la gauche (post-récompense) ──
+class _SlideInCard extends StatefulWidget {
+  final Widget child;
+  const _SlideInCard({super.key, required this.child});
+  @override
+  State<_SlideInCard> createState() => _SlideInCardState();
+}
+
+class _SlideInCardState extends State<_SlideInCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<Offset>   _slide;
+  late final Animation<double>   _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl  = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+    _slide = Tween<Offset>(begin: const Offset(-1.2, 0), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _fade  = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.45)));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ctrl.forward());
+  }
+
+  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _fade,
+    child: SlideTransition(position: _slide, child: widget.child),
   );
 }

@@ -237,7 +237,8 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
         ? (merchant['points_required'] as int? ?? 100)
         : (merchant['stamps_required'] as int? ?? 10);
     final card = {
-      'stamps_count': full,                       // toutes les cases pleines
+      'stamps_count': isPoints ? 0    : full,     // tampons pleins
+      'points_count': isPoints ? full : 0,         // points plein si programme points
       'card_design': reward['card_design'],
       'merchants': merchant,
     };

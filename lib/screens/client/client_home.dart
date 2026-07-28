@@ -51,9 +51,12 @@ class _ClientHomeState extends State<ClientHome>
   List<dynamic> _cards = [];
   List<dynamic> _history = [];
   bool _statsLoaded = false;
-  String? _animatingCardId; // carte en cours d'animation "s'envole vers récompenses"
+  String? _animatingCardId;  // carte en cours d'animation "s'envole vers récompenses"
+  String? _slidingInCardId;  // carte qui entre depuis la gauche (juste après l'envol)
+  StampEvent? _lastStampEvent; // dernier événement récompense (pour maj en mémoire)
   StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
   Timer?     _stampBadgeTimer;
+  Timer?     _slideInTimer;
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
@@ -533,6 +536,7 @@ class _ClientHomeState extends State<ClientHome>
     WidgetsBinding.instance.removeObserver(this);
     _notifAnim.dispose();
     _stampBadgeTimer?.cancel();
+    _slideInTimer?.cancel();
     super.dispose();
   }
 
@@ -543,6 +547,15 @@ class _ClientHomeState extends State<ClientHome>
   void _applyCards(List<dynamic> data) {
     int stamps = 0;
     for (final c in data) stamps += c['stamps_count'] as int? ?? 0;
+    // Trier : dernière carte utilisée en tête (last_scan_at desc, jamais scannées en fin)
+    data.sort((a, b) {
+      final aAt = a['last_scan_at'] as String?;
+      final bAt = b['last_scan_at'] as String?;
+      if (aAt == null && bAt == null) return 0;
+      if (aAt == null) return 1;
+      if (bAt == null) return -1;
+      return bAt.compareTo(aAt);
+    });
     AppLogger.client('Cartes → ${data.length} carte(s), $stamps tampon(s) total');
     if (mounted) {
       setState(() {
@@ -613,10 +626,12 @@ class _ClientHomeState extends State<ClientHome>
             card['stamps_count'] = e.newCount;
           }
         }
+        card['last_scan_at'] = DateTime.now().toUtc().toIso8601String();
         _cards[idx] = card;
         if (idx > 0) { final c = _cards.removeAt(idx); _cards.insert(0, c); }
       }
     });
+    if (e.reward) _lastStampEvent = e;
     _showStampPopup(e);
   }
 
@@ -676,11 +691,27 @@ class _ClientHomeState extends State<ClientHome>
 
   Future<void> _onRewardAnimationDone() async {
     if (!mounted) return;
-    // Refresh AVANT de retirer l'anim : la carte réapparaît directement avec
-    // les bonnes valeurs (ex. 90/300 de surplus) sans flash intermédiaire.
-    await _refreshAll();
-    if (!mounted) return;
-    setState(() => _animatingCardId = null);
+    final e      = _lastStampEvent;
+    final cardId = _animatingCardId;
+    // Mise à jour en mémoire immédiate (surplus ex. 90/300) — pas d'attente réseau.
+    setState(() {
+      if (e != null && cardId != null) {
+        final idx = _cards.indexWhere((c) => c['id'] == cardId);
+        if (idx >= 0) {
+          final card = Map<String, dynamic>.from(_cards[idx] as Map);
+          if (e.isPoints) card['points_count'] = e.newCount;
+          else card['stamps_count'] = e.newCount;
+          _cards[idx] = card;
+        }
+      }
+      _animatingCardId = null;
+      _slidingInCardId = cardId; // déclenche le slide-in depuis la gauche
+    });
+    _refreshAll(); // synchro DB en arrière-plan
+    _slideInTimer?.cancel();
+    _slideInTimer = Timer(const Duration(milliseconds: 430), () {
+      if (mounted) setState(() => _slidingInCardId = null);
+    });
   }
 
   void _showChangePassword() {
@@ -1037,7 +1068,7 @@ class _ClientHomeState extends State<ClientHome>
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, onAnimationDone: _onRewardAnimationDone);
+        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone);
       case 1:
         return ScanTab(
           token: widget.token,

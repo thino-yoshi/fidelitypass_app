@@ -16,7 +16,8 @@ const double _kMaxContentWidth = 500;
 class ScannerScreen extends StatefulWidget {
   final String token;
   final Map? merchantInfo;
-  const ScannerScreen({super.key, required this.token, this.merchantInfo});
+  final List<dynamic> initialHistory;
+  const ScannerScreen({super.key, required this.token, this.merchantInfo, this.initialHistory = const []});
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -43,7 +44,12 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     super.initState();
     AppLogger.merchant('ScannerScreen → ouvert, commerce: ${widget.merchantInfo?['business_name'] ?? '?'}');
     _scanLine = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _loadHistory();
+    if (widget.initialHistory.isNotEmpty) {
+      _history = List<dynamic>.from(widget.initialHistory);
+      _loadingHistory = false;
+    } else {
+      _loadHistory();
+    }
   }
 
   @override

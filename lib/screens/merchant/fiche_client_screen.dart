@@ -528,7 +528,10 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
       merchantLogoUrl: widget.merchantInfo['logo_url'] as String?,
       fallbackColor: kPrimary,
     );
-    return LoyaltyCardFace(card: card, style: style, userName: widget.clientName);
+    return SizedBox(
+      height: 220,
+      child: LoyaltyCardFace(card: card, style: style, userName: widget.clientName),
+    );
   }
 
   Widget _noteSection() {

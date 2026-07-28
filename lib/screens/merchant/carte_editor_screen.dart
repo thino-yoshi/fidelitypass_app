@@ -35,7 +35,8 @@ const _kThemes = [
 class CarteEditorScreen extends StatefulWidget {
   final String token;
   final Map merchantInfo;
-  const CarteEditorScreen({super.key, required this.token, required this.merchantInfo});
+  final Map? initialDesign; // card_design (objet interne) déjà chargé
+  const CarteEditorScreen({super.key, required this.token, required this.merchantInfo, this.initialDesign});
 
   @override
   State<CarteEditorScreen> createState() => _CarteEditorScreenState();
@@ -76,6 +77,11 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
   // ── Chargement ─────────────────────────────────────────────────────────────
 
   Future<void> _load() async {
+    if (widget.initialDesign != null) {
+      _applyDesign(widget.initialDesign!);
+      setState(() => _loading = false);
+      return;
+    }
     final r = await ApiService.instance.getMerchantCardDesign();
     if (!mounted) return;
     setState(() => _loading = false);
@@ -89,7 +95,8 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
     final bgType  = (d['bgType']  as String?) ?? 'gradient';
     final colors  = _parseColors(d['bgColors']);
     final accents = _parseColors(d['accentColors']);
-    final angle   = (d['bgGradientAngle'] as num?)?.toDouble() ?? 135.0;
+    final rawAngle = d['bgGradientAngle'];
+    final angle    = (rawAngle is num ? rawAngle.toDouble() : double.tryParse('$rawAngle')) ?? 135.0;
     final txtHex  = d['textColor'] as String?;
     final txt     = txtHex != null ? (_hexColor(txtHex) ?? Colors.white) : Colors.white;
 
@@ -157,17 +164,25 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
     'stampsRequired':    _stampsRequired,
   };
 
-  Map get _previewCard => {
-    'stamps_count': 3,
-    'card_design':  _design,
-    'merchants': {
-      'business_name':      _nameCtrl.text.trim().isEmpty
-          ? (widget.merchantInfo['business_name'] ?? '')
-          : _nameCtrl.text.trim(),
-      'stamps_required':    _stampsRequired,
-      'reward_description': _rewardCtrl.text.trim(),
-    },
-  };
+  bool get _isPoints => (widget.merchantInfo['program_type'] as String?) == 'points';
+
+  Map get _previewCard {
+    final isPoints      = _isPoints;
+    final ptGoal        = (widget.merchantInfo['points_required'] as int?) ?? 1000;
+    return {
+      if (isPoints) 'points_count': 0 else 'stamps_count': 3,
+      'card_design': _design,
+      'merchants': {
+        'business_name':      _nameCtrl.text.trim().isEmpty
+            ? (widget.merchantInfo['business_name'] ?? '')
+            : _nameCtrl.text.trim(),
+        'program_type':       widget.merchantInfo['program_type'] ?? 'stamps',
+        'stamps_required':    widget.merchantInfo['stamps_required'] ?? _stampsRequired,
+        'points_required':    ptGoal,
+        'reward_description': _rewardCtrl.text.trim(),
+      },
+    };
+  }
 
   // ── Sauvegarde ─────────────────────────────────────────────────────────────
 
@@ -266,7 +281,10 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
             blurRadius: 24, offset: const Offset(0, 8)),
         ],
       ),
-      child: LoyaltyCardFace(card: _previewCard, style: style, userName: ''),
+      child: SizedBox(
+        height: 220,
+        child: LoyaltyCardFace(card: _previewCard, style: style, userName: ''),
+      ),
     );
   }
 

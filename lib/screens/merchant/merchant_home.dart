@@ -267,7 +267,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
+        builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}, initialDesign: _cardDesign),
       ),
     );
     if (result != null && mounted) {
@@ -291,7 +291,7 @@ class _MerchantHomeState extends State<MerchantHome> {
 
   void _openScanner() {
     Navigator.push(context, MaterialPageRoute(
-      builder: (_) => ScannerScreen(token: widget.token, merchantInfo: merchantInfo),
+      builder: (_) => ScannerScreen(token: widget.token, merchantInfo: merchantInfo, initialHistory: _scanHistory),
     ));
   }
 
@@ -306,7 +306,7 @@ class _MerchantHomeState extends State<MerchantHome> {
         onLogout: _logout,
         onNavigateToProgram: null,
         onNavigateToNotifs: () => Navigator.push(context, MaterialPageRoute(
-          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo))),
+          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo, initialClients: _recentClients))),
         onNavigateToQR: () => Navigator.push(context, MaterialPageRoute(
           builder: (_) => StaticQRScreen(token: widget.token, businessName: _businessName, accentColor: _kPrimary),
         )),
@@ -319,6 +319,16 @@ class _MerchantHomeState extends State<MerchantHome> {
           if (updated != null && mounted) setState(() => merchantInfo = updated as Map);
         }),
         onNavigateToCarteEditor: _navigateToCarteEditor,
+        onNavigateToStats: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => StatsScreen(
+            token: widget.token,
+            merchantInfo: merchantInfo,
+            initialStats:   stats,
+            initialDaily:   _daily,
+            initialHistory: _scanHistory,
+            initialClients: _recentClients,
+          ),
+        )),
       ),
     );
   }
@@ -466,7 +476,7 @@ class _MerchantHomeState extends State<MerchantHome> {
           initialClients:     _recentClients,
           initialCardDesign:  _cardDesign,
         );
-      case 3: return NotificationsScreen(token: widget.token, merchantInfo: merchantInfo);
+      case 3: return NotificationsScreen(token: widget.token, merchantInfo: merchantInfo, initialClients: _recentClients);
       default: return _buildDashboard();
     }
   }
@@ -763,7 +773,14 @@ class _MerchantHomeState extends State<MerchantHome> {
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText))),
           GestureDetector(
             onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => StatsScreen(token: widget.token, merchantInfo: merchantInfo))),
+              builder: (_) => StatsScreen(
+                token: widget.token,
+                merchantInfo: merchantInfo,
+                initialStats:   stats,
+                initialDaily:   _daily,
+                initialHistory: _scanHistory,
+                initialClients: _recentClients,
+              ))),
             child: const Text('Voir stats →', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _kPrimary)),
           ),
           const SizedBox(width: 8),
@@ -846,10 +863,13 @@ class _MerchantHomeState extends State<MerchantHome> {
       const SizedBox(height: 8),
       GestureDetector(
         onTap: _navigateToCarteEditor,
-        child: LoyaltyCardFace(
-          card: card,
-          style: style,
-          userName: 'Client',  // aperçu — titulaire générique
+        child: SizedBox(
+          height: 220,
+          child: LoyaltyCardFace(
+            card: card,
+            style: style,
+            userName: 'Client',
+          ),
         ),
       ),
       const SizedBox(height: 8),
@@ -930,11 +950,13 @@ class _MerchantProfilSheet extends StatelessWidget {
   final VoidCallback? onNavigateToAbonnement;
   final VoidCallback? onNavigateToInfo;
   final VoidCallback? onNavigateToCarteEditor;
+  final VoidCallback? onNavigateToStats;
 
   const _MerchantProfilSheet({
     required this.token, this.merchantInfo, required this.onLogout,
     this.onNavigateToProgram, this.onNavigateToNotifs, this.onNavigateToQR,
     this.onNavigateToAbonnement, this.onNavigateToInfo, this.onNavigateToCarteEditor,
+    this.onNavigateToStats,
   });
 
   @override
@@ -1002,7 +1024,7 @@ class _MerchantProfilSheet extends StatelessWidget {
               _row(context, kBorder, kText, kSub, Icons.qr_code_2_rounded, _kPrimary.withValues(alpha: 0.12), _kPrimary, 'QR Code boutique', 'Afficher en caisse',
                   () { Navigator.pop(context); onNavigateToQR?.call(); }),
               _row(context, kBorder, kText, kSub, Icons.show_chart_rounded, _kPurple.withValues(alpha: 0.12), _kPurple, 'Statistiques', 'Analyse de l\'activité',
-                  () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => StatsScreen(token: token, merchantInfo: merchantInfo))); }, noBorder: true),
+                  () { Navigator.pop(context); onNavigateToStats?.call(); }, noBorder: true),
             ]),
             const SizedBox(height: 14),
             Text('AIDE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kSub, letterSpacing: 0.7)),

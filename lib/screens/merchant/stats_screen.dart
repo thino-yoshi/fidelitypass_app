@@ -16,7 +16,19 @@ const double _kMaxContentWidth = 500;
 class StatsScreen extends StatefulWidget {
   final String token;
   final Map? merchantInfo;
-  const StatsScreen({super.key, required this.token, this.merchantInfo});
+  final Map? initialStats;
+  final List<dynamic> initialDaily;
+  final List<dynamic> initialHistory;
+  final List<dynamic> initialClients;
+  const StatsScreen({
+    super.key,
+    required this.token,
+    this.merchantInfo,
+    this.initialStats,
+    this.initialDaily    = const [],
+    this.initialHistory  = const [],
+    this.initialClients  = const [],
+  });
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -35,7 +47,15 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialStats != null) {
+      _stats   = widget.initialStats;
+      _daily   = List<dynamic>.from(widget.initialDaily);
+      _history = List<dynamic>.from(widget.initialHistory);
+      _clients = List<dynamic>.from(widget.initialClients);
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {

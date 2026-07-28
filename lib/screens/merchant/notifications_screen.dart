@@ -18,7 +18,8 @@ const double _kMaxContentWidth = 500;
 class NotificationsScreen extends StatefulWidget {
   final String token;
   final Map? merchantInfo;
-  const NotificationsScreen({super.key, required this.token, this.merchantInfo});
+  final List<dynamic> initialClients;
+  const NotificationsScreen({super.key, required this.token, this.merchantInfo, this.initialClients = const []});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -70,10 +71,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _load() async {
     AppLogger.merchant('NotificationsScreen → chargement clients + planifiées...');
-    final c = await ApiService.instance.getMerchantClients(limit: 200);
-    if (mounted && c.isOk) {
-      AppLogger.merchant('NotificationsScreen → ${c.value.length} client(s) chargé(s)');
-      setState(() => _clients = c.value);
+    if (widget.initialClients.isNotEmpty) {
+      setState(() => _clients = List<dynamic>.from(widget.initialClients));
+    } else {
+      final c = await ApiService.instance.getMerchantClients(limit: 200);
+      if (mounted && c.isOk) {
+        AppLogger.merchant('NotificationsScreen → ${c.value.length} client(s) chargé(s)');
+        setState(() => _clients = c.value);
+      }
     }
     await _loadScheduled();
     await _loadHistory();
