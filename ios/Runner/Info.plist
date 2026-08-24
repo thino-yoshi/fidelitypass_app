@@ -68,5 +68,18 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSCameraUsageDescription</key>
+		<string>L'application utilise la caméra pour scanner les QR codes des cartes de fidélité.</string>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.1097051657980-r1dvb20pf3ofh0mee4ngqkqbbst1j806</string>
+				</array>
+			</dict>
+		</array>
 	</dict>
 </plist>
