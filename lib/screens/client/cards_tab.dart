@@ -1465,6 +1465,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
 
   // ── FACE AVANT : carte fidélité (réplique du site) + panneau QR ──────────────
   Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false, bool capture = false]) {
+    final merchantId = widget.card['merchant_id'] as String? ?? '';
     final cardFace = LoyaltyCardFace(
       card: widget.card,
       style: widget.style,
@@ -1502,8 +1503,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                       final origin = box != null
                           ? box.localToGlobal(Offset.zero) & box.size
                           : null;
+                      final url = merchantId.isNotEmpty
+                          ? '\nhttps://qarta.be/join/$merchantId'
+                          : '';
                       Share.share(
-                        "Rejoins le programme de fidélité de $businessName sur l'app Qarta !",
+                        "Rejoins le programme de fidélité de $businessName sur l'app Qarta !$url",
                         subject: 'Carte fidélité $businessName',
                         sharePositionOrigin: origin,
                       );

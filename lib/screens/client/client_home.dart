@@ -100,6 +100,31 @@ class _ClientHomeState extends State<ClientHome>
     _loadProfileImage();
     _loadPhone();
     _loadSessionInfo();
+    _checkPendingJoin();
+  }
+
+  Future<void> _checkPendingJoin() async {
+    final merchantId = pendingJoinMerchantId;
+    if (merchantId == null) return;
+    pendingJoinMerchantId = null;
+    final res = await http.post(
+      Uri.parse('$apiUrl/cards/'),
+      headers: {
+        'Authorization': 'Bearer ${widget.token}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'merchant_id': merchantId}),
+    );
+    if ((res.statusCode == 200 || res.statusCode == 201) && mounted) {
+      await _refreshAll();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Carte ajoutée !'),
+          backgroundColor: Color(0xFF2C7BE5),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
