@@ -8,6 +8,7 @@ import 'dart:ui';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:app_links/app_links.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/widget_service.dart';
@@ -57,6 +58,7 @@ class _ClientHomeState extends State<ClientHome>
   StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
   Timer?     _stampBadgeTimer;
   Timer?     _slideInTimer;
+  StreamSubscription<Uri>? _deepLinkSub;
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
@@ -101,6 +103,46 @@ class _ClientHomeState extends State<ClientHome>
     _loadPhone();
     _loadSessionInfo();
     _checkPendingJoin();
+    _initDeepLinks();
+  }
+
+  void _initDeepLinks() {
+    _deepLinkSub = AppLinks().uriLinkStream.listen((uri) {
+      final segments = uri.pathSegments;
+      if (segments.length >= 2 && segments[0] == 'join') {
+        _joinFromDeepLink(segments[1]);
+      }
+    });
+  }
+
+  Future<void> _joinFromDeepLink(String merchantId) async {
+    AppLogger.client('Deep link reçu → join merchant: $merchantId');
+    final res = await http.post(
+      Uri.parse('$apiUrl/cards/'),
+      headers: {
+        'Authorization': 'Bearer ${widget.token}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'merchant_id': merchantId}),
+    );
+    if (!mounted) return;
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      await _refreshAll();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Carte ajoutée !'),
+          backgroundColor: Color(0xFF2C7BE5),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (res.statusCode == 409) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tu as déjà cette carte !'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _checkPendingJoin() async {
@@ -562,6 +604,7 @@ class _ClientHomeState extends State<ClientHome>
     _notifAnim.dispose();
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
+    _deepLinkSub?.cancel();
     super.dispose();
   }
 

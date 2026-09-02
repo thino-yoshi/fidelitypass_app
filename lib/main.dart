@@ -173,47 +173,16 @@ class _SplashRouterState extends State<SplashRouter> {
 
   Future<void> _initDeepLinks() async {
     final appLinks = AppLinks();
-    // Lien initial (app lancée via deep link)
+    // Lien initial (app ouverte via deep link avant que ClientHome soit monté)
     final initial = await appLinks.getInitialLink();
-    if (initial != null) _handleDeepLink(initial);
-    // Liens entrants pendant que l'app tourne
-    _linkSub = appLinks.uriLinkStream.listen(_handleDeepLink);
+    if (initial != null) _storeDeepLink(initial);
   }
 
-  void _handleDeepLink(Uri uri) {
+  void _storeDeepLink(Uri uri) {
     final segments = uri.pathSegments;
     if (segments.length >= 2 && segments[0] == 'join') {
-      final merchantId = segments[1];
-      AppLogger.nav('Deep link join → merchant: $merchantId');
-      _joinMerchant(merchantId);
-    }
-  }
-
-  Future<void> _joinMerchant(String merchantId) async {
-    final session = await AuthService.getSession();
-    if (session == null || session['user_type'] != 'client') {
-      pendingJoinMerchantId = merchantId;
-      return;
-    }
-    final res = await http.post(
-      Uri.parse('$apiUrl/cards/'),
-      headers: {
-        'Authorization': 'Bearer ${session['token']}',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'merchant_id': merchantId}),
-    );
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      AppLogger.nav('Carte ajoutée via deep link ✓');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Carte ajoutée !'),
-            backgroundColor: Color(0xFF2C7BE5),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      pendingJoinMerchantId = segments[1];
+      AppLogger.nav('Deep link stocké → merchant: ${segments[1]}');
     }
   }
 
