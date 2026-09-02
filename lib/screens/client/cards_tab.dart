@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
@@ -1223,6 +1228,48 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   late AnimationController _confettiCtrl;
   final bool _showConfetti = false;
 
+  // ── Wallet ────────────────────────────────────────────────────────────────
+  final GlobalKey _cardKey = GlobalKey();
+  bool _walletLoading = false;
+
+  Future<void> _addToWallet() async {
+    final cardId = widget.card['id'] as String? ?? '';
+    if (cardId.isEmpty || _walletLoading) return;
+
+    setState(() => _walletLoading = true);
+    try {
+      if (Platform.isAndroid) {
+        final result = await ApiService.instance.getGoogleWalletJwt(cardId);
+        if (!mounted) return;
+        if (result.isErr) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.error ?? 'Erreur Google Wallet')),
+          );
+          return;
+        }
+        final saveUrl = result.value['save_url'] as String;
+        await launchUrl(Uri.parse(saveUrl), mode: LaunchMode.externalApplication);
+
+      } else if (Platform.isIOS) {
+        final result = await ApiService.instance.getAppleWalletUrl(cardId);
+        if (!mounted) return;
+        if (result.isErr) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.error ?? 'Erreur Apple Wallet')),
+          );
+          return;
+        }
+        final passUrl = result.value['url'] as String;
+        // iOS Safari télécharge automatiquement le .pkpass et propose "Ajouter au Wallet"
+        await launchUrl(Uri.parse(passUrl), mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      AppLogger.error('Wallet erreur: $e');
+    } finally {
+      if (mounted) setState(() => _walletLoading = false);
+    }
+  }
+
   // ── Flip 3D ──────────────────────────────────────────────────────────────────
   late AnimationController _flipCtrl;
   late Animation<double> _flipAnim;
@@ -1417,18 +1464,21 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   }
 
   // ── FACE AVANT : carte fidélité (réplique du site) + panneau QR ──────────────
-  Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false]) {
+  Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false, bool capture = false]) {
+    final cardFace = LoyaltyCardFace(
+      card: widget.card,
+      style: widget.style,
+      userName: widget.userName,
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         // 1. Le visuel de carte — identique à la liste / au site (tap → flip infos)
         GestureDetector(
           onTap: _toggleFlip,
-          child: LoyaltyCardFace(
-            card: widget.card,
-            style: widget.style,
-            userName: widget.userName,
-          ),
+          child: capture
+              ? RepaintBoundary(key: _cardKey, child: cardFace)
+              : cardFace,
         ),
         const SizedBox(height: 12),
         // 2. Panneau QR (fond sombre, indépendant de la carte)
@@ -1696,7 +1746,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               ),
               // Corps scrollable
               SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 63),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Column(
                   children: [
                     // ── Carte avec flip 3D ───────────────────────────
@@ -1720,7 +1770,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                                   ..setEntry(3, 2, 0.001)
                                   ..rotateY(angle),
                                 child: showFront
-                                    ? _buildCardFront(color, businessName, stamps, required, reward, full, pct, isPoints)
+                                    ? _buildCardFront(color, businessName, stamps, required, reward, full, pct, isPoints, true)
                                     : Transform(
                                         alignment: Alignment.center,
                                         transform: Matrix4.identity()..rotateY(pi),
@@ -1733,6 +1783,38 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                       ],
                     ),
                   ],
+                ),
+              ),
+              // ── Bouton Ajouter au Wallet ─────────────────────────────────────
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                    20, 0, 20, MediaQuery.of(context).padding.bottom + 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _walletLoading ? null : _addToWallet,
+                    icon: _walletLoading
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.account_balance_wallet_rounded, size: 18),
+                    label: Text(
+                      Platform.isIOS ? 'Ajouter à Apple Wallet' : 'Ajouter à Google Wallet',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Platform.isIOS
+                          ? const Color(0xFF000000)
+                          : const Color(0xFF2C7BE5),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade700,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
                 ),
               ),
             ],

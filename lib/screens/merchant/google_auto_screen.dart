@@ -71,8 +71,7 @@ class _GoogleAutoScreenState extends State<GoogleAutoScreen> {
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10)),
-          child: const Text('G',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF4285F4))),
+          child: Image.asset('assets/images/google_icon.png', width: 20, height: 20),
         ),
         const SizedBox(width: 10),
         const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

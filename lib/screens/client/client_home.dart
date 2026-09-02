@@ -1403,6 +1403,7 @@ class _ClientHomeState extends State<ClientHome>
     final active = _tab == idx;
     return Expanded(
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () { AppLogger.client('Onglet → ${["Cartes","Scan","Historique","Profil"][idx]}'); setState(() => _tab = idx); },
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1426,6 +1427,7 @@ class _ClientHomeState extends State<ClientHome>
     final iconColor = isDark ? const Color(0xFF061324) : const Color(0xFF428CE3);
     return Expanded(
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _tab = 1),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

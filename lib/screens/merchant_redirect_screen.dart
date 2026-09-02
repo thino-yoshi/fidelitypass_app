@@ -91,7 +91,7 @@ class MerchantRedirectScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    final uri = Uri.parse('https://qarta.app');
+                    final uri = Uri.parse('https://qarta.be');
                     if (await canLaunchUrl(uri)) {
                       await launchUrl(uri, mode: LaunchMode.externalApplication);
                     }
@@ -102,7 +102,7 @@ class MerchantRedirectScreen extends StatelessWidget {
                     color: Color(0xFF0D1526),
                   ),
                   label: const Text(
-                    'Aller sur qarta.app',
+                    'Aller sur qarta.be',
                     style: TextStyle(
                       color: Color(0xFF0D1526),
                       fontWeight: FontWeight.w700,

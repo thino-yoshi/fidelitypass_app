@@ -156,6 +156,12 @@ class _SplashRouterState extends State<SplashRouter> {
   void initState() {
     super.initState();
     _preloadFuture = _preload();
+    Future.wait([
+      _preloadFuture,
+      Future.delayed(const Duration(milliseconds: 1800)),
+    ]).then((_) {
+      if (mounted) _onSplashComplete();
+    });
   }
 
   Future<_PreloadedData> _preload() async {
@@ -292,6 +298,6 @@ class _SplashRouterState extends State<SplashRouter> {
 
   @override
   Widget build(BuildContext context) {
-    return SplashScreen(onComplete: _onSplashComplete);
+    return const SplashScreen();
   }
 }

@@ -553,7 +553,7 @@ class _MerchantHomeState extends State<MerchantHome> {
           border: Border.all(color: _kBlueLight.withValues(alpha: 0.2)),
         ),
         child: Row(children: [
-          const Text('G', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF4285F4))),
+          Image.asset('assets/images/google_icon.png', width: 18, height: 18),
           const SizedBox(width: 8),
           const Expanded(child: Text('Demander un avis Google',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white))),
@@ -906,6 +906,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     final active = _tab == idx;
     return Expanded(
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () { AppLogger.merchant('Onglet → $label'); setState(() => _tab = idx); },
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, color: active ? _kPrimary : _kSub, size: 22),
@@ -919,6 +920,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   Widget _navScanFab() {
     return Expanded(
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: _openScanner,
         child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
           Container(

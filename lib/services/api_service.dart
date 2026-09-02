@@ -318,6 +318,22 @@ class ApiService {
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
+  // ── WALLET ─────────────────────────────────────────────────────────────────
+
+  /// JWT Google Wallet pour Android → ouvrir pay.google.com/gp/v/save/{jwt}
+  Future<ApiResult<Map<String, dynamic>>> getGoogleWalletJwt(String cardId) async {
+    final r = await _get('/cards/$cardId/wallet/google');
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
+  /// URL .pkpass temporaire (5 min) pour iOS → ouvrir dans Safari
+  Future<ApiResult<Map<String, dynamic>>> getAppleWalletUrl(String cardId) async {
+    final r = await _get('/cards/$cardId/wallet/apple-url');
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
   // ── Helpers UI ─────────────────────────────────────────────────────────────
 
   /// Affiche un snackbar d'erreur si [result] est en erreur. Retourne isOk.

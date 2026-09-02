@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../utils/logger.dart';
+import '../widgets/hero_background.dart';
 import 'client/client_home.dart';
 import 'merchant/merchant_home.dart';
 import 'merchant_redirect_screen.dart';
@@ -17,10 +18,10 @@ class AuthScreen extends StatefulWidget {
 
 class CardData {
   final String title;
-  final String description;
+  final String imagePath;
   final IconData icon;
   final Color color;
-  CardData({required this.title, required this.description, required this.icon, required this.color});
+  const CardData({required this.title, required this.imagePath, this.icon = Icons.star, this.color = Colors.blue});
 }
 
 class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
@@ -52,9 +53,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   int _resendCooldown = 0;
   Timer? _resendTimer;
 
-  late AnimationController _orbCtrl;
-  late Animation<double> _orbOpacity;
-
   bool _isTablet(BuildContext ctx) => MediaQuery.of(ctx).size.width >= 600;
   double _maxW(BuildContext ctx) => _isTablet(ctx) ? 480.0 : double.infinity;
   double _fs(BuildContext ctx, double phone, {double? tablet}) =>
@@ -63,8 +61,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _orbCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 4000))..repeat(reverse: true);
-    _orbOpacity = Tween(begin: 0.15, end: 0.26).animate(CurvedAnimation(parent: _orbCtrl, curve: Curves.easeInOut));
     _loadSavedCredentials();
   }
 
@@ -144,7 +140,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _resendTimer?.cancel();
-    _orbCtrl.dispose();
     prenomCtrl.dispose(); emailCtrl.dispose(); passCtrl.dispose(); codeCtrl.dispose();
     loginEmailCtrl.dispose(); loginPassCtrl.dispose(); nomCtrl.dispose();
     super.dispose();
@@ -309,16 +304,22 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 320),
-        transitionBuilder: (child, anim) => SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(anim),
-          child: child,
-        ),
-        child: screen == 'landing' ? _buildLanding()
-            : screen == 'login'   ? _buildLogin()
-            : _buildRegister(),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const HeroBackground(),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 320),
+            transitionBuilder: (child, anim) => SlideTransition(
+              position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(anim),
+              child: child,
+            ),
+            child: screen == 'landing' ? _buildLanding()
+                : screen == 'login'   ? _buildLogin()
+                : _buildRegister(),
+          ),
+        ],
       ),
     );
   }
@@ -328,119 +329,71 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   // ═══════════════════════════════════════
   Widget _buildLanding() {
     final tablet = _isTablet(context);
-    final size = MediaQuery.of(context).size;
+    final pad = MediaQuery.of(context).padding;
 
-    return Stack(
+    return SafeArea(
       key: const ValueKey('landing'),
-      children: [
-        ..._corners(),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: tablet ? 60 : 28),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: tablet ? 480.0 : double.infinity),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(height: pad.top + 20),
 
-        // Orb
-        AnimatedBuilder(
-          animation: _orbOpacity,
-          builder: (_, __) => Positioned(
-            top: size.height * 0.3 - 130,
-            left: size.width / 2 - 130,
-            child: Opacity(
-              opacity: _orbOpacity.value,
-              child: Container(
-                width: 260, height: 260,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [Color(0x2E4A9EFF), Colors.transparent],
-                    stops: [0, 0.7],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+                // Logo + nom
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  _logoWidget(),
+                  const SizedBox(width: 10),
+                  Text('QARTA', style: TextStyle(
+                    color: Colors.white,
+                    fontSize: _fs(context, 20, tablet: 26),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                  )),
+                ]),
 
-        // Logo
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 24,
-          left: 0, right: 0,
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _logoWidget(),
-            const SizedBox(width: 8),
-            Text('QARTA', style: TextStyle(
-              color: Colors.white,
-              fontSize: _fs(context, 18, tablet: 22),
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-            )),
-          ]),
-        ),
+                const SizedBox(height: 48),
 
-        // Carousel
-        Positioned(
-          top: MediaQuery.of(context).padding.top + (tablet ? 110 : 90),
-          left: 0, right: 0,
-          height: tablet
-              ? size.height * 0.55
-              : 330,
-          child: tablet
-              ? Column(children: [
-            SizedBox(
-              height: (size.height * 0.55 - 20) / 2,
-              child: const FloatingCards(reverse: false, isTablet: true),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: (size.height * 0.55 - 20) / 2,
-              child: const FloatingCards(reverse: true, isTablet: true),
-            ),
-          ])
-              : const FloatingCards(reverse: false, isTablet: false),
-        ),
-
-        // Bottom
-        Positioned(
-          bottom: 0, left: 0, right: 0,
-          child: Center(
-            child: Container(
-              constraints: BoxConstraints(maxWidth: tablet ? 600.0 : double.infinity),
-              padding: EdgeInsets.only(
-                left: tablet ? 40 : 22,
-                right: tablet ? 40 : 22,
-                bottom: MediaQuery.of(context).padding.bottom + 24,
-                top: 26,
-              ),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xFF0D1526)],
-                  stops: [0, 0.35],
-                ),
-              ),
-              child: Column(children: [
+                // Titre
                 Text('La fidélité,', style: TextStyle(
                   color: Colors.white,
-                  fontSize: _fs(context, 21, tablet: 26),
-                  fontWeight: FontWeight.w700,
+                  fontSize: _fs(context, 28, tablet: 36),
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
                 )),
-                Text('en un scan', style: TextStyle(
+                Text('en un scan.', style: TextStyle(
                   color: Colors.white,
-                  fontSize: _fs(context, 21, tablet: 26),
-                  fontWeight: FontWeight.w700,
+                  fontSize: _fs(context, 28, tablet: 36),
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
                 )),
-                const SizedBox(height: 7),
-                Text('Rejoins des milliers de clients\net commerçants sur Qarta',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.38),
-                      fontSize: _fs(context, 12, tablet: 14),
-                    )),
-                const SizedBox(height: 22),
+                const SizedBox(height: 12),
+                Text(
+                  'Rejoins des milliers de clients\net commerçants sur Qarta',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: _fs(context, 13, tablet: 15),
+                  ),
+                ),
 
-                SizedBox(width: double.infinity,
+                const SizedBox(height: 40),
+
+                // Créer un compte
+                SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () => setState(() { screen = 'register'; regStep = 1; regType = null; error = ''; }),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kBlue, foregroundColor: kDark,
-                      padding: EdgeInsets.symmetric(vertical: tablet ? 18 : 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: EdgeInsets.symmetric(vertical: tablet ? 18 : 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: kDark, width: 2),
+                      ),
                       elevation: 0,
                     ),
                     child: Text('Créer un compte', style: TextStyle(
@@ -449,16 +402,18 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                     )),
                   ),
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: 10),
 
-                SizedBox(width: double.infinity,
+                // Se connecter
+                SizedBox(
+                  width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () => setState(() { screen = 'login'; error = ''; }),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: tablet ? 18 : 14),
+                      padding: EdgeInsets.symmetric(vertical: tablet ? 18 : 15),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+                      side: const BorderSide(color: kDark, width: 2),
                     ),
                     child: Text('Se connecter', style: TextStyle(
                       fontSize: _fs(context, 15, tablet: 17),
@@ -466,43 +421,68 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                     )),
                   ),
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: 16),
 
+                // Divider ou
                 Row(children: [
-                  Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('ou', style: TextStyle(color: Colors.white.withValues(alpha: 0.28), fontSize: 11))),
-                  Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
-                ]),
-                const SizedBox(height: 13),
-
-                SizedBox(width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: googleLoading ? null : _doGoogle,
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.07),
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                    ),
-                    child: googleLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      _googleIcon(),
-                      const SizedBox(width: 9),
-                      Text('Continuer avec Google', style: TextStyle(
-                        fontSize: _fs(context, 13, tablet: 15),
-                        fontWeight: FontWeight.w500,
-                      )),
-                    ]),
+                  Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.12))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('ou', style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11)),
                   ),
-                ),
-              ]),
+                  Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.12))),
+                ]),
+                const SizedBox(height: 16),
+
+                // Google + Apple
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: googleLoading ? null : _doGoogle,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: const BorderSide(color: kDark, width: 2),
+                      ),
+                      child: googleLoading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        _googleIcon(),
+                        const SizedBox(width: 8),
+                        Text('Google', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Apple — Bientôt disponible'), duration: Duration(seconds: 2)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: const BorderSide(color: kDark, width: 2),
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Image.asset('assets/images/apple_icon.png', width: 18, height: 18),
+                        const SizedBox(width: 8),
+                        Text('Apple', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
+                      ]),
+                    ),
+                  ),
+                ]),
+
+                const SizedBox(height: 32),
+              ],
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -518,7 +498,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       builder: (context, setS) => Stack(
         key: const ValueKey('login'),
         children: [
-          ..._corners(),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -535,11 +514,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       // Logo centré
                       Center(
                         child: Column(children: [
-                          Container(
-                            width: 64, height: 64,
-                            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1A2E50)),
-                            child: const Center(child: Text('Q', style: TextStyle(
-                                color: kBlue, fontSize: 32, fontWeight: FontWeight.w700))),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset('assets/images/89.png', width: 64, height: 64, fit: BoxFit.cover),
                           ),
                           const SizedBox(height: 12),
                           Text('Bon retour !', style: TextStyle(
@@ -665,25 +642,47 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       ]),
                       const SizedBox(height: 14),
 
-                      SizedBox(width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: googleLoading ? null : _doGoogle,
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(alpha: 0.07),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: googleLoading ? null : _doGoogle,
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(alpha: 0.07),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                            ),
+                            child: googleLoading
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              _googleIcon(),
+                              const SizedBox(width: 8),
+                              Text('Google', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
+                            ]),
                           ),
-                          child: googleLoading
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            _googleIcon(),
-                            const SizedBox(width: 9),
-                            Text('Continuer avec Google', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
-                          ]),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Apple — Bientôt disponible'), duration: Duration(seconds: 2)),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(alpha: 0.07),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: tablet ? 17 : 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                            ),
+                            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Image.asset('assets/images/apple_icon.png', width: 18, height: 18),
+                              const SizedBox(width: 8),
+                              Text('Apple', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
+                        ),
+                      ]),
                       const SizedBox(height: 16),
 
                       Center(
@@ -750,7 +749,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     return Stack(
       key: const ValueKey('register'),
       children: [
-        ..._corners(),
         SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -1225,11 +1223,15 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             Wrap(spacing: 6, children: tags.map((tag) => Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
-                color: kBlue.withValues(alpha: 0.15),
+                color: selected
+                    ? kDark.withValues(alpha: 0.18)
+                    : kBlue.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(tag, style: const TextStyle(
-                  fontSize: 10, color: kBlue, fontWeight: FontWeight.w500)),
+              child: Text(tag, style: TextStyle(
+                  fontSize: 10,
+                  color: selected ? kDark : kBlue,
+                  fontWeight: FontWeight.w500)),
             )).toList()),
           ],
         ]),
@@ -1303,17 +1305,15 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   Widget _logoWidget() {
     final s = _isTablet(context) ? 36.0 : 28.0;
-    return Container(
-      width: s, height: s,
-      decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1A2E50)),
-      child: Center(child: Text('Q', style: TextStyle(
-          color: kBlue, fontSize: _isTablet(context) ? 20 : 16, fontWeight: FontWeight.w700))),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.asset('assets/images/89.png', width: s, height: s, fit: BoxFit.cover),
     );
   }
 
-  Widget _googleIcon() => SizedBox(
-    width: 16, height: 16,
-    child: CustomPaint(painter: _GoogleSvgPainter()),
+  Widget _googleIcon() => Image.asset(
+    'assets/images/google_icon.png',
+    width: 18, height: 18,
   );
 
   List<Widget> _corners() {
@@ -1428,11 +1428,11 @@ class _FloatingCardsState extends State<FloatingCards> {
     );
 
     cards = [
-      CardData(title: "Offres", description: "Tes promos du moment", icon: Icons.local_offer, color: Colors.blue),
-      CardData(title: "Fidélité", description: "Tes points cumulés", icon: Icons.star, color: Colors.purple),
-      CardData(title: "Récompenses", description: "Ce que tu peux gagner", icon: Icons.card_giftcard, color: Colors.orange),
-      CardData(title: "Cashback", description: "Récupère de l'argent", icon: Icons.savings, color: Colors.teal),
-      CardData(title: "VIP", description: "Accès exclusifs", icon: Icons.star_border, color: Colors.pink),
+      const CardData(title: "Scanne ton QR code",    imagePath: 'assets/images/carousel_scan.png'),
+      const CardData(title: "Accumule des tampons",  imagePath: 'assets/images/carousel_stamp.png'),
+      const CardData(title: "Fidélité récompensée",  imagePath: 'assets/images/carousel_fidelity.png'),
+      const CardData(title: "Gagne des récompenses", imagePath: 'assets/images/carousel_gift.png'),
+      const CardData(title: "Rejoins-nous",  imagePath: 'assets/images/carousel_join.png'),
     ];
 
     _startAutoScroll();
@@ -1476,38 +1476,56 @@ class _FloatingCardsState extends State<FloatingCards> {
 
   Widget _card(CardData card) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = widget.isTablet
-        ? screenWidth * 0.85
-        : screenWidth * 0.82;
+    final cardWidth = widget.isTablet ? screenWidth * 0.85 : screenWidth * 0.82;
     final cardHeight = widget.isTablet ? 350.0 : 200.0;
 
     return Container(
       width: cardWidth,
       height: cardHeight,
-      padding: EdgeInsets.all(widget.isTablet ? 24 : 18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [card.color.withValues(alpha: 0.9), card.color.withValues(alpha: 0.5)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-        ),
         boxShadow: [BoxShadow(
-          color: card.color.withValues(alpha: 0.35),
+          color: Colors.black.withValues(alpha: 0.35),
           blurRadius: 30,
           offset: const Offset(0, 15),
         )],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(card.icon, color: Colors.white, size: widget.isTablet ? 32 : 26),
-        const Spacer(),
-        Text(card.title, style: TextStyle(
-            color: Colors.white, fontWeight: FontWeight.bold,
-            fontSize: widget.isTablet ? 22 : 18)),
-        const SizedBox(height: 6),
-        Text(card.description, style: TextStyle(
-            color: Colors.white70,
-            fontSize: widget.isTablet ? 15 : 13)),
-      ]),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Image plein cadre
+            Image.asset(
+              card.imagePath,
+              fit: BoxFit.cover,
+            ),
+            // Dégradé bas pour le label
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xCC000000), Colors.transparent],
+                  ),
+                ),
+                child: Text(
+                  card.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

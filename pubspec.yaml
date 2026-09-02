@@ -40,6 +40,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+  shaders:
+    - shaders/hero_gradient.frag
 
 flutter_launcher_icons:
   android: true
