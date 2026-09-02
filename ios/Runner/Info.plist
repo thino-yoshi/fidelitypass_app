@@ -70,6 +70,8 @@
 		<false/>
 		<key>NSCameraUsageDescription</key>
 		<string>L'application utilise la caméra pour scanner les QR codes des cartes de fidélité.</string>
+		<key>GIDClientID</key>
+		<string>1097051657980-r1dvb20pf3ofh0mee4ogqkqbbstlj506.apps.googleusercontent.com</string>
 		<key>CFBundleURLTypes</key>
 		<array>
 			<dict>
@@ -77,7 +79,7 @@
 				<string>Editor</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
-					<string>com.googleusercontent.apps.1097051657980-r1dvb20pf3ofh0mee4ngqkqbbst1j806</string>
+					<string>com.googleusercontent.apps.1097051657980-r1dvb20pf3ofh0mee4ogqkqbbstlj506</string>
 				</array>
 			</dict>
 		</array>
