@@ -1496,12 +1496,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               Align(
                 alignment: Alignment.centerRight,
                 child: GestureDetector(
-                  onTap: () async {
-                    await Share.shareWithResult(
+                  onTap: () => Share.share(
                       "Rejoins le programme de fidélité de $businessName sur l'app Qarta !",
-                      subject: 'Carte fidélité $businessName',
-                    );
-                  },
+                      subject: 'Carte fidélité $businessName'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                     decoration: BoxDecoration(
