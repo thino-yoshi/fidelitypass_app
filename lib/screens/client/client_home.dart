@@ -59,6 +59,7 @@ class _ClientHomeState extends State<ClientHome>
   Timer?     _stampBadgeTimer;
   Timer?     _slideInTimer;
   StreamSubscription<Uri>? _deepLinkSub;
+  Uri? _lastHandledDeepLink;
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
@@ -106,12 +107,21 @@ class _ClientHomeState extends State<ClientHome>
     _initDeepLinks();
   }
 
+  String? _merchantIdFromUri(Uri uri) {
+    // qarta://join/{id}  → host='join', pathSegments=['id']
+    if (uri.scheme == 'qarta' && uri.host == 'join' && uri.pathSegments.isNotEmpty) {
+      return uri.pathSegments.first;
+    }
+    // https://qarta.be/join/{id}  → pathSegments=['join','id']
+    final s = uri.pathSegments;
+    if (s.length >= 2 && s[0] == 'join') return s[1];
+    return null;
+  }
+
   void _initDeepLinks() {
     _deepLinkSub = AppLinks().uriLinkStream.listen((uri) {
-      final segments = uri.pathSegments;
-      if (segments.length >= 2 && segments[0] == 'join') {
-        _joinFromDeepLink(segments[1]);
-      }
+      final id = _merchantIdFromUri(uri);
+      if (id != null) _joinFromDeepLink(id);
     });
   }
 
@@ -173,6 +183,7 @@ class _ClientHomeState extends State<ClientHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
+      _checkLatestDeepLink();
       final now = DateTime.now();
       final stale = _lastCardsRefresh == null ||
           now.difference(_lastCardsRefresh!).inMinutes >= 5;
@@ -181,6 +192,14 @@ class _ClientHomeState extends State<ClientHome>
         _refreshAll();
       }
     }
+  }
+
+  Future<void> _checkLatestDeepLink() async {
+    final uri = await AppLinks().getLatestLink();
+    if (uri == null || uri == _lastHandledDeepLink) return;
+    _lastHandledDeepLink = uri;
+    final id = _merchantIdFromUri(uri);
+    if (id != null) _joinFromDeepLink(id);
   }
 
   Future<void> _loadProfileImage() async {

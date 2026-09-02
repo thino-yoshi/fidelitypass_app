@@ -179,10 +179,16 @@ class _SplashRouterState extends State<SplashRouter> {
   }
 
   void _storeDeepLink(Uri uri) {
-    final segments = uri.pathSegments;
-    if (segments.length >= 2 && segments[0] == 'join') {
-      pendingJoinMerchantId = segments[1];
-      AppLogger.nav('Deep link stocké → merchant: ${segments[1]}');
+    String? merchantId;
+    if (uri.scheme == 'qarta' && uri.host == 'join' && uri.pathSegments.isNotEmpty) {
+      merchantId = uri.pathSegments.first;
+    } else {
+      final s = uri.pathSegments;
+      if (s.length >= 2 && s[0] == 'join') merchantId = s[1];
+    }
+    if (merchantId != null) {
+      pendingJoinMerchantId = merchantId;
+      AppLogger.nav('Deep link stocké → merchant: $merchantId');
     }
   }
 
