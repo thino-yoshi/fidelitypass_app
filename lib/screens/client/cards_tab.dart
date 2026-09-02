@@ -1495,21 +1495,31 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               // Bouton partager
               Align(
                 alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: () => Share.share(
-                      "Rejoins le programme de fidélité de $businessName sur l'app Qarta !",
-                      subject: 'Carte fidélité $businessName'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.15))),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.share_rounded, color: Colors.white, size: 12),
-                      SizedBox(width: 5),
-                      Text('Partager', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ]),
+                child: Builder(
+                  builder: (ctx) => GestureDetector(
+                    onTap: () {
+                      final box = ctx.findRenderObject() as RenderBox?;
+                      final origin = box != null
+                          ? box.localToGlobal(Offset.zero) & box.size
+                          : null;
+                      Share.share(
+                        "Rejoins le programme de fidélité de $businessName sur l'app Qarta !",
+                        subject: 'Carte fidélité $businessName',
+                        sharePositionOrigin: origin,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15))),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.share_rounded, color: Colors.white, size: 12),
+                        SizedBox(width: 5),
+                        Text('Partager', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
                   ),
                 ),
               ),
