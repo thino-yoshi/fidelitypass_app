@@ -19,6 +19,8 @@ import 'cards_tab.dart';
 import 'history_tab.dart';
 import 'rewards_wallet_screen.dart';
 import 'manage_cards_screen.dart';
+import 'notifications_sheet.dart';
+import 'help_sheet.dart';
 import 'scan_tab.dart';
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
@@ -1302,11 +1304,30 @@ class _ClientHomeState extends State<ClientHome>
           _profSec([
             _profRowDarkMode(),
             _profRow(
+              iconBg: const Color(0xFFE8F1FD),
+              icon: Icons.notifications_outlined,
+              iconColor: const Color(0xFF2C7BE5),
+              label: 'Notifications',
+              sub: 'Push, offres, visites',
+              onTap: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const NotificationsSheet(),
+              ),
+            ),
+            _profRow(
               iconBg: const Color(0xFFF4F2EE),
               icon: Icons.help_outline_rounded,
               iconColor: const Color(0xFF888888),
-              label: 'Aide & Support',
+              label: 'Aide et Support',
               sub: 'FAQ, nous contacter',
+              onTap: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const HelpSheet(),
+              ),
             ),
           ]),
           const SizedBox(height: 14),
