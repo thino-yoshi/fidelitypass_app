@@ -18,6 +18,7 @@ import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'screens/splash_screen.dart';
 import 'utils/logger.dart';
+import 'utils/platform_route.dart';
 
 /// Merchant ID en attente (deep link reçu avant que l'utilisateur soit connecté)
 String? pendingJoinMerchantId;
@@ -301,13 +302,13 @@ class _SplashRouterState extends State<SplashRouter> {
     if (session == null) {
       AppLogger.nav('Aucune session → AuthScreen');
       Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+          context, platformRoute(builder: (_) => const AuthScreen()));
       return;
     }
 
     if (session['user_type'] == 'merchant') {
       AppLogger.nav('Redirection → MerchantHome (${session['name']})');
-      Navigator.pushReplacement(context, MaterialPageRoute(
+      Navigator.pushReplacement(context, platformRoute(
           builder: (_) => MerchantHome(
                 token:               session['token']!,
                 merchantName:        session['name']!,
@@ -320,7 +321,7 @@ class _SplashRouterState extends State<SplashRouter> {
               )));
     } else {
       AppLogger.nav('Redirection → ClientHome (${session['name']})');
-      Navigator.pushReplacement(context, MaterialPageRoute(
+      Navigator.pushReplacement(context, platformRoute(
           builder: (_) => ClientHome(
                 token: session['token']!,
                 userName: session['name']!,

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -24,6 +25,7 @@ import 'help_sheet.dart';
 import 'scan_tab.dart';
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
+import '../../utils/platform_route.dart';
 
 class ClientHome extends StatefulWidget {
   final String token;
@@ -811,7 +813,7 @@ class _ClientHomeState extends State<ClientHome>
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
+        builder: (ctx, setDialogState) => AlertDialog.adaptive(
           title: const Text('Changer le mot de passe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -856,7 +858,7 @@ class _ClientHomeState extends State<ClientHome>
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
+        builder: (ctx, setDialogState) => AlertDialog.adaptive(
           title: const Text('Supprimer mon compte', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE24B4A))),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -900,7 +902,7 @@ class _ClientHomeState extends State<ClientHome>
     await AuthService.logout();
     if (!mounted) return;
     AppLogger.nav('Logout → retour AuthScreen');
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+    Navigator.pushReplacement(context, platformRoute(builder: (_) => const AuthScreen()));
   }
 
   void _openNotifs() {
@@ -1119,7 +1121,7 @@ class _ClientHomeState extends State<ClientHome>
                       Expanded(child: GestureDetector(
                         onTap: () async {
                           setState(() => _rewardPillActive = true);
-                          await Navigator.push(context, MaterialPageRoute(
+                          await Navigator.push(context, platformRoute(
                             builder: (_) => RewardsWalletScreen(
                               token: widget.token,
                               userName: widget.userName,
@@ -1288,7 +1290,7 @@ class _ClientHomeState extends State<ClientHome>
               sub: 'Gérer et supprimer',
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
+                platformRoute(
                   builder: (_) => ManageCardsScreen(
                     token: widget.token,
                     userName: widget.userName,
@@ -1453,14 +1455,14 @@ class _ClientHomeState extends State<ClientHome>
                 ],
               ),
             ),
-            Switch(
+            Switch.adaptive(
               value: mode == ThemeMode.dark,
               onChanged: (val) async {
                 themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
                 final p = await SharedPreferences.getInstance();
                 await p.setBool('dark_mode', val);
               },
-              activeThumbColor: const Color(0xFF2C7BE5),
+              activeColor: const Color(0xFF2C7BE5),
             ),
           ],
         ),

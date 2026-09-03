@@ -183,7 +183,7 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
               ],
             ),
           ),
-          Switch(
+          Switch.adaptive(
             value: value,
             onChanged: onChanged,
             activeColor: const Color(0xFF2C7BE5),
