@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/auth_service.dart';
 
 class NotificationsSheet extends StatefulWidget {
   const NotificationsSheet({super.key});
@@ -29,10 +30,21 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
   }
 
   Future<void> _save() async {
+    // 1. Sauvegarde locale
     final p = await SharedPreferences.getInstance();
     await p.setBool('notif_push',    _push);
     await p.setBool('notif_offres',  _offres);
     await p.setBool('notif_visites', _visites);
+
+    // 2. Sync via API (contourne les RLS Supabase côté client)
+    try {
+      await AuthService.authPut('/notifications/preferences', '', {
+        'notif_push':    _push,
+        'notif_offres':  _offres,
+        'notif_visites': _visites,
+      });
+    } catch (_) {}
+
     if (!mounted) return;
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
