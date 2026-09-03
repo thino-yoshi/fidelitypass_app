@@ -52,7 +52,7 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
         color: isDark ? const Color(0xFF0F1E35) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 32 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
