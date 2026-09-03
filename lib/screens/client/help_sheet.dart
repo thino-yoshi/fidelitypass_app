@@ -30,16 +30,20 @@ class HelpSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F1E35) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F1E35) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
           Center(
             child: Container(
               width: 36, height: 4,
@@ -128,10 +132,12 @@ class HelpSheet extends StatelessWidget {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF2C7BE5))),
           ),
         ],
+        ),
       ),
     );
   }
 }
+
 
 class _FaqTile extends StatefulWidget {
   final String q;
