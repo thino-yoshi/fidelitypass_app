@@ -114,8 +114,16 @@ class _HistoryTabState extends State<HistoryTab> {
           if (filteredItems.isEmpty) ...[
             const SizedBox(height: 60),
             Center(child: Column(children: [
-              const Text('🕐', style: TextStyle(fontSize: 44)),
-              const SizedBox(height: 12),
+              Container(
+                width: 72, height: 72,
+                decoration: BoxDecoration(
+                  color: context.cSurface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: context.cBorder),
+                ),
+                child: Icon(Icons.history_rounded, size: 34, color: context.cSub),
+              ),
+              const SizedBox(height: 16),
               Text('Aucune activité', style: TextStyle(
                 color: _kText, fontSize: 15, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),

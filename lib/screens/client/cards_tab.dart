@@ -60,6 +60,8 @@ class CardsTab extends StatefulWidget {
 }
 
 class _CardsTabState extends State<CardsTab> {
+  String _search = '';
+
   // Palette de secours si le commerçant n'a pas de design personnalisé
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
@@ -129,9 +131,16 @@ class _CardsTabState extends State<CardsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final cards = widget.cards;
+    final cards = _search.isEmpty
+        ? widget.cards
+        : widget.cards.where((c) {
+            final q        = _search.toLowerCase();
+            final name     = (c['merchants']?['business_name'] as String? ?? '').toLowerCase();
+            final cardName = ((c['card_design'] as Map?)?['cardName'] as String? ?? '').toLowerCase();
+            return name.contains(q) || cardName.contains(q);
+          }).toList();
 
-    if (cards.isEmpty) {
+    if (widget.cards.isEmpty) {
       return RefreshIndicator(
         onRefresh: () async => widget.onRefresh(),
         color: const Color(0xFF2C7BE5),
@@ -142,7 +151,15 @@ class _CardsTabState extends State<CardsTab> {
             Center(
               child: Column(
                 children: [
-                  const Text('💳', style: TextStyle(fontSize: 48)),
+                  Container(
+                    width: 72, height: 72,
+                    decoration: BoxDecoration(
+                      color: context.qSurface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: context.qBorder),
+                    ),
+                    child: Icon(Icons.credit_card_off_outlined, size: 34, color: context.qSub),
+                  ),
                   const SizedBox(height: 16),
                   Text("Tu n'as pas encore de carte.", style: TextStyle(color: Colors.grey[500], fontSize: 15)),
                   const SizedBox(height: 4),
@@ -161,7 +178,37 @@ class _CardsTabState extends State<CardsTab> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
         children: [
-          _SectionHeader(title: 'Tes cartes', action: 'Voir tout', onAction: () {}),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10, top: 4),
+            child: Row(
+              children: [
+                Text('Tes cartes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.qText)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: context.qSurface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.qBorder),
+                    ),
+                    child: TextField(
+                      onChanged: (v) => setState(() => _search = v),
+                      style: TextStyle(fontSize: 12, color: context.qText),
+                      decoration: InputDecoration(
+                        hintText: 'Rechercher un commerce…',
+                        hintStyle: TextStyle(fontSize: 12, color: context.qSub),
+                        prefixIcon: Icon(Icons.search_rounded, size: 16, color: context.qSub),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           // Liste des cartes
           ...List.generate(cards.length, (i) {

@@ -51,7 +51,7 @@ class _ClientHomeState extends State<ClientHome>
   int _totalStamps = 0;
   int _rewardCount = 0;
   List<dynamic> _rewards = [];
-  int _notifCount = 3;
+  int _notifCount = 0;
   bool _rewardPillActive = false; // true pendant l'ouverture de la modal récompenses
   List<dynamic> _cards = [];
   List<dynamic> _history = [];
@@ -916,14 +916,14 @@ class _ClientHomeState extends State<ClientHome>
     });
   }
 
-  void _markAllRead() {
+  Future<void> _markAllRead() async {
     setState(() {
       for (var n in _notifs) {
         n['read'] = true;
       }
       _notifCount = 0;
     });
-    http.put(
+    await http.put(
       Uri.parse('$apiUrl/notifications/client/read-all'),
       headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
     );

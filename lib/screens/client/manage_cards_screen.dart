@@ -59,8 +59,10 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
     var list = _search.isEmpty
         ? List<dynamic>.from(_cards)
         : _cards.where((c) {
-            final name = ((c['merchants']?['business_name'] ?? '') as String).toLowerCase();
-            return name.contains(_search.toLowerCase());
+            final q        = _search.toLowerCase();
+            final name     = ((c['merchants']?['business_name'] ?? '') as String).toLowerCase();
+            final cardName = ((c['card_design'] as Map?)?['cardName'] as String? ?? '').toLowerCase();
+            return name.contains(q) || cardName.contains(q);
           }).toList();
     switch (_sort) {
       case _SortMode.recent:
