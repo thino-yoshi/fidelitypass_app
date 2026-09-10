@@ -110,7 +110,15 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
 
   Widget _empty() {
     return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Text('🎁', style: TextStyle(fontSize: 52)),
+      Container(
+        width: 72, height: 72,
+        decoration: BoxDecoration(
+          color: context.cSurface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: context.cBorder),
+        ),
+        child: Icon(Icons.card_giftcard_rounded, size: 34, color: context.cSub),
+      ),
       const SizedBox(height: 14),
       Text('Aucune récompense pour l\'instant', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.cText)),
       const SizedBox(height: 6),
