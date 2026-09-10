@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
 import '../../config/app_colors.dart';
 import '../../services/auth_service.dart';
+import '../../utils/platform_route.dart';
 import 'cards_tab.dart' show CardStyle, LoyaltyCardFace;
 
 enum _SortMode { recent, oldest, mostStamps, leastStamps }
@@ -99,6 +101,74 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         }
       });
 
+  Widget _rewardsWarning(int lostRewards) => Container(
+    margin: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFEF3C7),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFFCD34D)),
+    ),
+    child: Row(children: [
+      const Icon(Icons.warning_amber_rounded, color: Color(0xFF92400E), size: 16),
+      const SizedBox(width: 8),
+      Expanded(child: Text(
+        '$lostRewards récompense${lostRewards > 1 ? 's' : ''} '
+        '${lostRewards > 1 ? 'seront perdues' : 'sera perdue'} définitivement.',
+        style: const TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.w600, height: 1.4),
+      )),
+    ]),
+  );
+
+  Widget _buildDeleteDialog({
+    required BuildContext ctx,
+    required int n,
+    required int lostRewards,
+    required int countdown,
+    required VoidCallback onCancel,
+    required VoidCallback? onConfirm,
+  }) {
+    final title = 'Supprimer $n carte${n > 1 ? 's' : ''} ?';
+    const body = 'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.';
+    final confirmLabel = countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer';
+
+    if (Platform.isIOS) {
+      return CupertinoAlertDialog(
+        title: Text(title),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 4),
+          const Text(body),
+          if (lostRewards > 0) _rewardsWarning(lostRewards),
+        ]),
+        actions: [
+          CupertinoDialogAction(onPressed: onCancel, child: const Text('Annuler')),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: onConfirm,
+            child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      );
+    }
+    return AlertDialog(
+      backgroundColor: context.qSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(title, style: TextStyle(color: context.qText, fontWeight: FontWeight.w800, fontSize: 17)),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(body, style: TextStyle(color: context.qSub, fontSize: 13, height: 1.55)),
+        if (lostRewards > 0) _rewardsWarning(lostRewards),
+      ]),
+      actions: [
+        CupertinoDialogAction(onPressed: onCancel, child: Text('Annuler', style: TextStyle(color: context.qSub))),
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          onPressed: onConfirm,
+          child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      ],
+    );
+  }
+
   Future<void> _deleteSelected() async {
     final n = _selected.length;
 
@@ -111,7 +181,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         .where((r) => selectedMerchantIds.contains(r['merchant_id'] as String?))
         .length;
 
-    final confirm = await showDialog<bool>(
+    final confirm = await (Platform.isIOS ? showCupertinoDialog<bool> : showDialog<bool>)(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -126,67 +196,13 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
             });
             return PopScope(
               onPopInvokedWithResult: (_, __) => t?.cancel(),
-              child: AlertDialog.adaptive(
-                backgroundColor: context.qSurface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                title: Text(
-                  'Supprimer $n carte${n > 1 ? 's' : ''} ?',
-                  style: TextStyle(color: context.qText, fontWeight: FontWeight.w800, fontSize: 17),
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.',
-                      style: TextStyle(color: context.qSub, fontSize: 13, height: 1.55),
-                    ),
-                    if (lostRewards > 0) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFFCD34D)),
-                        ),
-                        child: Row(children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: Color(0xFF92400E), size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '$lostRewards récompense${lostRewards > 1 ? 's' : ''} '
-                              '${lostRewards > 1 ? 'seront perdues' : 'sera perdue'} définitivement.',
-                              style: const TextStyle(
-                                color: Color(0xFF92400E),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ]),
-                      ),
-                    ],
-                  ],
-                ),
-                actions: [
-                  CupertinoDialogAction(
-                    onPressed: () { t?.cancel(); Navigator.pop(ctx, false); },
-                    child: const Text('Annuler'),
-                  ),
-                  CupertinoDialogAction(
-                    isDestructiveAction: true,
-                    onPressed: countdown == 0
-                        ? () { t?.cancel(); Navigator.pop(ctx, true); }
-                        : null,
-                    child: Text(
-                      countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+              child: _buildDeleteDialog(
+                ctx: ctx,
+                n: n,
+                lostRewards: lostRewards,
+                countdown: countdown,
+                onCancel: () { t?.cancel(); Navigator.pop(ctx, false); },
+                onConfirm: countdown == 0 ? () { t?.cancel(); Navigator.pop(ctx, true); } : null,
               ),
             );
           },
