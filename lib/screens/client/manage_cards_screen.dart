@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
@@ -171,24 +172,15 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
                   ],
                 ),
                 actions: [
-                  TextButton(
+                  CupertinoDialogAction(
                     onPressed: () { t?.cancel(); Navigator.pop(ctx, false); },
-                    child: Text('Annuler',
-                        style: TextStyle(color: context.qSub, fontWeight: FontWeight.w600)),
+                    child: const Text('Annuler'),
                   ),
-                  ElevatedButton(
+                  CupertinoDialogAction(
+                    isDestructiveAction: true,
                     onPressed: countdown == 0
                         ? () { t?.cancel(); Navigator.pop(ctx, true); }
                         : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53E3E),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFFE53E3E).withValues(alpha: 0.45),
-                      disabledForegroundColor: Colors.white70,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    ),
                     child: Text(
                       countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer',
                       style: const TextStyle(fontWeight: FontWeight.w700),
