@@ -35,7 +35,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _filter = 'tout'; // 'tout' | 'tampons' | 'recompenses' | 'nouveaux'
   Set<String> _newScanIds = {}; // ids des scans = 1ʳᵉ apparition d'un client (≈ nouveau)
 
-  int get _required => widget.merchantInfo?['stamps_required'] as int? ?? 10;
+  int get _required  => widget.merchantInfo?['stamps_required'] as int? ?? 10;
+  bool get _isPoints => (widget.merchantInfo?['program_type'] as String?) == 'points';
 
   @override
   void initState() {
@@ -146,7 +147,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
         child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
           pill('tout', 'Tout'),
-          pill('tampons', 'Tampons'),
+          pill('tampons', _isPoints ? 'Points' : 'Tampons'),
           pill('recompenses', 'Récompenses'),
           pill('nouveaux', 'Nouveaux'),
         ])),

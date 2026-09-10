@@ -448,7 +448,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 Row(children: [
                   Expanded(child: GestureDetector(
                     onTap: () => setState(() => _selectedMode = 'stamp'),
-                    child: Center(child: Text('Tampons',
+                    child: Center(child: Text(_isPoints ? 'Points' : 'Tampons',
                         style: TextStyle(color: Colors.white.withValues(alpha: _selectedMode == 'stamp' ? 1.0 : 0.5), fontSize: 13, fontWeight: FontWeight.w700))),
                   )),
                   Expanded(child: GestureDetector(
