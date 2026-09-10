@@ -810,8 +810,9 @@ class _ClientHomeState extends State<ClientHome>
     final newCtrl = TextEditingController();
     bool loading = false;
     const blue = Color(0xFF2C7BE5);
-    showPlatformDialog(
+    (Platform.isIOS ? showCupertinoDialog<void> : showDialog<void>)(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final actions = [
@@ -863,8 +864,9 @@ class _ClientHomeState extends State<ClientHome>
   void _showDeleteAccount() {
     final passCtrl = TextEditingController();
     bool loading = false;
-    showPlatformDialog(
+    (Platform.isIOS ? showCupertinoDialog<void> : showDialog<void>)(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final actions = [
