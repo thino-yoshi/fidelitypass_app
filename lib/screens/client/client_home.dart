@@ -1295,6 +1295,7 @@ class _ClientHomeState extends State<ClientHome>
                     token: widget.token,
                     userName: widget.userName,
                     cards: _cards,
+                    rewards: _rewards,
                     onRefresh: _refreshAll,
                   ),
                 ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../config/api.dart';
@@ -11,6 +12,7 @@ class ManageCardsScreen extends StatefulWidget {
   final String token;
   final String userName;
   final List<dynamic> cards;
+  final List<dynamic> rewards;
   final VoidCallback onRefresh;
 
   const ManageCardsScreen({
@@ -18,6 +20,7 @@ class ManageCardsScreen extends StatefulWidget {
     required this.token,
     required this.userName,
     required this.cards,
+    this.rewards = const [],
     required this.onRefresh,
   });
 
@@ -97,38 +100,106 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
 
   Future<void> _deleteSelected() async {
     final n = _selected.length;
+
+    // Compter les récompenses perdues pour les marchands sélectionnés
+    final selectedMerchantIds = _cards
+        .where((c) => _selected.contains(c['id'] as String?))
+        .map((c) => c['merchant_id'] as String?)
+        .toSet();
+    final lostRewards = widget.rewards
+        .where((r) => selectedMerchantIds.contains(r['merchant_id'] as String?))
+        .length;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.qSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Supprimer $n carte${n > 1 ? 's' : ''} ?',
-          style: TextStyle(color: context.qText, fontWeight: FontWeight.w800, fontSize: 17),
-        ),
-        content: Text(
-          'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.',
-          style: TextStyle(color: context.qSub, fontSize: 13, height: 1.55),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Annuler',
-                style: TextStyle(color: context.qSub, fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE53E3E),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            ),
-            child: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (ctx) {
+        int countdown = 5;
+        Timer? t;
+        return StatefulBuilder(
+          builder: (ctx, setSt) {
+            t ??= Timer.periodic(const Duration(seconds: 1), (_) {
+              if (!ctx.mounted) { t?.cancel(); return; }
+              if (countdown > 0) setSt(() => countdown--);
+              else t?.cancel();
+            });
+            return PopScope(
+              onPopInvokedWithResult: (_, __) => t?.cancel(),
+              child: AlertDialog(
+                backgroundColor: context.qSurface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: Text(
+                  'Supprimer $n carte${n > 1 ? 's' : ''} ?',
+                  style: TextStyle(color: context.qText, fontWeight: FontWeight.w800, fontSize: 17),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.',
+                      style: TextStyle(color: context.qSub, fontSize: 13, height: 1.55),
+                    ),
+                    if (lostRewards > 0) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFCD34D)),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              color: Color(0xFF92400E), size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$lostRewards récompense${lostRewards > 1 ? 's' : ''} '
+                              '${lostRewards > 1 ? 'seront perdues' : 'sera perdue'} définitivement.',
+                              style: const TextStyle(
+                                color: Color(0xFF92400E),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () { t?.cancel(); Navigator.pop(ctx, false); },
+                    child: Text('Annuler',
+                        style: TextStyle(color: context.qSub, fontWeight: FontWeight.w600)),
+                  ),
+                  ElevatedButton(
+                    onPressed: countdown == 0
+                        ? () { t?.cancel(); Navigator.pop(ctx, true); }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53E3E),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFE53E3E).withValues(alpha: 0.45),
+                      disabledForegroundColor: Colors.white70,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    ),
+                    child: Text(
+                      countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
     if (confirm != true) return;
 
