@@ -328,11 +328,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           border: Border.all(color: sel ? _kPrimary : context.cBorder, width: sel ? 1.5 : 1),
         ),
         child: Stack(children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Text(t.title, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
-            const SizedBox(height: 1),
-            Text(t.desc, textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: context.cSub)),
-          ]),
+          SizedBox(
+            width: double.infinity,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Text(t.title, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
+              const SizedBox(height: 1),
+              Text(t.desc, textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: context.cSub)),
+            ]),
+          ),
           if (sel) const Positioned(right: 0, top: 0, bottom: 0,
             child: Align(alignment: Alignment.center, child: Icon(Icons.check_circle_rounded, color: _kPrimary, size: 18))),
         ]),
