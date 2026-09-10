@@ -810,20 +810,11 @@ class _ClientHomeState extends State<ClientHome>
     final newCtrl = TextEditingController();
     bool loading = false;
     const blue = Color(0xFF2C7BE5);
-    showDialog(
+    showPlatformDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog.adaptive(
-          title: const Text('Changer le mot de passe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: currentCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe actuel')),
-              const SizedBox(height: 12),
-              TextField(controller: newCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe')),
-            ],
-          ),
-          actions: [
+        builder: (ctx, setDialogState) {
+          final actions = [
             CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
             CupertinoDialogAction(
               isDefaultAction: true,
@@ -846,8 +837,25 @@ class _ClientHomeState extends State<ClientHome>
               },
               child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Confirmer'),
             ),
-          ],
-        ),
+          ];
+          final content = Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: currentCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe actuel')),
+            const SizedBox(height: 12),
+            TextField(controller: newCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe')),
+          ]);
+          if (Platform.isIOS) {
+            return CupertinoAlertDialog(
+              title: const Text('Changer le mot de passe'),
+              content: content,
+              actions: actions,
+            );
+          }
+          return AlertDialog(
+            title: const Text('Changer le mot de passe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            content: content,
+            actions: actions,
+          );
+        },
       ),
     );
   }
@@ -855,20 +863,11 @@ class _ClientHomeState extends State<ClientHome>
   void _showDeleteAccount() {
     final passCtrl = TextEditingController();
     bool loading = false;
-    showDialog(
+    showPlatformDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog.adaptive(
-          title: const Text('Supprimer mon compte', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE24B4A))),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
-              const SizedBox(height: 16),
-              TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
-            ],
-          ),
-          actions: [
+        builder: (ctx, setDialogState) {
+          final actions = [
             CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
             CupertinoDialogAction(
               isDestructiveAction: true,
@@ -891,8 +890,25 @@ class _ClientHomeState extends State<ClientHome>
               },
               child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Supprimer'),
             ),
-          ],
-        ),
+          ];
+          final content = Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
+            const SizedBox(height: 12),
+            TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
+          ]);
+          if (Platform.isIOS) {
+            return CupertinoAlertDialog(
+              title: const Text('Supprimer mon compte', style: TextStyle(color: Color(0xFFE24B4A))),
+              content: content,
+              actions: actions,
+            );
+          }
+          return AlertDialog(
+            title: const Text('Supprimer mon compte', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE24B4A))),
+            content: content,
+            actions: actions,
+          );
+        },
       ),
     );
   }
