@@ -500,7 +500,7 @@ class _ClientHomeState extends State<ClientHome>
                         elevation: 0,
                       ),
                       child: saving
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive())
                           : const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                     ),
                   ),
@@ -844,7 +844,7 @@ class _ClientHomeState extends State<ClientHome>
                 } catch (_) { setDialogState(() => loading = false); }
               },
               style: ElevatedButton.styleFrom(backgroundColor: blue, foregroundColor: Colors.white),
-              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Confirmer'),
+              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Confirmer'),
             ),
           ],
         ),
@@ -889,7 +889,7 @@ class _ClientHomeState extends State<ClientHome>
                 } catch (_) { setDialogState(() => loading = false); }
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE24B4A), foregroundColor: Colors.white),
-              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Supprimer'),
+              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Supprimer'),
             ),
           ],
         ),

@@ -1587,7 +1587,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16)]),
                     child: loadingQR
-                        ? SizedBox(width: 150, height: 150, child: Center(child: CircularProgressIndicator(color: color, strokeWidth: 2)))
+                        ? SizedBox(width: 150, height: 150, child: Center(child: CircularProgressIndicator.adaptive()))
                         : qrError != null
                             ? SizedBox(width: 150, height: 150, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                                 const Icon(Icons.wifi_off_rounded, color: Color(0xFFE24B4A), size: 32),
@@ -1858,7 +1858,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     icon: _walletLoading
                         ? const SizedBox(
                             width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator.adaptive(),
                           )
                         : const Icon(Icons.account_balance_wallet_rounded, size: 18),
                     label: Text(

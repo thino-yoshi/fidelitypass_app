@@ -79,7 +79,7 @@ class _StoresTabState extends State<StoresTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator(color: _kPrimary));
+    if (loading) return const Center(child: CircularProgressIndicator.adaptive());
 
     final filtered = merchants.where((m) {
       final name = (m['business_name'] ?? '').toLowerCase();

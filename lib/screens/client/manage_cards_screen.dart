@@ -125,7 +125,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
             });
             return PopScope(
               onPopInvokedWithResult: (_, __) => t?.cancel(),
-              child: AlertDialog(
+              child: AlertDialog.adaptive(
                 backgroundColor: context.qSurface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 title: Text(
@@ -504,7 +504,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
           icon: _deleting
               ? const SizedBox(
                   width: 18, height: 18,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                  child: CircularProgressIndicator.adaptive())
               : const Icon(Icons.delete_rounded, size: 20),
           label: Text(
             _deleting

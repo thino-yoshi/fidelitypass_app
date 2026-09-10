@@ -71,7 +71,7 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
         _header(),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator(color: _kGold))
+              ? const Center(child: CircularProgressIndicator.adaptive())
               : groups.isEmpty
                   ? _empty()
                   : Center(child: ConstrainedBox(
@@ -381,7 +381,7 @@ class _RewardQRModalState extends State<_RewardQRModal> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
             child: _loading
-                ? const SizedBox(width: 180, height: 180, child: Center(child: CircularProgressIndicator(color: _kGold, strokeWidth: 2)))
+                ? const SizedBox(width: 180, height: 180, child: Center(child: CircularProgressIndicator.adaptive()))
                 : QrImageView(data: _token ?? '', version: QrVersions.auto, size: 180, foregroundColor: _kNavy),
           ),
           const SizedBox(height: 16),

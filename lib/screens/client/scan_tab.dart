@@ -218,7 +218,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
               if (_loading)
                 const SizedBox(
                   width: 28, height: 28,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                  child: CircularProgressIndicator.adaptive(),
                 ),
 
               const SizedBox(height: 40),
