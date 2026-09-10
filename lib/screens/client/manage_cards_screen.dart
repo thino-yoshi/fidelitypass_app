@@ -115,7 +115,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        int countdown = 5;
+        int countdown = 3;
         Timer? t;
         return StatefulBuilder(
           builder: (ctx, setSt) {
