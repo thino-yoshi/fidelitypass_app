@@ -824,8 +824,9 @@ class _ClientHomeState extends State<ClientHome>
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-            ElevatedButton(
+            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            CupertinoDialogAction(
+              isDefaultAction: true,
               onPressed: loading ? null : () async {
                 setDialogState(() => loading = true);
                 try {
@@ -843,7 +844,6 @@ class _ClientHomeState extends State<ClientHome>
                   ));
                 } catch (_) { setDialogState(() => loading = false); }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: blue, foregroundColor: Colors.white),
               child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Confirmer'),
             ),
           ],
@@ -869,8 +869,9 @@ class _ClientHomeState extends State<ClientHome>
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-            ElevatedButton(
+            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
               onPressed: loading ? null : () async {
                 setDialogState(() => loading = true);
                 try {
@@ -888,7 +889,6 @@ class _ClientHomeState extends State<ClientHome>
                   }
                 } catch (_) { setDialogState(() => loading = false); }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE24B4A), foregroundColor: Colors.white),
               child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Supprimer'),
             ),
           ],
