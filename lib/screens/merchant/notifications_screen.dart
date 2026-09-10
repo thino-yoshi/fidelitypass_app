@@ -27,20 +27,18 @@ class NotificationsScreen extends StatefulWidget {
 
 class _Tpl {
   final String key, title, desc, msgTitle, msgBody;
-  final IconData icon;
-  final Color color;
-  const _Tpl(this.key, this.icon, this.color, this.title, this.desc, this.msgTitle, this.msgBody);
+  const _Tpl(this.key, this.title, this.desc, this.msgTitle, this.msgBody);
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   static const _templates = [
-    _Tpl('promo', Icons.local_offer_rounded, Color(0xFFF59E0B), 'Offre spéciale', "Annonce une promo flash pour aujourd'hui",
+    _Tpl('promo', 'Offre spéciale', "Annonce une promo flash pour aujourd'hui",
         'Offre spéciale ce soir !', '-20% sur tout ce soir de 18h à 22h. Venez nous voir !'),
-    _Tpl('rappel', Icons.check_circle_rounded, Color(0xFF27AE60), 'Rappel tampon', 'Rappelle aux clients proches de la récompense',
+    _Tpl('rappel', 'Rappel tampon', 'Rappelle aux clients proches de la récompense',
         'Plus que quelques tampons !', 'Vous êtes tout proche de votre récompense. Passez la chercher !'),
-    _Tpl('merci', Icons.star_rounded, Color(0xFFF59E0B), 'Merci & fidélité', 'Remercie tes clients fidèles',
+    _Tpl('merci', 'Merci & fidélité', 'Remercie tes clients fidèles',
         'Merci de votre fidélité', 'Un grand merci ! Une petite surprise vous attend à votre prochaine visite.'),
-    _Tpl('libre', Icons.chat_bubble_rounded, Color(0xFF2C7BE5), 'Message libre', 'Écris ton propre message', '', ''),
+    _Tpl('libre', 'Message libre', 'Écris ton propre message', '', ''),
   ];
 
   String _tpl = 'promo';
@@ -330,18 +328,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           border: Border.all(color: sel ? _kPrimary : context.cBorder, width: sel ? 1.5 : 1),
         ),
         child: Row(children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(color: t.color.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Icon(t.icon, size: 16, color: t.color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(t.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Text(t.title, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
             const SizedBox(height: 1),
-            Text(t.desc, style: TextStyle(fontSize: 11, color: context.cSub)),
+            Text(t.desc, textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: context.cSub)),
           ])),
-          if (sel) const Icon(Icons.check_circle_rounded, color: _kPrimary, size: 18),
+          if (sel) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.check_circle_rounded, color: _kPrimary, size: 18)),
         ]),
       ),
     );
