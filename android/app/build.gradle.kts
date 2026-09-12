@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.fidelitypass_app"
+    namespace = "com.qarta.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
