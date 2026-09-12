@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:1097051657980:android:73f833c86e5117788d6979",
         "android_client_info": {
-          "package_name": "com.example.fidelitypass_app"
+          "package_name": "com.qarta.app"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "1097051657980-1v299oqmdibdfqirke26v72ab0c3g0cn.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.example.fidelitypass_app",
+            "package_name": "com.qarta.app",
             "certificate_hash": "76240fe749e995f58d9d64d57daca0233c4f173d"
           }
         },
