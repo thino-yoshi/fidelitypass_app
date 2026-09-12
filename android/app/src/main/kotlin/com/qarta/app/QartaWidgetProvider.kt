@@ -1,4 +1,4 @@
-package com.example.fidelitypass_app
+package com.qarta.app
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
