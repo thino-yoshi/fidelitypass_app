@@ -1093,6 +1093,7 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                   ],
                 ),
+                if (_tab != 3) ...[
                 const SizedBox(height: 20),
                 // ── Pills avec indicateur glissant
                 SizedBox(
@@ -1163,6 +1164,7 @@ class _ClientHomeState extends State<ClientHome>
                     ]),
                   ]),
                 ),
+                ], // fin if (_tab != 3)
               ],
             ),
           ),
@@ -1238,12 +1240,12 @@ class _ClientHomeState extends State<ClientHome>
   // ── PROFIL TAB ─────────────────────────────────────────────────────────────
 
   Widget _buildProfilTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(16, 14, 16, MediaQuery.of(context).padding.bottom + 90),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 76),
       child: Column(
         children: [
           // ── Avatar profil ──────────────────────────────────────────────────
-          const SizedBox(height: 12),
+          const Spacer(),
           GestureDetector(
             onTap: _pickProfileImage,
             child: Stack(
@@ -1278,9 +1280,9 @@ class _ClientHomeState extends State<ClientHome>
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 18),
+          Spacer(flex: 2),
           // Section 1: compte
           _profSec([
             _profRow(
@@ -1320,7 +1322,7 @@ class _ClientHomeState extends State<ClientHome>
               ),
             ),
           ]),
-          const SizedBox(height: 10),
+          const Spacer(),
           // Section 2: préférences
           _profSec([
             _profRowDarkMode(),
@@ -1351,7 +1353,7 @@ class _ClientHomeState extends State<ClientHome>
               ),
             ),
           ]),
-          const SizedBox(height: 14),
+          Spacer(flex: 2),
           // Bouton déconnexion
           GestureDetector(
             onTap: _logout,

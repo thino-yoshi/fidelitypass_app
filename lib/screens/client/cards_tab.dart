@@ -147,7 +147,7 @@ class _CardsTabState extends State<CardsTab> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const SizedBox(height: 60),
+            const SizedBox(height: 104),
             Center(
               child: Column(
                 children: [
@@ -161,9 +161,9 @@ class _CardsTabState extends State<CardsTab> {
                     child: Icon(Icons.credit_card_off_outlined, size: 34, color: context.qSub),
                   ),
                   const SizedBox(height: 16),
-                  Text("Tu n'as pas encore de carte.", style: TextStyle(color: Colors.grey[500], fontSize: 15)),
+                  Text("Tu n'as pas encore de carte.", style: TextStyle(color: context.qText, fontSize: 15, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
                   const SizedBox(height: 4),
-                  Text("Va dans Commerces pour en créer une !", style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  Text("Va dans un de tes commerces préférés pour en ajouter une !", style: TextStyle(color: Colors.grey[400], fontSize: 13), textAlign: TextAlign.center),
                 ],
               ),
             ),
@@ -1788,7 +1788,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                       businessName,
                       style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w800,
-                        color: Color(0xFF8F85D0),
+                        color: Colors.white,
                       ),
                     ),
                     GestureDetector(

@@ -125,7 +125,7 @@ class _HistoryTabState extends State<HistoryTab> {
               ),
               const SizedBox(height: 16),
               Text('Aucune activité', style: TextStyle(
-                color: _kText, fontSize: 15, fontWeight: FontWeight.w600)),
+                color: _kText, fontSize: 15, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
               const SizedBox(height: 4),
               Text('Tes visites apparaîtront ici après ton premier scan.',
                 style: TextStyle(color: _kSub, fontSize: 13), textAlign: TextAlign.center),

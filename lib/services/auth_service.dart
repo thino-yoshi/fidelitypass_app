@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../config/api.dart';
 import '../main.dart' show navigatorKey;
 import '../screens/auth_screen.dart';
@@ -138,6 +141,78 @@ class AuthService {
     AppLogger.auth('Google OAuth succès → user_type: $userType, name: $name');
 
     await saveSession(token, userType, name, email: user.email ?? '', isGoogle: true);
+    await fetchAndSaveProfile(token);
+    await saveFCMToken(token);
+
+    return {'token': token, 'user_type': userType, 'name': name};
+  }
+
+  // ── Connexion Apple (nonce natif → Supabase) ─────────────────────────────────
+  static String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  static String _sha256(String input) {
+    final bytes = utf8.encode(input);
+    return sha256.convert(bytes).toString();
+  }
+
+  static Future<Map<String, dynamic>> signInWithApple() async {
+    AppLogger.auth('Apple OAuth → tentative de connexion...');
+    final rawNonce = _generateNonce();
+    final nonce    = _sha256(rawNonce);
+
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: nonce,
+    );
+
+    final idToken = credential.identityToken;
+    if (idToken == null) {
+      AppLogger.error('Apple OAuth → identityToken null');
+      throw Exception('Token Apple introuvable');
+    }
+
+    AppLogger.auth('Apple OAuth → idToken obtenu, envoi à Supabase');
+    final res = await _supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
+
+    final user = res.user;
+    if (user == null || res.session == null) {
+      AppLogger.error('Apple OAuth → user ou session null');
+      throw Exception('Connexion Apple échouée');
+    }
+
+    // Apple ne fournit le nom qu'à la toute première connexion
+    final givenName  = credential.givenName  ?? '';
+    final familyName = credential.familyName ?? '';
+    final appleEmail = credential.email ?? user.email ?? '';
+    final name = (givenName.isNotEmpty || familyName.isNotEmpty)
+        ? '$givenName $familyName'.trim()
+        : (user.userMetadata?['name'] as String?) ?? appleEmail.split('@').first;
+
+    final meta = user.userMetadata ?? {};
+    if (!meta.containsKey('user_type')) {
+      AppLogger.auth('Apple OAuth → user_type absent → mise à jour metadata');
+      await _supabase.auth.updateUser(
+        UserAttributes(data: {'user_type': 'client', 'name': name}),
+      );
+      await _supabase.auth.refreshSession();
+    }
+
+    final userType = resolveUserType(_supabase.auth.currentUser?.userMetadata ?? meta);
+    final token    = _supabase.auth.currentSession!.accessToken;
+    AppLogger.auth('Apple OAuth succès → user_type: $userType, name: $name');
+
+    await saveSession(token, userType, name, email: appleEmail);
     await fetchAndSaveProfile(token);
     await saveFCMToken(token);
 
