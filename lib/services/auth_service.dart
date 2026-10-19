@@ -224,20 +224,21 @@ class AuthService {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
-      // Sur iOS, attendre que le token APNs soit disponible (peut prendre quelques secondes)
-      if (Platform.isIOS) {
-        String? apnsToken;
-        for (int i = 0; i < 8; i++) {
-          apnsToken = await messaging.getAPNSToken();
-          if (apnsToken != null) break;
-          await Future.delayed(const Duration(seconds: 1));
-        }
-        if (apnsToken == null) {
-          AppLogger.fcm('Token APNs non disponible après 8s — abandon');
-          return;
+      // Sur iOS, getToken() peut échouer si le token APNs n'est pas encore prêt — on réessaie
+      String? fcmToken;
+      for (int i = 0; i < 10; i++) {
+        try {
+          fcmToken = await messaging.getToken();
+          if (fcmToken != null) break;
+        } catch (e) {
+          AppLogger.fcm('Tentative FCM token ${i + 1}/10 : $e');
+          await Future.delayed(const Duration(seconds: 2));
         }
       }
-      final fcmToken = await messaging.getToken();
+      if (fcmToken == null) {
+        AppLogger.fcm('Token FCM non disponible après 10 tentatives — abandon');
+        return;
+      }
       final token = currentToken ?? authToken;
       if (fcmToken != null && token.isNotEmpty) {
         AppLogger.fcm('Token FCM obtenu : ${fcmToken.substring(0, 20)}…');
