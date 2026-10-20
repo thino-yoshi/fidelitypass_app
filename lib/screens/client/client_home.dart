@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/widget_service.dart';
@@ -110,6 +111,22 @@ class _ClientHomeState extends State<ClientHome>
     _loadSessionInfo();
     _checkPendingJoin();
     _initDeepLinks();
+    _initNotifTapHandlers();
+  }
+
+  void _initNotifTapHandlers() {
+    // App en background : tap sur notif → ouvrir le panel
+    notifOpenNotifier.addListener(_onNotifOpen);
+    // App complètement fermée : vérifier si l'app a été ouverte via une notif
+    FirebaseMessaging.instance.getInitialMessage().then((msg) {
+      if (msg != null && mounted) {
+        Future.delayed(const Duration(milliseconds: 500), _openNotifs);
+      }
+    });
+  }
+
+  void _onNotifOpen() {
+    if (mounted) _openNotifs();
   }
 
   String? _merchantIdFromUri(Uri uri) {
@@ -640,6 +657,7 @@ class _ClientHomeState extends State<ClientHome>
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
     _deepLinkSub?.cancel();
+    notifOpenNotifier.removeListener(_onNotifOpen);
     super.dispose();
   }
 

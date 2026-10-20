@@ -28,8 +28,9 @@ String? pendingJoinMerchantId;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
-final navigatorKey = GlobalKey<NavigatorState>();
+final themeNotifier    = ValueNotifier<ThemeMode>(ThemeMode.light);
+final navigatorKey     = GlobalKey<NavigatorState>();
+final notifOpenNotifier = ValueNotifier<int>(0);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,6 +73,11 @@ void main() async {
       } catch (e) {
         AppLogger.error('Erreur permission notifications : $e');
       }
+    });
+
+    // Tap sur notif quand l'app est en background → ouvrir le panel notifs
+    FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      notifOpenNotifier.value++;
     });
 
     // Afficher les notifs en foreground (Android uniquement — iOS gère via setForegroundNotificationPresentationOptions)
