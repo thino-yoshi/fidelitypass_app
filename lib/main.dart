@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'config/supabase_config.dart';
 import 'config/api.dart';
 import 'screens/auth_screen.dart';
@@ -55,30 +56,43 @@ void main() async {
       ),
     );
 
-    // Demander permission notifications Android 13+
-    final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-
     AppLogger.splash('Firebase initialisé ✓');
-    AppLogger.fcm('Demande permission notifications...');
 
-    // Afficher les notifs en foreground
+    // Demande de permission et config foreground après runApp (évite crash watchdog iOS)
+    Future.microtask(() async {
+      try {
+        final messaging = FirebaseMessaging.instance;
+        await messaging.requestPermission(alert: true, badge: true, sound: true);
+        await messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+        AppLogger.fcm('Permission notifications accordée ✓');
+      } catch (e) {
+        AppLogger.error('Erreur permission notifications : $e');
+      }
+    });
+
+    // Afficher les notifs en foreground (Android uniquement — iOS gère via setForegroundNotificationPresentationOptions)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       AppLogger.fcm('Message reçu en foreground : ${message.notification?.title}');
-      flutterLocalNotificationsPlugin.show(
-        0,
-        message.notification?.title,
-        message.notification?.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'qarta_channel',
-            'Qarta Notifications',
-            importance: Importance.high,
-            priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+      if (Platform.isAndroid) {
+        flutterLocalNotificationsPlugin.show(
+          message.messageId?.hashCode ?? 0,
+          message.notification?.title,
+          message.notification?.body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'qarta_channel',
+              'Qarta Notifications',
+              importance: Importance.high,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
           ),
-        ),
-      );
+        );
+      }
     });
   } catch (e) {
     AppLogger.error('Firebase non disponible (émulateur ?) — notifs push désactivées : $e');
