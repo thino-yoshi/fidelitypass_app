@@ -76,7 +76,8 @@ class _ClientHomeState extends State<ClientHome>
   String? _profileImageUrl;   // URL serveur (Supabase Storage)
   String  _userEmail = '';
   String  _phone = '';
-  bool    _isGoogle = false; // 'tout' | 'tampon' | 'recompense' | 'promo'
+  bool    _isGoogle = false;
+  bool    _isOAuth  = false; // true pour Google ET Apple (email non modifiable)
 
   static const Map<String, Map<String, dynamic>> _notifStyle = {
     'recompense': {'icon': '⭐', 'color': 0xFFFBBF24},
@@ -231,14 +232,17 @@ class _ClientHomeState extends State<ClientHome>
         final serverIsGoogle = body['is_google'] as bool? ?? false;
         final localIsGoogle  = prefs.getBool('is_google') ?? false;
         final isGoogle = serverIsGoogle || localIsGoogle;
+        final isOAuth  = (body['is_oauth'] as bool? ?? false) || isGoogle;
         // Persister tout en local
         if (url != null && url.isNotEmpty) await prefs.setString('profile_image_url', url);
         if (email.isNotEmpty) await prefs.setString('email', email);
         await prefs.setBool('is_google', isGoogle);
+        await prefs.setBool('is_oauth', isOAuth);
         setState(() {
           if (url != null && url.isNotEmpty) _profileImageUrl = url;
           if (email.isNotEmpty) _userEmail = email;
           _isGoogle  = isGoogle;
+          _isOAuth   = isOAuth;
         });
       }
     } catch (_) {}
@@ -254,11 +258,13 @@ class _ClientHomeState extends State<ClientHome>
     final prefs = await SharedPreferences.getInstance();
     final email    = prefs.getString('email') ?? '';
     final isGoogle = prefs.getBool('is_google') ?? false;
+    final isOAuth  = prefs.getBool('is_oauth') ?? isGoogle;
     if (mounted) {
       setState(() {
-      if (email.isNotEmpty) _userEmail = email;
-      if (isGoogle) _isGoogle = true; // ne jamais rétrograder à false
-    });
+        if (email.isNotEmpty) _userEmail = email;
+        if (isGoogle) _isGoogle = true;
+        if (isOAuth)  _isOAuth  = true;
+      });
     }
   }
 
@@ -266,6 +272,7 @@ class _ClientHomeState extends State<ClientHome>
     // Toujours récupérer les données fraîches depuis le serveur
     String freshEmail  = _userEmail;
     bool   freshGoogle = _isGoogle;
+    bool   freshOAuth  = _isOAuth;
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/users/me'),
@@ -279,9 +286,11 @@ class _ClientHomeState extends State<ClientHome>
         final localIsGoogle  = prefs.getBool('is_google') ?? false;
         freshEmail  = serverEmail.isNotEmpty ? serverEmail : freshEmail;
         freshGoogle = serverIsGoogle || localIsGoogle || _isGoogle;
+        freshOAuth  = (body['is_oauth'] as bool? ?? false) || freshGoogle;
         if (freshEmail.isNotEmpty) await prefs.setString('email', freshEmail);
         await prefs.setBool('is_google', freshGoogle);
-        if (mounted) setState(() { _userEmail = freshEmail; _isGoogle = freshGoogle; });
+        await prefs.setBool('is_oauth', freshOAuth);
+        if (mounted) setState(() { _userEmail = freshEmail; _isGoogle = freshGoogle; _isOAuth = freshOAuth; });
       }
     } catch (_) {}
     if (!mounted) return;
@@ -412,34 +421,41 @@ class _ClientHomeState extends State<ClientHome>
                           decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                           child: const Text('Compte Google', style: TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.w700)),
                         ),
+                      ] else if (_isOAuth) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                          child: const Text('Compte Apple', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w700)),
+                        ),
                       ],
                     ],
                   ),
-                  if (_isGoogle)
+                  if (_isOAuth)
                     Padding(
                       padding: const EdgeInsets.only(top: 6, bottom: 4),
-                      child: Text('Nom et email gérés par Google', style: TextStyle(fontSize: 12, color: sub)),
+                      child: Text('Email géré par ${_isGoogle ? "Google" : "Apple"}', style: TextStyle(fontSize: 12, color: sub)),
                     ),
                   const SizedBox(height: 16),
 
-                  // Nom
+                  // Nom (toujours éditable)
                   editableRow(
                     icon: Icons.person_rounded,
                     fieldKey: 'name',
                     label: 'Nom & Prénom',
                     ctrl: nameCtrl,
-                    readOnly: _isGoogle,
+                    readOnly: false,
                   ),
                   const SizedBox(height: 12),
 
-                  // Email
+                  // Email (bloqué pour les comptes OAuth)
                   editableRow(
                     icon: Icons.email_outlined,
                     fieldKey: 'email',
                     label: 'Email',
                     ctrl: emailCtrl,
                     keyboard: TextInputType.emailAddress,
-                    readOnly: _isGoogle,
+                    readOnly: _isOAuth,
                   ),
                   const SizedBox(height: 12),
 
@@ -464,30 +480,26 @@ class _ClientHomeState extends State<ClientHome>
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.setString('user_phone', phoneCtrl.text.trim());
 
-                        // Mettre à jour nom/email sur le serveur (sauf Google)
-                        if (!_isGoogle) {
-                          try {
-                            final res = await http.patch(
-                              Uri.parse('$apiUrl/users/me'),
-                              headers: {
-                                'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
-                                'Content-Type': 'application/json',
-                              },
-                              body: jsonEncode({
-                                'name':  nameCtrl.text.trim(),
-                                'email': emailCtrl.text.trim(),
-                              }),
-                            );
-                            if (res.statusCode == 200 && mounted) {
-                              final updated = jsonDecode(res.body);
-                              setState(() {
-                                _userEmail = updated['email'] ?? _userEmail;
-                                // Met à jour aussi le nom dans la session
-                                SharedPreferences.getInstance().then((p) => p.setString('name', updated['name'] ?? widget.userName));
-                              });
-                            }
-                          } catch (_) {}
-                        }
+                        // Mettre à jour nom (et email si non-OAuth) sur le serveur
+                        try {
+                          final reqBody = <String, dynamic>{'name': nameCtrl.text.trim()};
+                          if (!_isOAuth) reqBody['email'] = emailCtrl.text.trim();
+                          final res = await http.patch(
+                            Uri.parse('$apiUrl/users/me'),
+                            headers: {
+                              'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
+                              'Content-Type': 'application/json',
+                            },
+                            body: jsonEncode(reqBody),
+                          );
+                          if (res.statusCode == 200 && mounted) {
+                            final updated = jsonDecode(res.body);
+                            setState(() {
+                              _userEmail = updated['email'] ?? _userEmail;
+                              SharedPreferences.getInstance().then((p) => p.setString('name', updated['name'] ?? widget.userName));
+                            });
+                          }
+                        } catch (_) {}
 
                         if (mounted) setState(() => _phone = phoneCtrl.text.trim());
                         if (ctx.mounted) Navigator.pop(ctx);
