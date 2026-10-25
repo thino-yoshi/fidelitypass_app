@@ -115,14 +115,16 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _initNotifTapHandlers() {
-    // App en background : tap sur notif → ouvrir le panel
     notifOpenNotifier.addListener(_onNotifOpen);
-    // App complètement fermée : vérifier si l'app a été ouverte via une notif
-    FirebaseMessaging.instance.getInitialMessage().then((msg) {
-      if (msg != null && mounted) {
-        Future.delayed(const Duration(milliseconds: 500), _openNotifs);
-      }
-    });
+    try {
+      FirebaseMessaging.instance.getInitialMessage().then((msg) {
+        if (msg != null && mounted) {
+          Future.delayed(const Duration(milliseconds: 500), _openNotifs);
+        }
+      });
+    } catch (e) {
+      debugPrint('[CLIENT] Firebase non dispo pour notif handlers : $e');
+    }
   }
 
   void _onNotifOpen() {
