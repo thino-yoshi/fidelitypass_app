@@ -1,14 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../config/api.dart';
 import '../main.dart' show navigatorKey;
 import '../screens/auth_screen.dart';
@@ -19,8 +16,12 @@ const _kTimeout = Duration(seconds: 10);
 class AuthService {
   static SupabaseClient get _supabase => Supabase.instance.client;
 
-  // ── Token actuel (toujours frais via Supabase SDK) ──────────────────────────
-  static String? get currentToken => _supabase.auth.currentSession?.accessToken;
+  // Cache synchrone du token (mis à jour par saveSession, vidé par logout)
+  static String? _cachedToken;
+
+  // Token actuel : Supabase en priorité, puis cache local (Google mobile / email)
+  static String? get currentToken =>
+      _supabase.auth.currentSession?.accessToken ?? _cachedToken;
 
   /// Détermine le type de compte depuis les métadonnées Supabase.
   /// Règle : site = marchand (clé `role`), app = client (clé `user_type`).
@@ -93,115 +94,57 @@ class AuthService {
     return {'token': token, 'user_type': userType, 'name': name};
   }
 
-  // ── Connexion Google (token natif → Supabase) ────────────────────────────────
-  static Future<Map<String, dynamic>> signInWithGoogle() async {
-    AppLogger.auth('Google OAuth → tentative de connexion...');
-    final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-    final googleUser   = await googleSignIn.signIn();
-    if (googleUser == null) {
-      AppLogger.auth('Google OAuth → annulée par l\'utilisateur');
-      throw Exception('Connexion Google annulée');
-    }
-    AppLogger.auth('Google OAuth → compte sélectionné : ${googleUser.email}');
-
-    final googleAuth = await googleUser.authentication;
-    final idToken    = googleAuth.idToken;
-    if (idToken == null) {
-      AppLogger.error('Google OAuth → idToken null');
-      throw Exception('Token Google introuvable');
-    }
-
-    final res = await _supabase.auth.signInWithIdToken(
-      provider: OAuthProvider.google,
-      idToken: idToken,
-      accessToken: googleAuth.accessToken,
+  // ── Connexion Google (natif → backend Railway, sans Supabase) ───────────────
+  static Future<Map<String, dynamic>> launchGoogleSignIn() async {
+    AppLogger.auth('Google Sign-In natif → ouverture sélecteur de compte...');
+    final googleSignIn = GoogleSignIn(
+      serverClientId: '1097051657980-rm2slbqt9atg9og0qdjc45nat5qe3jkj.apps.googleusercontent.com',
     );
-    final user = res.user;
-    if (user == null || res.session == null) {
-      AppLogger.error('Google OAuth → user ou session null après signInWithIdToken');
-      throw Exception('Connexion Google échouée');
+    await googleSignIn.signOut();
+    final googleUser = await googleSignIn.signIn();
+    if (googleUser == null) throw Exception('Connexion Google annulée');
+    final googleAuth = await googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    if (idToken == null) throw Exception('Impossible d\'obtenir le token Google');
+
+    AppLogger.auth('Google Sign-In → token obtenu, appel backend...');
+    final res = await http.post(
+      Uri.parse('$apiUrl/auth/google'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'id_token': idToken}),
+    ).timeout(const Duration(seconds: 20));
+
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      throw Exception(body['detail'] ?? 'Connexion Google échouée (${res.statusCode})');
     }
 
-    final name = (user.userMetadata?['name'] as String?)
-        ?? googleUser.displayName
-        ?? user.email
-        ?? '';
+    final data     = jsonDecode(res.body) as Map<String, dynamic>;
+    final token    = data['token'] as String;
+    final userType = (data['user_type'] as String?) ?? 'client';
+    final name     = (data['name']      as String?) ?? '';
+    final email    = (data['email']     as String?) ?? '';
 
-    final meta = user.userMetadata ?? {};
-    if (!meta.containsKey('user_type')) {
-      AppLogger.auth('Google OAuth → user_type absent dans metadata → updateUser + refreshSession');
-      await _supabase.auth.updateUser(
-        UserAttributes(data: {'user_type': 'client', 'name': name}),
-      );
-      await _supabase.auth.refreshSession();
-    }
-
-    final userType = resolveUserType(_supabase.auth.currentUser?.userMetadata ?? meta);
-    final token    = _supabase.auth.currentSession!.accessToken;
-    AppLogger.auth('Google OAuth succès → user_type: $userType, name: $name');
-
-    await saveSession(token, userType, name, email: user.email ?? '', isGoogle: true);
-    await fetchAndSaveProfile(token);
+    AppLogger.auth('Google Sign-In backend succès → user_type: $userType');
+    await saveSession(token, userType, name, email: email, isGoogle: true);
     await saveFCMToken(token);
 
     return {'token': token, 'user_type': userType, 'name': name};
   }
 
-  // ── Connexion Apple (nonce natif → Supabase) ─────────────────────────────────
-  static String _generateNonce([int length = 32]) {
-    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
-    final random = Random.secure();
-    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
-  }
+  // Appelé si un signedIn Supabase arrive (Apple Sign-In ou OAuth browser futur)
+  static Future<Map<String, dynamic>> processCurrentGoogleUser() async {
+    final user    = _supabase.auth.currentUser;
+    final session = _supabase.auth.currentSession;
+    if (user == null || session == null) throw Exception('Aucune session active');
 
-  static String _sha256(String input) {
-    final bytes = utf8.encode(input);
-    return sha256.convert(bytes).toString();
-  }
-
-  static Future<Map<String, dynamic>> signInWithApple() async {
-    AppLogger.auth('Apple OAuth → tentative de connexion...');
-    final rawNonce = _generateNonce();
-    final nonce    = _sha256(rawNonce);
-
-    final credential = await SignInWithApple.getAppleIDCredential(
-      scopes: [
-        AppleIDAuthorizationScopes.email,
-        AppleIDAuthorizationScopes.fullName,
-      ],
-      nonce: nonce,
-    );
-
-    final idToken = credential.identityToken;
-    if (idToken == null) {
-      AppLogger.error('Apple OAuth → identityToken null');
-      throw Exception('Token Apple introuvable');
-    }
-
-    AppLogger.auth('Apple OAuth → idToken obtenu, envoi à Supabase');
-    final res = await _supabase.auth.signInWithIdToken(
-      provider: OAuthProvider.apple,
-      idToken: idToken,
-      nonce: rawNonce,
-    );
-
-    final user = res.user;
-    if (user == null || res.session == null) {
-      AppLogger.error('Apple OAuth → user ou session null');
-      throw Exception('Connexion Apple échouée');
-    }
-
-    // Apple ne fournit le nom qu'à la toute première connexion
-    final givenName  = credential.givenName  ?? '';
-    final familyName = credential.familyName ?? '';
-    final appleEmail = credential.email ?? user.email ?? '';
-    final name = (givenName.isNotEmpty || familyName.isNotEmpty)
-        ? '$givenName $familyName'.trim()
-        : (user.userMetadata?['name'] as String?) ?? appleEmail.split('@').first;
+    final name = (user.userMetadata?['full_name'] as String?)
+        ?? (user.userMetadata?['name'] as String?)
+        ?? user.email
+        ?? '';
 
     final meta = user.userMetadata ?? {};
     if (!meta.containsKey('user_type')) {
-      AppLogger.auth('Apple OAuth → user_type absent → mise à jour metadata');
       await _supabase.auth.updateUser(
         UserAttributes(data: {'user_type': 'client', 'name': name}),
       );
@@ -210,12 +153,10 @@ class AuthService {
 
     final userType = resolveUserType(_supabase.auth.currentUser?.userMetadata ?? meta);
     final token    = _supabase.auth.currentSession!.accessToken;
-    AppLogger.auth('Apple OAuth succès → user_type: $userType, name: $name');
-
-    await saveSession(token, userType, name, email: appleEmail);
+    AppLogger.auth('processCurrentGoogleUser → user_type: $userType');
+    await saveSession(token, userType, name, email: user.email ?? '', isGoogle: true);
     await fetchAndSaveProfile(token);
     await saveFCMToken(token);
-
     return {'token': token, 'user_type': userType, 'name': name};
   }
 
@@ -224,21 +165,7 @@ class AuthService {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
-      // Sur iOS, getToken() peut échouer si le token APNs n'est pas encore prêt — on réessaie
-      String? fcmToken;
-      for (int i = 0; i < 10; i++) {
-        try {
-          fcmToken = await messaging.getToken();
-          if (fcmToken != null) break;
-        } catch (e) {
-          AppLogger.fcm('Tentative FCM token ${i + 1}/10 : $e');
-          await Future.delayed(const Duration(seconds: 2));
-        }
-      }
-      if (fcmToken == null) {
-        AppLogger.fcm('Token FCM non disponible après 10 tentatives — abandon');
-        return;
-      }
+      final fcmToken = await messaging.getToken();
       final token = currentToken ?? authToken;
       if (fcmToken != null && token.isNotEmpty) {
         AppLogger.fcm('Token FCM obtenu : ${fcmToken.substring(0, 20)}…');
@@ -271,6 +198,7 @@ class AuthService {
     bool isGoogle  = false,
   }) async {
     AppLogger.auth('saveSession → type: $userType, name: $name, email: $email, google: $isGoogle');
+    _cachedToken = token; // cache synchrone pour currentToken
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token',     token);
     await prefs.setString('user_type', userType);
@@ -295,29 +223,36 @@ class AuthService {
     } catch (_) {}
   }
 
-  /// Lit la session Supabase active (remplace la lecture via SharedPreferences).
+  /// Lit la session active : Supabase en priorité, puis SharedPreferences (tokens backend).
   static Future<Map<String, String>?> getSession() async {
+    // 1. Session Supabase (email/password classique ou Apple)
     final session = _supabase.auth.currentSession;
-    if (session == null) {
+    if (session != null) {
+      final user     = _supabase.auth.currentUser;
+      final userType = resolveUserType(user?.userMetadata);
+      final name     = (user?.userMetadata?['name'] as String?) ?? user?.email ?? '';
+      AppLogger.auth('getSession → Supabase, user_type: $userType, name: $name');
+      return {'token': session.accessToken, 'user_type': userType, 'name': name};
+    }
+
+    // 2. Token backend (Google mobile ou email/password via Railway)
+    final prefs    = await SharedPreferences.getInstance();
+    final token    = prefs.getString('token');
+    if (token == null || token.isEmpty) {
       AppLogger.auth('getSession → aucune session active');
       return null;
     }
-
-    final user     = _supabase.auth.currentUser;
-    final userType = resolveUserType(user?.userMetadata);
-    final name     = (user?.userMetadata?['name'] as String?) ?? user?.email ?? '';
-    AppLogger.auth('getSession → user_type: $userType, name: $name');
-
-    return {
-      'token':     session.accessToken,
-      'user_type': userType,
-      'name':      name,
-    };
+    _cachedToken = token; // restaure le cache synchrone au démarrage
+    final userType = prefs.getString('user_type') ?? 'client';
+    final name     = prefs.getString('name')      ?? '';
+    AppLogger.auth('getSession → token backend, user_type: $userType, name: $name');
+    return {'token': token, 'user_type': userType, 'name': name};
   }
 
   // ── Déconnexion ──────────────────────────────────────────────────────────────
   static Future<void> logout() async {
     AppLogger.auth('Logout → effacement session + Supabase signOut');
+    _cachedToken = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       // Supprimer uniquement les clés de session (pas les identifiants mémorisés ni le thème)

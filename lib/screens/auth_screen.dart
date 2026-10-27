@@ -24,7 +24,7 @@ class CardData {
   const CardData({required this.title, required this.imagePath, this.icon = Icons.star, this.color = Colors.blue});
 }
 
-class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
+class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
 
   static const kBg   = Color(0xFF0D1526);
   static const kBlue = Color(0xFF4A9EFF);
@@ -46,13 +46,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   bool loading = false;
   bool googleLoading = false;
-  bool appleLoading = false;
   bool _rememberMe = false;
+  bool _awaitingGoogleAuth = false;
   String error = '';
   int passScore = 0;
   String? _pendingEmail;
   int _resendCooldown = 0;
   Timer? _resendTimer;
+  StreamSubscription<AuthState>? _authSub;
 
   bool _isTablet(BuildContext ctx) => MediaQuery.of(ctx).size.width >= 600;
   double _maxW(BuildContext ctx) => _isTablet(ctx) ? 480.0 : double.infinity;
@@ -62,7 +63,44 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSavedCredentials();
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(_onAuthStateChange);
+  }
+
+  Future<void> _onAuthStateChange(AuthState state) async {
+    if (!_awaitingGoogleAuth) return;
+    if (state.event == AuthChangeEvent.signedIn && state.session != null) {
+      _awaitingGoogleAuth = false;
+      try {
+        final data = await AuthService.processCurrentGoogleUser();
+        AppLogger.auth('Google OAuth (browser) → succès, user_type: ${data['user_type']}');
+        if (mounted) {
+          setState(() => googleLoading = false);
+          _navigate(data);
+        }
+      } catch (e) {
+        AppLogger.error('Google OAuth (browser) → traitement échoué : $e');
+        if (mounted) {
+          setState(() {
+            googleLoading = false;
+            error = e.toString().replaceAll('Exception: ', '');
+          });
+        }
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingGoogleAuth) {
+      // Si l'app reprend mais auth n'a pas abouti dans 3s → reset loading
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _awaitingGoogleAuth) {
+          setState(() { googleLoading = false; _awaitingGoogleAuth = false; });
+        }
+      });
+    }
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -140,7 +178,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _resendTimer?.cancel();
+    _authSub?.cancel();
     prenomCtrl.dispose(); emailCtrl.dispose(); passCtrl.dispose(); codeCtrl.dispose();
     loginEmailCtrl.dispose(); loginPassCtrl.dispose(); nomCtrl.dispose();
     super.dispose();
@@ -284,40 +324,23 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _doGoogle() async {
-    AppLogger.auth('Google OAuth → clic bouton "Continuer avec Google"');
-    setState(() { googleLoading = true; error = ''; });
+    AppLogger.auth('Google Sign-In natif → clic bouton "Continuer avec Google"');
+    setState(() { googleLoading = true; error = ''; _awaitingGoogleAuth = false; });
     try {
-      final data = await AuthService.signInWithGoogle();
-      AppLogger.auth('Google OAuth → succès, user_type: ${data['user_type']}');
-      _navigate(data);
-    } catch (e) {
-      if (e.toString().contains('annulée')) {
-        AppLogger.auth('Google OAuth → annulée par l\'utilisateur');
-      } else {
-        AppLogger.error('Google OAuth → échec : $e');
-        setState(() => error = e.toString().replaceAll('Exception: ', ''));
+      final data = await AuthService.launchGoogleSignIn();
+      AppLogger.auth('Google natif → succès, user_type: ${data['user_type']}');
+      if (mounted) {
+        setState(() => googleLoading = false);
+        _navigate(data);
       }
-    } finally {
-      if (mounted) setState(() => googleLoading = false);
-    }
-  }
-
-  Future<void> _doApple() async {
-    AppLogger.auth('Apple OAuth → clic bouton "Continuer avec Apple"');
-    setState(() { appleLoading = true; error = ''; });
-    try {
-      final data = await AuthService.signInWithApple();
-      AppLogger.auth('Apple OAuth → succès, user_type: ${data['user_type']}');
-      _navigate(data);
     } catch (e) {
-      if (e.toString().contains('canceled') || e.toString().contains('annulée')) {
-        AppLogger.auth('Apple OAuth → annulée par l\'utilisateur');
-      } else {
-        AppLogger.error('Apple OAuth → échec : $e');
-        setState(() => error = e.toString().replaceAll('Exception: ', ''));
+      AppLogger.error('Google natif → échec : $e');
+      if (mounted) {
+        setState(() {
+          googleLoading = false;
+          error = e.toString().replaceAll('Exception: ', '');
+        });
       }
-    } finally {
-      if (mounted) setState(() => appleLoading = false);
     }
   }
 
@@ -478,7 +501,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: appleLoading ? null : _doApple,
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Apple — Bientôt disponible'), duration: Duration(seconds: 2)),
+                      ),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white.withValues(alpha: 0.08),
                         foregroundColor: Colors.white,
@@ -486,10 +511,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         side: const BorderSide(color: kDark, width: 2),
                       ),
-                      child: appleLoading
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        _appleIcon(),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Image.asset('assets/images/apple_icon.png', width: 18, height: 18),
                         const SizedBox(width: 8),
                         Text('Apple', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
                       ]),
@@ -685,7 +708,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: appleLoading ? null : _doApple,
+                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Apple — Bientôt disponible'), duration: Duration(seconds: 2)),
+                            ),
                             style: OutlinedButton.styleFrom(
                               backgroundColor: Colors.white.withValues(alpha: 0.07),
                               foregroundColor: Colors.white,
@@ -693,10 +718,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                             ),
-                            child: appleLoading
-                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              _appleIcon(),
+                            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Image.asset('assets/images/apple_icon.png', width: 18, height: 18),
                               const SizedBox(width: 8),
                               Text('Apple', style: TextStyle(fontSize: _fs(context, 13, tablet: 15), fontWeight: FontWeight.w500)),
                             ]),
@@ -1336,12 +1359,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     width: 18, height: 18,
   );
 
-  // Logo Apple officiel (SVG blanc, conforme aux guidelines Apple)
-  Widget _appleIcon() => SizedBox(
-    width: 18, height: 18,
-    child: CustomPaint(painter: _AppleLogoPainter()),
-  );
-
   List<Widget> _corners() {
     const c = Color(0x4D4A9EFF);
     const s = 18.0;
@@ -1561,47 +1578,4 @@ class _FloatingCardsState extends State<FloatingCards> {
     _controller.dispose();
     super.dispose();
   }
-}
-
-// ── Logo Apple officiel (path SVG blanc, conforme aux guidelines Apple) ────────
-class _AppleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final sx = size.width  / 24;
-    final sy = size.height / 24;
-
-    final path = Path();
-    // Forme du logo Apple tracée à partir des guidelines officielles (24×24)
-    path.moveTo(17.05 * sx, 12.54 * sy);
-    path.cubicTo(17.03 * sx, 10.42 * sy, 18.11 * sx, 8.87 * sy, 20.28 * sx, 7.75 * sy);
-    path.cubicTo(19.15 * sx, 6.12 * sy, 17.46 * sx, 5.23 * sy, 15.25 * sx, 5.07 * sy);
-    path.cubicTo(13.16 * sx, 4.92 * sy, 10.89 * sx, 6.29 * sy, 10.02 * sx, 6.29 * sy);
-    path.cubicTo(9.09  * sx, 6.29 * sy, 7.10  * sx, 5.12 * sy, 5.47  * sx, 5.12 * sy);
-    path.cubicTo(2.44  * sx, 5.17 * sy, 0.0   * sx, 7.56 * sy, 0.0   * sx, 10.86 * sy);
-    path.cubicTo(0.0   * sx, 14.08 * sy, 1.51  * sx, 17.49 * sy, 3.46  * sx, 19.78 * sy);
-    path.cubicTo(4.41  * sx, 21.05 * sy, 5.55  * sx, 22.53 * sy, 7.07  * sx, 22.47 * sy);
-    path.cubicTo(8.53  * sx, 22.41 * sy, 9.08  * sx, 21.57 * sy, 10.88 * sx, 21.57 * sy);
-    path.cubicTo(12.67 * sx, 21.57 * sy, 13.17 * sx, 22.47 * sy, 14.70 * sx, 22.41 * sy);
-    path.cubicTo(16.29 * sx, 22.34 * sy, 17.26 * sx, 20.99 * sy, 18.19 * sx, 19.72 * sy);
-    path.cubicTo(19.07 * sx, 18.45 * sy, 19.42 * sx, 17.18 * sy, 19.43 * sx, 17.10 * sy);
-    path.cubicTo(19.43 * sx, 17.09 * sy, 17.07 * sx, 16.15 * sy, 17.05 * sx, 12.54 * sy);
-    path.close();
-
-    // Feuille (tige du logo Apple)
-    path.moveTo(13.86 * sx, 3.48 * sy);
-    path.cubicTo(14.64 * sx, 2.53 * sy, 15.16 * sx, 1.21 * sy, 15.00 * sx, 0.0  * sy);
-    path.cubicTo(13.85 * sx, 0.06 * sy, 12.48 * sx, 0.77 * sy, 11.68 * sx, 1.74 * sy);
-    path.cubicTo(10.95 * sx, 2.63 * sy, 10.33 * sx, 3.97 * sy, 10.53 * sx, 5.22 * sy);
-    path.cubicTo(11.79 * sx, 5.31 * sy, 13.06 * sx, 4.45 * sy, 13.86 * sx, 3.48 * sy);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
