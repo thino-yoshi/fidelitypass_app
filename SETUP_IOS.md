@@ -2,6 +2,11 @@
 
 > Document de référence technique. À consulter en cas de problème avec Firebase, Google Sign-In, Apple Sign-In ou les notifications push.
 
+> ⚠️ **Répertoire du projet Flutter** : utiliser `fidelitypass_app` et **non** `fidelitypass_app_github`.
+> ```bash
+> cd ~/Documents/fidelitypass_app
+> ```
+
 ---
 
 ## 1. Contexte
