@@ -973,10 +973,11 @@ class _ClientHomeState extends State<ClientHome>
       }
       _notifCount = 0;
     });
-    await http.put(
+    final res = await http.put(
       Uri.parse('$apiUrl/notifications/client/read-all'),
       headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
     );
+    AppLogger.client('Tout lu → serveur ${res.statusCode}: ${res.body}');
   }
 
   String get _firstName {
