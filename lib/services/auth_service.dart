@@ -35,60 +35,63 @@ class AuthService {
     return 'client';
   }
 
-  // ── Connexion email / mot de passe ──────────────────────────────────────────
+  // ── Connexion email / mot de passe (backend Railway → Neon) ────────────────
   static Future<Map<String, dynamic>> login(String email, String password) async {
     AppLogger.auth('Login tentative → $email');
-    final res = await _supabase.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
-    final user = res.user;
-    if (user == null || res.session == null) {
-      AppLogger.error('Login échoué → utilisateur ou session null');
-      throw Exception('Connexion échouée — vérifiez vos identifiants');
+    final res = await http.post(
+      Uri.parse('$apiUrl/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    ).timeout(const Duration(seconds: 20));
+
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      throw Exception(body['detail'] ?? 'Connexion échouée');
     }
-    final userType = resolveUserType(user.userMetadata);
-    final name     = (user.userMetadata?['name']      as String?) ?? user.email ?? '';
-    final token    = res.session!.accessToken;
+
+    final data     = jsonDecode(res.body) as Map<String, dynamic>;
+    final token    = data['token'] as String;
+    final userType = (data['user_type'] as String?) ?? 'client';
+    final name     = (data['name']      as String?) ?? '';
     AppLogger.auth('Login succès → user_type: $userType, name: $name');
 
-    await saveSession(token, userType, name, email: user.email ?? '');
-    await fetchAndSaveProfile(token);
+    await saveSession(token, userType, name, email: email);
     await saveFCMToken(token);
 
     return {'token': token, 'user_type': userType, 'name': name};
   }
 
-  // ── Inscription email / mot de passe (clients uniquement) ───────────────────
+  // ── Inscription email / mot de passe (backend Railway → Neon) ───────────────
   static Future<Map<String, dynamic>> register(
     String email,
     String password,
     String name,
     String userType, {
-    String? merchantCode, // conservé pour compat, non utilisé
+    String? merchantCode,
   }) async {
     AppLogger.auth('Register tentative → email: $email, type: $userType, name: $name');
-    final res = await _supabase.auth.signUp(
-      email: email,
-      password: password,
-      data: {'user_type': userType, 'name': name},
-    );
-    final user = res.user;
-    if (user == null) {
-      AppLogger.error('Register échoué → user null');
-      throw Exception('Inscription échouée');
+    final res = await http.post(
+      Uri.parse('$apiUrl/auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+        'name': name,
+        'user_type': userType,
+        if (merchantCode != null) 'merchant_code': merchantCode,
+      }),
+    ).timeout(const Duration(seconds: 20));
+
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      throw Exception(body['detail'] ?? 'Inscription échouée');
     }
 
-    // Email confirmation activée → session null, on attend la vérification
-    if (res.session == null) {
-      AppLogger.auth('Register → OTP envoyé à $email, en attente de confirmation');
-      return {'pending_confirmation': true, 'user_type': userType, 'name': name, 'token': ''};
-    }
+    final data     = jsonDecode(res.body) as Map<String, dynamic>;
+    final token    = data['token'] as String;
+    AppLogger.auth('Register succès → user_type: $userType');
 
-    final token = res.session!.accessToken;
-    AppLogger.auth('Register succès → session directe obtenue');
-    await saveSession(token, userType, name, email: user.email ?? '');
-    await fetchAndSaveProfile(token);
+    await saveSession(token, userType, name, email: email);
     await saveFCMToken(token);
 
     return {'token': token, 'user_type': userType, 'name': name};
