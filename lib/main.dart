@@ -21,6 +21,7 @@ import 'services/api_service.dart';
 import 'screens/splash_screen.dart';
 import 'utils/logger.dart';
 import 'utils/platform_route.dart';
+import 'firebase_options.dart';
 
 /// Merchant ID en attente (deep link reçu avant que l'utilisateur soit connecté)
 String? pendingJoinMerchantId;
@@ -43,7 +44,7 @@ void main() async {
 
   try {
     AppLogger.splash('Init Firebase...');
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
     // Init local notifications
     const AndroidInitializationSettings initializationSettingsAndroid =
