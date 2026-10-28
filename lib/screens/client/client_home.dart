@@ -876,7 +876,7 @@ class _ClientHomeState extends State<ClientHome>
             ),
           ];
           final content = Material(
-            type: MaterialType.transparency,
+            color: Colors.transparent,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(
                 controller: currentCtrl,
