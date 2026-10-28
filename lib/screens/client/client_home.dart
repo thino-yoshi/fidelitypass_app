@@ -958,11 +958,14 @@ class _ClientHomeState extends State<ClientHome>
               child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Supprimer'),
             ),
           ];
-          final content = Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
-            const SizedBox(height: 12),
-            TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
-          ]);
+          final content = Material(
+            color: Colors.transparent,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
+              const SizedBox(height: 12),
+              TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
+            ]),
+          );
           if (Platform.isIOS) {
             return CupertinoAlertDialog(
               title: const Text('Supprimer mon compte', style: TextStyle(color: Color(0xFFE24B4A))),
