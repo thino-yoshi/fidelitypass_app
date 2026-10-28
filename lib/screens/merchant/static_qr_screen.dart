@@ -1,5 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
@@ -24,6 +30,9 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
   String? qrToken;
   bool loading = true;
   String? error;
+  bool _sharing = false;
+
+  final _qrKey = GlobalKey();
 
   Color get _kBg     => context.cBg;
   Color get _kWhite  => context.cSurface;
@@ -45,6 +54,71 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
       Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, color: _kSub, height: 1.4))),
     ]),
   );
+
+  Future<Uint8List?> _captureQR() async {
+    try {
+      final boundary = _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      AppLogger.error('Capture QR erreur : $e');
+      return null;
+    }
+  }
+
+  Future<File?> _saveTmp(Uint8List bytes, String name) async {
+    final dir = await getTemporaryDirectory();
+    final safe = widget.businessName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final file = File('${dir.path}/${name}_$safe.png');
+    await file.writeAsBytes(bytes);
+    return file;
+  }
+
+  Future<void> _download() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      final bytes = await _captureQR();
+      if (bytes == null || !mounted) return;
+      final file = await _saveTmp(bytes, 'qr_code');
+      if (file == null || !mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'image/png')],
+        text: 'QR code — ${widget.businessName}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e'), duration: const Duration(seconds: 3)));
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  Future<void> _print() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      final bytes = await _captureQR();
+      if (bytes == null || !mounted) return;
+      final file = await _saveTmp(bytes, 'qr_print');
+      if (file == null || !mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'image/png')],
+        subject: 'Imprimer QR code — ${widget.businessName}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e'), duration: const Duration(seconds: 3)));
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   Future<void> _loadQR() async {
     AppLogger.merchant('StaticQRScreen → chargement QR statique pour ${widget.businessName}...');
@@ -98,7 +172,9 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                       const SizedBox(height: 32),
 
                       // QR code
-                      Container(
+                      RepaintBoundary(
+                        key: _qrKey,
+                      child: Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           color: _kWhite,
@@ -143,14 +219,16 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                           ],
                         ),
                       ),
+                      ),  // RepaintBoundary
                       const SizedBox(height: 24),
 
                       // Boutons d'action
                       Row(children: [
                         Expanded(child: OutlinedButton.icon(
-                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Impression bientôt disponible'), duration: Duration(seconds: 2))),
-                          icon: Icon(Icons.print_outlined, size: 16, color: widget.accentColor),
+                          onPressed: _sharing ? null : _print,
+                          icon: _sharing
+                              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: widget.accentColor))
+                              : Icon(Icons.print_outlined, size: 16, color: widget.accentColor),
                           label: Text('Imprimer', style: TextStyle(fontWeight: FontWeight.w700, color: widget.accentColor)),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -160,9 +238,10 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
                         )),
                         const SizedBox(width: 12),
                         Expanded(child: ElevatedButton.icon(
-                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Téléchargement bientôt disponible'), duration: Duration(seconds: 2))),
-                          icon: const Icon(Icons.download_rounded, size: 16),
+                          onPressed: _sharing ? null : _download,
+                          icon: _sharing
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.download_rounded, size: 16),
                           label: const Text('Télécharger', style: TextStyle(fontWeight: FontWeight.w700)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: widget.accentColor, foregroundColor: Colors.white,
