@@ -233,7 +233,13 @@ class AuthService {
     if (session != null) {
       final user     = _supabase.auth.currentUser;
       final userType = resolveUserType(user?.userMetadata);
-      final name     = (user?.userMetadata?['name'] as String?) ?? user?.email ?? '';
+      var name = (user?.userMetadata?['name'] as String?) ?? '';
+      // Apple ne retourne le nom qu'à la 1ère connexion — fallback sur SharedPreferences
+      if (name.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        final saved = prefs.getString('name') ?? '';
+        name = saved.isNotEmpty ? saved : (user?.email ?? '');
+      }
       AppLogger.auth('getSession → Supabase, user_type: $userType, name: $name');
       return {'token': session.accessToken, 'user_type': userType, 'name': name};
     }

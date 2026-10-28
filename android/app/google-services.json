@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:1097051657980:android:73f833c86e5117788d6979",
         "android_client_info": {
-          "package_name": "com.qarta.app"
+          "package_name": "com.example.fidelitypass_app"
         }
       },
       "oauth_client": [
@@ -17,8 +17,24 @@
           "client_id": "1097051657980-1v299oqmdibdfqirke26v72ab0c3g0cn.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.qarta.app",
+            "package_name": "com.example.fidelitypass_app",
             "certificate_hash": "76240fe749e995f58d9d64d57daca0233c4f173d"
+          }
+        },
+        {
+          "client_id": "1097051657980-qs2bbuej6kih2kth0s5bqpjbdsbadror.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fidelitypass_app",
+            "certificate_hash": "bb678b5c08d2f0ecce78d9773f4ae1bb58c5ef68"
+          }
+        },
+        {
+          "client_id": "1097051657980-tt7to63i0f7l56fofmf28ee9jjv75vm1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fidelitypass_app",
+            "certificate_hash": "6a4a24d3453e2a95c9c7f8135e7234a62fda1b15"
           }
         },
         {
@@ -37,6 +53,65 @@
             {
               "client_id": "1097051657980-rm2slbqt9atg9og0qdjc45nat5qe3jkj.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1097051657980-r1dvb20pf3ofh0mee4ogqkqbbstlj506.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.yassin.fidelitypassapp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097051657980:android:09e055ea3ca930938d6979",
+        "android_client_info": {
+          "package_name": "com.qarta.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1097051657980-nm38cbqvmlur75rqi1t1pcncqq47r067.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.qarta.app",
+            "certificate_hash": "76240fe749e995f58d9d64d57daca0233c4f173d"
+          }
+        },
+        {
+          "client_id": "1097051657980-nugug8a4fpkqq87u698bv3hv2d06hssp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.qarta.app",
+            "certificate_hash": "6a4a24d3453e2a95c9c7f8135e7234a62fda1b15"
+          }
+        },
+        {
+          "client_id": "1097051657980-rm2slbqt9atg9og0qdjc45nat5qe3jkj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrXud2go-vz0kBP9P4USlARIkC7qh0q20"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1097051657980-rm2slbqt9atg9og0qdjc45nat5qe3jkj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1097051657980-r1dvb20pf3ofh0mee4ogqkqbbstlj506.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.yassin.fidelitypassapp"
+              }
             }
           ]
         }

@@ -15,3 +15,23 @@ PageRoute<T> platformRoute<T>({required WidgetBuilder builder, bool fullscreenDi
     fullscreenDialog: fullscreenDialog,
   );
 }
+
+/// showCupertinoDialog sur iOS (animation + barrière natifs), showDialog ailleurs.
+Future<T?> showPlatformDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = false,
+}) {
+  if (Platform.isIOS) {
+    return showCupertinoDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: builder,
+  );
+}

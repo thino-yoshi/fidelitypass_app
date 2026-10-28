@@ -79,6 +79,7 @@ class _ClientHomeState extends State<ClientHome>
   String  _phone = '';
   bool    _isGoogle = false;
   bool    _isOAuth  = false; // true pour Google ET Apple (email non modifiable)
+  bool    _openingPersonalInfo = false;
 
   static const Map<String, Map<String, dynamic>> _notifStyle = {
     'recompense': {'icon': '⭐', 'color': 0xFFFBBF24},
@@ -288,6 +289,8 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   Future<void> _showPersonalInfo() async {
+    if (_openingPersonalInfo) return;
+    _openingPersonalInfo = true;
     // Toujours récupérer les données fraîches depuis le serveur
     String freshEmail  = _userEmail;
     bool   freshGoogle = _isGoogle;
@@ -312,7 +315,7 @@ class _ClientHomeState extends State<ClientHome>
         if (mounted) setState(() { _userEmail = freshEmail; _isGoogle = freshGoogle; _isOAuth = freshOAuth; });
       }
     } catch (_) {}
-    if (!mounted) return;
+    if (!mounted) { _openingPersonalInfo = false; return; }
 
     const blue = Color(0xFF2C7BE5);
 
@@ -325,7 +328,7 @@ class _ClientHomeState extends State<ClientHome>
     String? editingField; // 'name' | 'email' | 'phone'
     bool saving = false;
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -410,7 +413,7 @@ class _ClientHomeState extends State<ClientHome>
           }
 
           return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
             child: Container(
               decoration: BoxDecoration(
                 color: bg,
@@ -542,6 +545,7 @@ class _ClientHomeState extends State<ClientHome>
         },
       ),
     );
+    _openingPersonalInfo = false;
   }
 
   Widget _infoRow({required IconData icon, required String label, required String value, required Color sub}) {
@@ -871,11 +875,40 @@ class _ClientHomeState extends State<ClientHome>
               child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Confirmer'),
             ),
           ];
-          final content = Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: currentCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe actuel')),
-            const SizedBox(height: 12),
-            TextField(controller: newCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe')),
-          ]);
+          final content = Material(
+            type: MaterialType.transparency,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: currentCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Mot de passe actuel',
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: blue, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Nouveau mot de passe',
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: blue, width: 2),
+                  ),
+                ),
+              ),
+            ]),
+          );
           if (Platform.isIOS) {
             return CupertinoAlertDialog(
               title: const Text('Changer le mot de passe'),

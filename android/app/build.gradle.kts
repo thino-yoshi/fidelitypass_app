@@ -20,6 +20,15 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "qarta"
+            keyPassword = "Qarta@2025!"
+            storeFile = file("qarta-release-key.jks")
+            storePassword = "Qarta@2025!"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.qarta.app"
         minSdk = flutter.minSdkVersion
@@ -30,7 +39,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

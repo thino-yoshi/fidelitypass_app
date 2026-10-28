@@ -202,9 +202,20 @@ class _SplashRouterState extends State<SplashRouter> {
 
   Future<void> _initDeepLinks() async {
     final appLinks = AppLinks();
-    // Lien initial (app ouverte via deep link avant que ClientHome soit monté)
+    // Lien initial (app ouverte via deep link avant que SplashRouter soit monté)
     final initial = await appLinks.getInitialLink();
-    if (initial != null) _storeDeepLink(initial);
+    if (initial != null) _handleDeepLink(initial);
+    // Stream pour les liens reçus pendant que l'app tourne (OAuth callback inclus)
+    _linkSub = appLinks.uriLinkStream.listen(_handleDeepLink);
+  }
+
+  void _handleDeepLink(Uri uri) {
+    // Callback OAuth Supabase (Google / Apple) → passer à Supabase pour compléter la session
+    if (uri.host == 'login-callback') {
+      Supabase.instance.client.auth.getSessionFromUrl(uri);
+      return;
+    }
+    _storeDeepLink(uri);
   }
 
   void _storeDeepLink(Uri uri) {
