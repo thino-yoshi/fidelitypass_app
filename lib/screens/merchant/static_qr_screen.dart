@@ -83,10 +83,7 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
     try {
       final bytes = await _captureQR();
       if (bytes == null || !mounted) return;
-      await Gal.putImageBytes(
-        bytes,
-        name: 'qr_${widget.businessName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
-      );
+      await Gal.putImageBytes(bytes);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
