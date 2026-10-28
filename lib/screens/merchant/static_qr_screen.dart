@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -82,12 +83,18 @@ class _StaticQRScreenState extends State<StaticQRScreen> {
     try {
       final bytes = await _captureQR();
       if (bytes == null || !mounted) return;
-      final file = await _saveTmp(bytes, 'qr_code');
-      if (file == null || !mounted) return;
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
-        text: 'QR code — ${widget.businessName}',
+      await Gal.putImageBytes(
+        bytes,
+        name: 'qr_${widget.businessName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image sauvegardée dans la galerie ✓'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
