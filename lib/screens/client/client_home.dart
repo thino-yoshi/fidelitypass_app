@@ -76,6 +76,7 @@ class _ClientHomeState extends State<ClientHome>
   String? _profileImagePath;  // fichier local (avant upload / fallback)
   String? _profileImageUrl;   // URL serveur (Supabase Storage)
   String  _userEmail = '';
+  String  _userName  = '';
   String  _phone = '';
   bool    _isGoogle = false;
   bool    _isOAuth  = false; // true pour Google ET Apple (email non modifiable)
@@ -93,6 +94,7 @@ class _ClientHomeState extends State<ClientHome>
   void initState() {
     super.initState();
     AppLogger.client('ClientHome chargé → userName: ${widget.userName}');
+    _userName = widget.userName;
     WidgetsBinding.instance.addObserver(this);
     _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
     if (widget.initialCards.isNotEmpty) {
@@ -291,37 +293,14 @@ class _ClientHomeState extends State<ClientHome>
   Future<void> _showPersonalInfo() async {
     if (_openingPersonalInfo) return;
     _openingPersonalInfo = true;
-    // Toujours récupérer les données fraîches depuis le serveur
-    String freshEmail  = _userEmail;
-    bool   freshGoogle = _isGoogle;
-    bool   freshOAuth  = _isOAuth;
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/users/me'),
-        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-      );
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final serverEmail    = body['email'] as String? ?? '';
-        final serverIsGoogle = body['is_google'] as bool? ?? false;
-        final prefs = await SharedPreferences.getInstance();
-        final localIsGoogle  = prefs.getBool('is_google') ?? false;
-        freshEmail  = serverEmail.isNotEmpty ? serverEmail : freshEmail;
-        freshGoogle = serverIsGoogle || localIsGoogle || _isGoogle;
-        freshOAuth  = (body['is_oauth'] as bool? ?? false) || freshGoogle;
-        if (freshEmail.isNotEmpty) await prefs.setString('email', freshEmail);
-        await prefs.setBool('is_google', freshGoogle);
-        await prefs.setBool('is_oauth', freshOAuth);
-        if (mounted) setState(() { _userEmail = freshEmail; _isGoogle = freshGoogle; _isOAuth = freshOAuth; });
-      }
-    } catch (_) {}
     if (!mounted) { _openingPersonalInfo = false; return; }
 
     const blue = Color(0xFF2C7BE5);
 
-    // Champs éditables — utilise les données fraîches
-    final nameCtrl  = TextEditingController(text: widget.userName);
-    final emailCtrl = TextEditingController(text: freshEmail);
+    // Champs éditables — utilise les données en cache (ouverture immédiate)
+    final nameCtrl  = TextEditingController(text: _userName);
+    final emailCtrl = TextEditingController(text: _userEmail);
+    bool _profileLoaded = false;
     final phoneCtrl = TextEditingController(text: _phone);
 
     // Quel champ est en cours d'édition ? null = aucun
@@ -334,6 +313,43 @@ class _ClientHomeState extends State<ClientHome>
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
+          // Rafraîchissement en arrière-plan au premier build (sans bloquer l'ouverture)
+          if (!_profileLoaded) {
+            _profileLoaded = true;
+            Future.microtask(() async {
+              try {
+                final res = await http.get(
+                  Uri.parse('$apiUrl/users/me'),
+                  headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
+                );
+                if (res.statusCode == 200 && ctx.mounted) {
+                  final body        = jsonDecode(res.body) as Map<String, dynamic>;
+                  final serverEmail = body['email'] as String? ?? '';
+                  final serverName  = body['name']  as String? ?? '';
+                  final serverIsGoogle = body['is_google'] as bool? ?? false;
+                  final prefs = await SharedPreferences.getInstance();
+                  final localIsGoogle = prefs.getBool('is_google') ?? false;
+                  final freshEmail  = serverEmail.isNotEmpty ? serverEmail : _userEmail;
+                  final freshGoogle = serverIsGoogle || localIsGoogle || _isGoogle;
+                  final freshOAuth  = (body['is_oauth'] as bool? ?? false) || freshGoogle;
+                  if (freshEmail.isNotEmpty) await prefs.setString('email', freshEmail);
+                  await prefs.setBool('is_google', freshGoogle);
+                  await prefs.setBool('is_oauth', freshOAuth);
+                  if (mounted) setState(() {
+                    _userEmail = freshEmail;
+                    _isGoogle  = freshGoogle;
+                    _isOAuth   = freshOAuth;
+                    if (serverName.isNotEmpty) _userName = serverName;
+                  });
+                  if (ctx.mounted) setS(() {
+                    emailCtrl.text = freshEmail;
+                    if (serverName.isNotEmpty) nameCtrl.text = serverName;
+                  });
+                }
+              } catch (_) {}
+            });
+          }
+
           final isDark = Theme.of(context).brightness == Brightness.dark;
           final bg  = isDark ? const Color(0xFF1E1D2A) : Colors.white;
           final sub = isDark ? Colors.white54 : Colors.black45;
@@ -518,8 +534,11 @@ class _ClientHomeState extends State<ClientHome>
                             final updated = jsonDecode(res.body);
                             setState(() {
                               _userEmail = updated['email'] ?? _userEmail;
-                              SharedPreferences.getInstance().then((p) => p.setString('name', updated['name'] ?? widget.userName));
+                              _userName  = updated['name']  ?? _userName;
                             });
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('name',  _userName);
+                            await prefs.setString('email', _userEmail);
                           }
                         } catch (_) {}
 
