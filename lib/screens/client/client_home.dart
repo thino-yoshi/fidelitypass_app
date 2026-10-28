@@ -64,6 +64,7 @@ class _ClientHomeState extends State<ClientHome>
   Timer?     _stampBadgeTimer;
   Timer?     _slideInTimer;
   StreamSubscription<Uri>? _deepLinkSub;
+  StreamSubscription<dynamic>? _fcmForegroundSub;
   Uri? _lastHandledDeepLink;
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
@@ -124,6 +125,10 @@ class _ClientHomeState extends State<ClientHome>
         if (msg != null && mounted) {
           Future.delayed(const Duration(milliseconds: 500), _openNotifs);
         }
+      });
+      // Notif reçue pendant que l'app est ouverte → refresh instantané
+      _fcmForegroundSub = FirebaseMessaging.onMessage.listen((msg) {
+        if (mounted) _loadNotifs();
       });
     } catch (e) {
       debugPrint('[CLIENT] Firebase non dispo pour notif handlers : $e');
@@ -682,6 +687,7 @@ class _ClientHomeState extends State<ClientHome>
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
     _deepLinkSub?.cancel();
+    _fcmForegroundSub?.cancel();
     notifOpenNotifier.removeListener(_onNotifOpen);
     super.dispose();
   }
