@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
+import '../../utils/platform_route.dart';
 import 'notifications_screen.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -403,7 +404,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
         // ── Bouton ────────────────────────────────────────────────────────────
         SizedBox(width: double.infinity, child: GestureDetector(
-          onTap: () => Navigator.push(context, MaterialPageRoute(
+          onTap: () => Navigator.push(context, platformRoute(
               builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 11),
@@ -548,7 +549,7 @@ class _StatsScreenState extends State<StatsScreen> {
       label: n > 1 ? 'sont proches de la récompense' : 'est proche de la récompense',
       sub: '≥ ${(_required - 2).clamp(1, _required)}/$_required tampons · prêts à être relancés',
       btn: 'Notifier', btnBg: _kGold, btnText: Colors.white,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
+      onTap: () => Navigator.push(context, platformRoute(
           builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
     );
   }
@@ -561,7 +562,7 @@ class _StatsScreenState extends State<StatsScreen> {
       label: n > 1 ? 'inactifs depuis +7 jours' : 'inactif depuis +7 jours',
       sub: 'aucune visite récente · à reconquérir',
       btn: 'Relancer', btnBg: context.cBg, btnText: context.cText,
-      onTap: () => Navigator.push(context, MaterialPageRoute(
+      onTap: () => Navigator.push(context, platformRoute(
           builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
     );
   }

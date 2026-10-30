@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../utils/platform_route.dart';
 import '../../main.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
@@ -266,7 +267,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   Future<void> _navigateToCarteEditor() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(
+      platformRoute(
         builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}, initialDesign: _cardDesign),
       ),
     );
@@ -286,11 +287,11 @@ class _MerchantHomeState extends State<MerchantHome> {
     await AuthService.logout();
     if (!mounted) return;
     AppLogger.nav('Logout → retour AuthScreen');
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+    Navigator.pushReplacement(context, platformRoute(builder: (_) => const AuthScreen()));
   }
 
   void _openScanner() {
-    Navigator.push(context, MaterialPageRoute(
+    Navigator.push(context, platformRoute(
       builder: (_) => ScannerScreen(token: widget.token, merchantInfo: merchantInfo, initialHistory: _scanHistory),
     ));
   }
@@ -305,21 +306,21 @@ class _MerchantHomeState extends State<MerchantHome> {
         merchantInfo: merchantInfo,
         onLogout: _logout,
         onNavigateToProgram: null,
-        onNavigateToNotifs: () => Navigator.push(context, MaterialPageRoute(
+        onNavigateToNotifs: () => Navigator.push(context, platformRoute(
           builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo, initialClients: _recentClients))),
-        onNavigateToQR: () => Navigator.push(context, MaterialPageRoute(
+        onNavigateToQR: () => Navigator.push(context, platformRoute(
           builder: (_) => StaticQRScreen(token: widget.token, businessName: _businessName, accentColor: _kPrimary),
         )),
-        onNavigateToAbonnement: () => Navigator.push(context, MaterialPageRoute(
+        onNavigateToAbonnement: () => Navigator.push(context, platformRoute(
           builder: (_) => const AbonnementScreen(),
         )),
-        onNavigateToInfo: () => Navigator.push(context, MaterialPageRoute(
+        onNavigateToInfo: () => Navigator.push(context, platformRoute(
           builder: (_) => InfoCommerceScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
         )).then((updated) {
           if (updated != null && mounted) setState(() => merchantInfo = updated as Map);
         }),
         onNavigateToCarteEditor: _navigateToCarteEditor,
-        onNavigateToStats: () => Navigator.push(context, MaterialPageRoute(
+        onNavigateToStats: () => Navigator.push(context, platformRoute(
           builder: (_) => StatsScreen(
             token: widget.token,
             merchantInfo: merchantInfo,
@@ -543,7 +544,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   // ── Bulle "Demander un avis Google" ─────────────────────────────────────────
   Widget _googleBubble() {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(
+      onTap: () => Navigator.push(context, platformRoute(
         builder: (_) => GoogleAutoScreen(token: widget.token, merchantInfo: merchantInfo ?? {}))),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
@@ -772,7 +773,7 @@ class _MerchantHomeState extends State<MerchantHome> {
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText))),
           GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(
+            onTap: () => Navigator.push(context, platformRoute(
               builder: (_) => StatsScreen(
                 token: widget.token,
                 merchantInfo: merchantInfo,

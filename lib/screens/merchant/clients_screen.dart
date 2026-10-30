@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
+import '../../utils/platform_route.dart';
 import 'fiche_client_screen.dart';
 
 class ClientsScreen extends StatefulWidget {
@@ -203,7 +204,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                       AppLogger.merchant('ClientsScreen → fiche: $name');
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        platformRoute(
                           builder: (_) => FicheClientScreen(
                             token:              widget.token,
                             clientId:           clientId,

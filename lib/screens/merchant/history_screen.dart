@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
+import '../../utils/platform_route.dart';
 import 'fiche_client_screen.dart';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -282,7 +283,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ? (cardData['stamps_count'] as int? ?? 0)
         : (clientScans.isNotEmpty ? (clientScans.first['stamps_count'] as int? ?? 0) : 0);
 
-    Navigator.push(context, MaterialPageRoute(builder: (_) => FicheClientScreen(
+    Navigator.push(context, platformRoute(builder: (_) => FicheClientScreen(
       token:             widget.token,
       clientId:          clientId,
       cardId:            cardId,

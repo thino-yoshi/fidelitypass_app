@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
+import '../../utils/platform_route.dart';
 import '../client/cards_tab.dart' show LoyaltyCardFace, CardStyle;
 import 'notifications_screen.dart';
 
@@ -636,7 +637,7 @@ class _FicheClientScreenState extends State<FicheClientScreen> {
         style: OutlinedButton.styleFrom(
           foregroundColor: context.cText, side: BorderSide(color: context.cBorder),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-        onPressed: () => Navigator.push(context, MaterialPageRoute(
+        onPressed: () => Navigator.push(context, platformRoute(
             builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
         icon: const Icon(Icons.notifications_active_outlined, size: 17, color: kGold),
         label: const Text('Envoyer une notification ciblée', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
