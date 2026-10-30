@@ -128,34 +128,38 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
 
   // ── Bannière magasin ──────────────────────────────────────────────────────────
   Widget _banner(String name, List<dynamic> rewards) {
+    final style = CardStyle.fromDesign(rewards.first['card_design'], fallbackColor: _kGold);
+    final cardColor = style.bgColors.isNotEmpty ? style.bgColors.first : _kNavy;
+    final description = rewards.first['description'] as String? ?? 'Récompense';
+
     return GestureDetector(
       onTap: () => _openStack(name, rewards),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: _kNavy,
+          color: cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.35), width: 1.5),
-          boxShadow: [BoxShadow(color: _kNavy.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+          boxShadow: [BoxShadow(color: cardColor.withValues(alpha: 0.4), blurRadius: 14, offset: const Offset(0, 6))],
         ),
         child: Row(children: [
           Container(
             width: 40, height: 40,
-            decoration: BoxDecoration(color: const Color(0xFF4A9EFF).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.star_rounded, color: Color(0xFF4A9EFF), size: 22),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.star_rounded, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 2),
-            Text('${rewards.length} récompense${rewards.length > 1 ? "s" : ""} disponible${rewards.length > 1 ? "s" : ""}',
-                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.65))),
+            Text(description, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.75))),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-            decoration: BoxDecoration(color: const Color(0xFF4A9EFF).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-            child: Text('${rewards.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF4A9EFF))),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
+            child: Text('${rewards.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.white)),
           ),
         ]),
       ),
