@@ -346,17 +346,20 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
   }
 
   Future<void> _doApple() async {
-    AppLogger.auth('Apple Sign-In → clic bouton');
-    setState(() { appleLoading = true; error = ''; _awaitingGoogleAuth = true; });
+    AppLogger.auth('Apple Sign-In natif → clic bouton');
+    setState(() { appleLoading = true; error = ''; });
     try {
-      await AuthService.launchAppleSignIn();
-      // La session arrive via deep link → _onAuthStateChange prend le relais
+      final data = await AuthService.launchAppleSignIn();
+      AppLogger.auth('Apple natif → succès, user_type: ${data['user_type']}');
+      if (mounted) {
+        setState(() => appleLoading = false);
+        _navigate(data);
+      }
     } catch (e) {
       AppLogger.error('Apple Sign-In → échec : $e');
       if (mounted) {
         setState(() {
           appleLoading = false;
-          _awaitingGoogleAuth = false;
           error = e.toString().replaceAll('Exception: ', '');
         });
       }

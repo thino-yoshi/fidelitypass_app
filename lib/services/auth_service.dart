@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../config/api.dart';
@@ -165,13 +168,43 @@ class AuthService {
     return {'token': token, 'user_type': userType, 'name': name};
   }
 
-  // ── Connexion Apple (OAuth Supabase → deep link qarta://login-callback) ──────
-  static Future<void> launchAppleSignIn() async {
-    AppLogger.auth('Apple Sign-In → ouverture OAuth Supabase...');
-    await _supabase.auth.signInWithOAuth(
-      OAuthProvider.apple,
-      redirectTo: 'qarta://login-callback',
+  // ── Connexion Apple (modale native iOS via Sign In with Apple) ───────────────
+  static Future<Map<String, dynamic>> launchAppleSignIn() async {
+    AppLogger.auth('Apple Sign-In natif → ouverture modale système...');
+    final rawNonce = _generateNonce();
+    final nonce = _sha256ofString(rawNonce);
+
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: nonce,
     );
+
+    final idToken = credential.identityToken;
+    if (idToken == null) throw Exception('Apple Sign-In : identityToken null');
+
+    AppLogger.auth('Apple Sign-In → credential obtenu, connexion Supabase...');
+    await _supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
+
+    return processCurrentGoogleUser();
+  }
+
+  static String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  static String _sha256ofString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
   }
 
   // ── Envoi du token FCM à l'API ───────────────────────────────────────────────

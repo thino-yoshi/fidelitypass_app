@@ -1421,12 +1421,13 @@ class _ClientHomeState extends State<ClientHome>
   // ── PROFIL TAB ─────────────────────────────────────────────────────────────
 
   Widget _buildProfilTab() {
-    return Padding(
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 76),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Avatar profil ──────────────────────────────────────────────────
-          const Spacer(),
+          const SizedBox(height: 8),
           GestureDetector(
             onTap: _pickProfileImage,
             child: Stack(
@@ -1463,7 +1464,7 @@ class _ClientHomeState extends State<ClientHome>
           ),
           const SizedBox(height: 6),
           Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          Spacer(flex: 2),
+          const SizedBox(height: 20),
           // Section 1: compte
           _profSec([
             _profRow(
@@ -1503,7 +1504,7 @@ class _ClientHomeState extends State<ClientHome>
               ),
             ),
           ]),
-          const Spacer(),
+          const SizedBox(height: 12),
           // Section 2: préférences
           _profSec([
             _profRowDarkMode(),
@@ -1534,7 +1535,7 @@ class _ClientHomeState extends State<ClientHome>
               ),
             ),
           ]),
-          Spacer(flex: 2),
+          const SizedBox(height: 20),
           // Bouton déconnexion
           GestureDetector(
             onTap: _logout,
