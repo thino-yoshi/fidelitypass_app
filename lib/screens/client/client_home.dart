@@ -130,6 +130,13 @@ class _ClientHomeState extends State<ClientHome>
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((msg) {
         if (mounted) _loadNotifs();
       });
+      // Tap sur notif depuis background → refresh + ouvre modale
+      FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+        if (mounted) {
+          _loadNotifs();
+          Future.delayed(const Duration(milliseconds: 300), _openNotifs);
+        }
+      });
     } catch (e) {
       debugPrint('[CLIENT] Firebase non dispo pour notif handlers : $e');
     }
@@ -216,6 +223,7 @@ class _ClientHomeState extends State<ClientHome>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _checkLatestDeepLink();
+      _loadNotifs();
       final now = DateTime.now();
       final stale = _lastCardsRefresh == null ||
           now.difference(_lastCardsRefresh!).inMinutes >= 5;
