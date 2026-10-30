@@ -1114,6 +1114,8 @@ class _ClientHomeState extends State<ClientHome>
   void _openNotifs() {
     setState(() => _notifOpen = true);
     _notifAnim.forward();
+    // Marque toutes comme lues dès l'ouverture (comme WhatsApp)
+    if (_notifCount > 0) _markAllRead();
   }
 
   void _closeNotifs() {
