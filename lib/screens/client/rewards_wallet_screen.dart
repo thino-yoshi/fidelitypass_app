@@ -130,7 +130,10 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
   Widget _banner(String name, List<dynamic> rewards) {
     final style = CardStyle.fromDesign(rewards.first['card_design'], fallbackColor: _kGold);
     final cardColor = style.bgColors.isNotEmpty ? style.bgColors.first : _kNavy;
-    final description = rewards.first['description'] as String? ?? 'Récompense';
+    // Priorité : reward_description du merchant (toujours à jour) > description snapshot
+    final description = (rewards.first['merchant'] as Map?)?['reward_description'] as String?
+        ?? rewards.first['description'] as String?
+        ?? 'Récompense';
 
     return GestureDetector(
       onTap: () => _openStack(name, rewards),
