@@ -308,9 +308,23 @@ class _ClientHomeState extends State<ClientHome>
     bool _profileLoaded = false;
     final phoneCtrl = TextEditingController(text: _phone);
 
+    // Pour déclencher un rebuild du bouton dès qu'un champ change
+    // (utiliser une variable dans le StatefulBuilder via setS)
+    void Function(void Function())? _setS;
+
     // Quel champ est en cours d'édition ? null = aucun
     String? editingField; // 'name' | 'email' | 'phone'
     bool saving = false;
+
+    // Valeurs initiales pour détecter les modifications
+    final initName  = _userName;
+    final initEmail = _userEmail;
+    final initPhone = _phone;
+
+    bool hasChanges() =>
+        nameCtrl.text.trim() != initName ||
+        (!_isOAuth && emailCtrl.text.trim() != initEmail) ||
+        phoneCtrl.text.trim() != initPhone;
 
     await showModalBottomSheet(
       context: context,
@@ -318,6 +332,15 @@ class _ClientHomeState extends State<ClientHome>
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
+          // Listeners pour activer le bouton Enregistrer dès qu'un champ est modifié
+          if (_setS == null) {
+            _setS = setS;
+            void rebuild() { if (ctx.mounted) setS(() {}); }
+            nameCtrl.addListener(rebuild);
+            emailCtrl.addListener(rebuild);
+            phoneCtrl.addListener(rebuild);
+          }
+
           // Rafraîchissement en arrière-plan au premier build (sans bloquer l'ouverture)
           if (!_profileLoaded) {
             _profileLoaded = true;
@@ -513,11 +536,11 @@ class _ClientHomeState extends State<ClientHome>
                   ),
                   const SizedBox(height: 24),
 
-                  // Bouton Enregistrer
+                  // Bouton Enregistrer — actif seulement si un champ a changé
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: saving ? null : () async {
+                      onPressed: saving || !hasChanges() ? null : () async {
                         setS(() => saving = true);
                         // Sauvegarder téléphone localement
                         final prefs = await SharedPreferences.getInstance();
@@ -867,84 +890,148 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _showChangePassword() {
-    final currentCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    bool loading = false;
+    final currentCtrl  = TextEditingController();
+    final newCtrl      = TextEditingController();
+    final confirmCtrl  = TextEditingController();
+    bool loading       = false;
+    bool showCurrent   = false;
+    bool showNew       = false;
+    bool showConfirm   = false;
     const blue = Color(0xFF2C7BE5);
-    (Platform.isIOS ? showCupertinoDialog<void> : showDialog<void>)(
+
+    showModalBottomSheet<void>(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final actions = [
-            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: loading ? null : () async {
-                setDialogState(() => loading = true);
-                try {
-                  final res = await http.put(
-                    Uri.parse('$apiUrl/users/change-password'),
-                    headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
-                    body: jsonEncode({'current_password': currentCtrl.text, 'new_password': newCtrl.text}),
-                  );
-                  if (!ctx.mounted) return;
-                  Navigator.pop(ctx);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(res.statusCode == 200 ? 'Mot de passe mis à jour !' : jsonDecode(res.body)['detail'] ?? 'Erreur'),
-                    backgroundColor: res.statusCode == 200 ? blue : Colors.red,
-                  ));
-                } catch (_) { setDialogState(() => loading = false); }
-              },
-              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Confirmer'),
+        builder: (ctx, setS) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final bg     = isDark ? const Color(0xFF1E1D2A) : Colors.white;
+          final sub    = isDark ? Colors.white54 : Colors.black45;
+
+          Widget passField({
+            required TextEditingController ctrl,
+            required String label,
+            required bool visible,
+            required VoidCallback onToggle,
+          }) =>
+              Container(
+                decoration: BoxDecoration(
+                  color: blue.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: blue.withValues(alpha: 0.12)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                      child: Icon(Icons.lock_outline_rounded, color: blue, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl,
+                        obscureText: !visible,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: label,
+                          hintStyle: TextStyle(color: sub, fontWeight: FontWeight.w400),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(visible ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: sub, size: 18),
+                      onPressed: onToggle,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              );
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.lock_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text('Changer le mot de passe', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  passField(ctrl: currentCtrl, label: 'Mot de passe actuel', visible: showCurrent, onToggle: () => setS(() => showCurrent = !showCurrent)),
+                  const SizedBox(height: 12),
+                  passField(ctrl: newCtrl, label: 'Nouveau mot de passe', visible: showNew, onToggle: () => setS(() => showNew = !showNew)),
+                  const SizedBox(height: 12),
+                  passField(ctrl: confirmCtrl, label: 'Confirmer le nouveau mot de passe', visible: showConfirm, onToggle: () => setS(() => showConfirm = !showConfirm)),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: loading ? null : () async {
+                        if (newCtrl.text != confirmCtrl.text) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Les mots de passe ne correspondent pas'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+                        setS(() => loading = true);
+                        try {
+                          final res = await http.put(
+                            Uri.parse('$apiUrl/users/change-password'),
+                            headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
+                            body: jsonEncode({'current_password': currentCtrl.text, 'new_password': newCtrl.text}),
+                          );
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(res.statusCode == 200 ? 'Mot de passe mis à jour !' : jsonDecode(res.body)['detail'] ?? 'Erreur'),
+                            backgroundColor: res.statusCode == 200 ? blue : Colors.red,
+                          ));
+                        } catch (_) { setS(() => loading = false); }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: blue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                      ),
+                      child: loading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive(backgroundColor: Colors.white))
+                          : const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ];
-          final content = Material(
-            color: Colors.transparent,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(
-                controller: currentCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Mot de passe actuel',
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: blue, width: 2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: newCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Nouveau mot de passe',
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: blue, width: 2),
-                  ),
-                ),
-              ),
-            ]),
-          );
-          if (Platform.isIOS) {
-            return CupertinoAlertDialog(
-              title: const Text('Changer le mot de passe'),
-              content: content,
-              actions: actions,
-            );
-          }
-          return AlertDialog(
-            title: const Text('Changer le mot de passe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            content: content,
-            actions: actions,
           );
         },
       ),
@@ -1387,7 +1474,7 @@ class _ClientHomeState extends State<ClientHome>
               sub: 'Nom, email, téléphone',
               onTap: _showPersonalInfo,
             ),
-            if (!_isGoogle)
+            if (!_isOAuth)
               _profRow(
                 iconBg: const Color(0xFFFEF3C7),
                 icon: Icons.lock_outline_rounded,
