@@ -46,6 +46,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
 
   bool loading = false;
   bool googleLoading = false;
+  bool appleLoading = false;
   bool _rememberMe = false;
   bool _awaitingGoogleAuth = false;
   String error = '';
@@ -74,13 +75,13 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
       _awaitingGoogleAuth = false;
       try {
         final data = await AuthService.processCurrentGoogleUser();
-        AppLogger.auth('Google OAuth (browser) → succès, user_type: ${data['user_type']}');
+        AppLogger.auth('OAuth (browser) → succès, user_type: ${data['user_type']}');
         if (mounted) {
-          setState(() => googleLoading = false);
+          setState(() { googleLoading = false; appleLoading = false; });
           _navigate(data);
         }
       } catch (e) {
-        AppLogger.error('Google OAuth (browser) → traitement échoué : $e');
+        AppLogger.error('OAuth (browser) → traitement échoué : $e');
         if (mounted) {
           setState(() {
             googleLoading = false;
@@ -344,6 +345,24 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
     }
   }
 
+  Future<void> _doApple() async {
+    AppLogger.auth('Apple Sign-In → clic bouton');
+    setState(() { appleLoading = true; error = ''; _awaitingGoogleAuth = true; });
+    try {
+      await AuthService.launchAppleSignIn();
+      // La session arrive via deep link → _onAuthStateChange prend le relais
+    } catch (e) {
+      AppLogger.error('Apple Sign-In → échec : $e');
+      if (mounted) {
+        setState(() {
+          appleLoading = false;
+          _awaitingGoogleAuth = false;
+          error = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -501,9 +520,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Apple — Bientôt disponible'), duration: Duration(seconds: 2)),
-                      ),
+                      onPressed: appleLoading ? null : _doApple,
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white.withValues(alpha: 0.08),
                         foregroundColor: Colors.white,
@@ -708,9 +725,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Apple — Bientôt disponible'), duration: Duration(seconds: 2)),
-                            ),
+                            onPressed: appleLoading ? null : _doApple,
                             style: OutlinedButton.styleFrom(
                               backgroundColor: Colors.white.withValues(alpha: 0.07),
                               foregroundColor: Colors.white,

@@ -135,7 +135,7 @@ class AuthService {
     return {'token': token, 'user_type': userType, 'name': name};
   }
 
-  // Appelé si un signedIn Supabase arrive (Apple Sign-In ou OAuth browser futur)
+  // Appelé quand une session Supabase OAuth arrive (Google browser ou Apple)
   static Future<Map<String, dynamic>> processCurrentGoogleUser() async {
     final user    = _supabase.auth.currentUser;
     final session = _supabase.auth.currentSession;
@@ -154,13 +154,24 @@ class AuthService {
       await _supabase.auth.refreshSession();
     }
 
+    final provider = (user.appMetadata['provider'] as String?) ?? '';
+    final isGoogle = provider == 'google';
     final userType = resolveUserType(_supabase.auth.currentUser?.userMetadata ?? meta);
     final token    = _supabase.auth.currentSession!.accessToken;
-    AppLogger.auth('processCurrentGoogleUser → user_type: $userType');
-    await saveSession(token, userType, name, email: user.email ?? '', isGoogle: true);
+    AppLogger.auth('processCurrentGoogleUser → provider: $provider, user_type: $userType');
+    await saveSession(token, userType, name, email: user.email ?? '', isGoogle: isGoogle);
     await fetchAndSaveProfile(token);
     await saveFCMToken(token);
     return {'token': token, 'user_type': userType, 'name': name};
+  }
+
+  // ── Connexion Apple (OAuth Supabase → deep link qarta://login-callback) ──────
+  static Future<void> launchAppleSignIn() async {
+    AppLogger.auth('Apple Sign-In → ouverture OAuth Supabase...');
+    await _supabase.auth.signInWithOAuth(
+      OAuthProvider.apple,
+      redirectTo: 'qarta://login-callback',
+    );
   }
 
   // ── Envoi du token FCM à l'API ───────────────────────────────────────────────
