@@ -121,21 +121,21 @@ class _ClientHomeState extends State<ClientHome>
   void _initNotifTapHandlers() {
     notifOpenNotifier.addListener(_onNotifOpen);
     try {
-      FirebaseMessaging.instance.getInitialMessage().then((msg) {
+      FirebaseMessaging.instance.getInitialMessage().then((msg) async {
         if (msg != null && mounted) {
-          Future.delayed(const Duration(milliseconds: 500), _openNotifs);
+          await _loadNotifs();
+          if (mounted) _openNotifs();
         }
       });
       // Notif reçue pendant que l'app est ouverte → refresh instantané
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((msg) {
         if (mounted) _loadNotifs();
       });
-      // Tap sur notif depuis background → refresh + ouvre modale
-      FirebaseMessaging.onMessageOpenedApp.listen((msg) {
-        if (mounted) {
-          _loadNotifs();
-          Future.delayed(const Duration(milliseconds: 300), _openNotifs);
-        }
+      // Tap sur notif depuis background → refresh PUIS ouvre modale (séquencé pour éviter race condition)
+      FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
+        if (!mounted) return;
+        await _loadNotifs();
+        if (mounted) _openNotifs();
       });
     } catch (e) {
       debugPrint('[CLIENT] Firebase non dispo pour notif handlers : $e');
@@ -1119,6 +1119,7 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _closeNotifs() {
+    if (_notifCount > 0) _markAllRead();
     _notifAnim.reverse().then((_) {
       if (mounted) setState(() => _notifOpen = false);
     });
