@@ -1129,14 +1129,14 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   String get _firstName {
-    final parts = widget.userName.trim().split(' ');
-    return parts.isNotEmpty ? parts[0] : widget.userName;
+    final parts = _userName.trim().split(' ');
+    return parts.isNotEmpty ? parts[0] : _userName;
   }
 
   String get _initials {
-    final parts = widget.userName.trim().split(' ');
+    final parts = _userName.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : 'U';
+    return _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U';
   }
 
   @override
@@ -1463,7 +1463,7 @@ class _ClientHomeState extends State<ClientHome>
             ),
           ),
           const SizedBox(height: 6),
-          Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          Text(_userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 20),
           // Section 1: compte
           _profSec([
