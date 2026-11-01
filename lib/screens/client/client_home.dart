@@ -238,13 +238,18 @@ class _ClientHomeState extends State<ClientHome>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _checkLatestDeepLink();
-      _loadNotifs();
       final now = DateTime.now();
       final stale = _lastCardsRefresh == null ||
           now.difference(_lastCardsRefresh!).inSeconds >= 30;
       if (stale) {
-        AppLogger.client('App revenue au premier plan → refresh complet');
-        _refreshAll();
+        // Délai pour laisser l'animation de retour iOS/Android se terminer avant de charger
+        Future.delayed(const Duration(milliseconds: 350), () {
+          if (!mounted) return;
+          AppLogger.client('App revenue au premier plan → refresh cartes + récompenses');
+          Future.wait([_loadStats(), _loadRewardsCount(), _loadNotifs()]);
+        });
+      } else {
+        _loadNotifs();
       }
     }
   }
