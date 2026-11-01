@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
@@ -15,17 +16,20 @@ class ScanTab extends StatefulWidget {
   State<ScanTab> createState() => _ScanTabState();
 }
 
-class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
+class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   MobileScannerController? _controller;
   bool _scanning = true;
   bool _loading  = false;
   String? _error;
+  late AnimationController _lineAnim;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startCamera();
+    _lineAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+      ..repeat(reverse: true);
   }
 
   void _startCamera() {
@@ -39,6 +43,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _lineAnim.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     super.dispose();
@@ -68,6 +73,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null || raw.isEmpty) return;
 
+    HapticFeedback.mediumImpact();
     AppLogger.client('ScanTab → QR détecté (brut): $raw');
     setState(() { _scanning = false; _loading = true; _error = null; });
     _controller?.stop();
@@ -127,8 +133,17 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
     _controller?.start();
   }
 
+  Rect _scanRect(Size size) {
+    final boxSize = size.width * 0.65;
+    final top = (size.height - boxSize) / 2 - 30;
+    return Rect.fromLTWH((size.width - boxSize) / 2, top, boxSize, boxSize);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final rect = _scanRect(size);
+
     return Stack(
       children: [
         // ── Caméra ──────────────────────────────────────────────────────
@@ -136,10 +151,11 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
           MobileScanner(
             controller: _controller!,
             onDetect: _onDetect,
+            scanWindow: rect,
           ),
 
-        // ── Overlay sombre avec fenêtre de scan ──────────────────────────
-        _ScanOverlay(),
+        // ── Overlay sombre + ligne animée ────────────────────────────────
+        _ScanOverlay(scanRect: rect, lineAnim: _lineAnim),
 
         // ── UI au-dessus ──────────────────────────────────────────────────
         SafeArea(
@@ -252,24 +268,45 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver {
   }
 }
 
-// ── Overlay de scan (fond sombre + fenêtre transparente) ──────────────────────
+// ── Overlay de scan (fond sombre + fenêtre + ligne animée) ───────────────────
 class _ScanOverlay extends StatelessWidget {
+  final Rect scanRect;
+  final Animation<double> lineAnim;
+  const _ScanOverlay({required this.scanRect, required this.lineAnim});
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final boxSize = size.width * 0.65;
-    final top = (size.height - boxSize) / 2 - 30;
-
-    return CustomPaint(
-      size: Size(size.width, size.height),
-      painter: _OverlayPainter(
-        scanRect: Rect.fromLTWH(
-          (size.width - boxSize) / 2,
-          top,
-          boxSize,
-          boxSize,
+    return Stack(
+      children: [
+        CustomPaint(
+          size: Size(size.width, size.height),
+          painter: _OverlayPainter(scanRect: scanRect),
         ),
-      ),
+        // Ligne de scan animée
+        AnimatedBuilder(
+          animation: lineAnim,
+          builder: (_, __) {
+            final y = scanRect.top + 8 + (scanRect.height - 16) * lineAnim.value;
+            return Positioned(
+              left: scanRect.left + 14,
+              top: y,
+              child: Container(
+                width: scanRect.width - 28,
+                height: 2,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    Colors.transparent,
+                    Colors.white.withValues(alpha: 0.85),
+                    Colors.transparent,
+                  ]),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
