@@ -126,18 +126,30 @@ class _ClientHomeState extends State<ClientHome>
       FirebaseMessaging.instance.getInitialMessage().then((msg) async {
         if (msg != null && mounted) {
           await _loadNotifs();
-          if (mounted) _openNotifs();
+          if (!mounted) return;
+          if (msg.data['type'] == 'recompense') {
+            setState(() { _rewardPillActive = true; _tab = 0; });
+            _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+          } else {
+            _openNotifs();
+          }
         }
       });
       // Notif reçue pendant que l'app est ouverte → refresh instantané
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((msg) {
         if (mounted) _loadNotifs();
       });
-      // Tap sur notif depuis background → refresh PUIS ouvre modale (séquencé pour éviter race condition)
+      // Tap sur notif depuis background → refresh PUIS route selon le type
       FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
         if (!mounted) return;
         await _loadNotifs();
-        if (mounted) _openNotifs();
+        if (!mounted) return;
+        if (msg.data['type'] == 'recompense') {
+          setState(() { _rewardPillActive = true; _tab = 0; });
+          _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+        } else {
+          _openNotifs();
+        }
       });
     } catch (e) {
       debugPrint('[CLIENT] Firebase non dispo pour notif handlers : $e');
