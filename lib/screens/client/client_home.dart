@@ -69,6 +69,7 @@ class _ClientHomeState extends State<ClientHome>
   bool _notifOpen = false;
   DateTime? _lastCardsRefresh;
   late AnimationController _notifAnim;
+  late PageController _pillPageCtrl;
 
   List<Map> _notifs = [];
   bool _notifsLoaded = false;
@@ -98,6 +99,7 @@ class _ClientHomeState extends State<ClientHome>
     _userName = widget.userName;
     WidgetsBinding.instance.addObserver(this);
     _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
+    _pillPageCtrl = PageController();
     if (widget.initialCards.isNotEmpty) {
       _applyCards(widget.initialCards);
     } else {
@@ -715,6 +717,7 @@ class _ClientHomeState extends State<ClientHome>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _notifAnim.dispose();
+    _pillPageCtrl.dispose();
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
     _deepLinkSub?.cancel();
@@ -1317,7 +1320,10 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                     Row(children: [
                       Expanded(child: GestureDetector(
-                        onTap: () => setState(() { _rewardPillActive = false; _tab = 0; }),
+                        onTap: () {
+                          setState(() { _rewardPillActive = false; _tab = 0; });
+                          _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+                        },
                         child: Center(child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1331,17 +1337,9 @@ class _ClientHomeState extends State<ClientHome>
                       )),
                       Expanded(child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () async {
+                        onTap: () {
                           setState(() => _rewardPillActive = true);
-                          await Navigator.push(context, platformRoute(
-                            builder: (_) => RewardsWalletScreen(
-                              token: widget.token,
-                              userName: widget.userName,
-                              initialRewards: _rewards,
-                              onChanged: _refreshAll,
-                            ),
-                          ));
-                          if (mounted) setState(() => _rewardPillActive = false);
+                          _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
                         },
                         child: Center(child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1372,7 +1370,14 @@ class _ClientHomeState extends State<ClientHome>
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone);
+        return PageView(
+          controller: _pillPageCtrl,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
+            RewardsTab(token: widget.token, userName: widget.userName, initialRewards: _rewards, onChanged: _refreshAll),
+          ],
+        );
       case 1:
         return ScanTab(
           token: widget.token,

@@ -10,14 +10,14 @@ const _kGold = Color(0xFFF59E0B);
 const _kGold2 = Color(0xFFFBBF24);
 const double _kMaxContentWidth = 500;
 
-/// Portefeuille de récompenses : bannière par magasin → carrousel des cartes
-/// complétées (design réel, tampons pleins) → modale QR de la plus ancienne (FIFO).
-class RewardsWalletScreen extends StatefulWidget {
+/// Onglet récompenses inline (pas de Scaffold) : bannière par magasin → carrousel
+/// des cartes complétées → modale QR de la plus ancienne (FIFO).
+class RewardsTab extends StatefulWidget {
   final String token;
   final String userName;
   final List<dynamic> initialRewards;
   final VoidCallback? onChanged;
-  const RewardsWalletScreen({
+  const RewardsTab({
     super.key,
     required this.token,
     this.userName = '',
@@ -26,10 +26,10 @@ class RewardsWalletScreen extends StatefulWidget {
   });
 
   @override
-  State<RewardsWalletScreen> createState() => _RewardsWalletScreenState();
+  State<RewardsTab> createState() => _RewardsTabState();
 }
 
-class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
+class _RewardsTabState extends State<RewardsTab> {
   List<dynamic> _rewards = [];
   bool _loading = true;
 
@@ -65,47 +65,15 @@ class _RewardsWalletScreenState extends State<RewardsWalletScreen> {
   @override
   Widget build(BuildContext context) {
     final groups = _byMerchant;
-    return Scaffold(
-      backgroundColor: context.cBg,
-      body: Column(children: [
-        _header(),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator.adaptive())
-              : groups.isEmpty
-                  ? _empty()
-                  : Center(child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
-                      child: ListView(
-                        padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
-                        children: groups.entries.map((e) => _banner(e.value.first['merchant_name'] as String? ?? 'Commerce', e.value)).toList(),
-                      ),
-                    )),
-        ),
-      ]),
-    );
-  }
-
-  Widget _header() {
-    return Container(
-      color: _kNavy,
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12, left: 16, right: 16, bottom: 14),
-      child: Center(child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
-        child: Row(children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
-              child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22),
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Text('Mes récompenses', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-        ]),
-      )),
-    );
+    if (_loading) return const Center(child: CircularProgressIndicator.adaptive());
+    if (groups.isEmpty) return _empty();
+    return Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
+        children: groups.entries.map((e) => _banner(e.value.first['merchant_name'] as String? ?? 'Commerce', e.value)).toList(),
+      ),
+    ));
   }
 
   Widget _empty() {
