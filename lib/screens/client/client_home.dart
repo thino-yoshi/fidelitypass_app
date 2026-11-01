@@ -1330,6 +1330,7 @@ class _ClientHomeState extends State<ClientHome>
                         )),
                       )),
                       Expanded(child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () async {
                           setState(() => _rewardPillActive = true);
                           await Navigator.push(context, platformRoute(
@@ -1691,8 +1692,8 @@ class _ClientHomeState extends State<ClientHome>
     // Couleurs exactes Figma : --nav-bg #ffffffb3 (blanc 70%), --nav-border #ede9e380 (50%)
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final navBg = isDark
-        ? const Color(0xFF1E1D2A).withValues(alpha: 0.70)
-        : Colors.white.withValues(alpha: 0.70);
+        ? const Color(0xFF1E1D2A).withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.92);
     final navBorder = isDark
         ? const Color(0xFF2A2840).withValues(alpha: 0.50)
         : const Color(0xFFEDE9E3).withValues(alpha: 0.50);
@@ -1790,7 +1791,7 @@ class _ClientHomeState extends State<ClientHome>
               translation: Offset(0, -1 + _notifAnim.value),
               child: Container(
                 decoration: BoxDecoration(
-                  color: context.qSurface,
+                  color: context.qBg,
                   borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
                 ),
                 constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
