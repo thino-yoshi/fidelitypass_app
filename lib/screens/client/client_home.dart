@@ -228,7 +228,7 @@ class _ClientHomeState extends State<ClientHome>
       _loadNotifs();
       final now = DateTime.now();
       final stale = _lastCardsRefresh == null ||
-          now.difference(_lastCardsRefresh!).inMinutes >= 5;
+          now.difference(_lastCardsRefresh!).inSeconds >= 30;
       if (stale) {
         AppLogger.client('App revenue au premier plan → refresh complet');
         _refreshAll();

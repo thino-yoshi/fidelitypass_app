@@ -44,6 +44,14 @@ class _RewardsTabState extends State<RewardsTab> {
     }
   }
 
+  @override
+  void didUpdateWidget(RewardsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialRewards != oldWidget.initialRewards && widget.initialRewards.isNotEmpty) {
+      setState(() => _rewards = List<dynamic>.from(widget.initialRewards));
+    }
+  }
+
   Future<void> _load() async {
     final r = await ApiService.instance.getMyRewards();
     if (!mounted) return;
