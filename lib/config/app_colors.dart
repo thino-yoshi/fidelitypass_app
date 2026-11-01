@@ -28,7 +28,7 @@ extension AppColors on BuildContext {
   Color get qSub         => cSub;
   Color get qNavy        => isDark ? const Color(0xFF0A1628) : const Color(0xFF0A1628);
   Color get qMuted       => isDark ? const Color(0xFF4A5568) : const Color(0xFFB0B7C3);
-  Color get qNavInactive => isDark ? const Color(0xFF4A5568) : const Color(0xFFB0B7C3);
+  Color get qNavInactive => isDark ? const Color(0xFF7B8DB0) : const Color(0xFF7A8699);
   Color get qDivider     => isDark ? const Color(0xFF1A2D45) : const Color(0xFFEEEBE6);
   Color get qChipText    => isDark ? const Color(0xFF7B8DB0) : const Color(0xFF6B7280);
 }
