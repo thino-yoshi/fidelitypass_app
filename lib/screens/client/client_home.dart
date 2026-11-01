@@ -1301,22 +1301,29 @@ class _ClientHomeState extends State<ClientHome>
                         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                       ),
                     )),
-                    AnimatedAlign(
-                      alignment: _rewardPillActive ? Alignment.centerRight : Alignment.centerLeft,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
-                      child: FractionallySizedBox(
-                        widthFactor: 0.5,
-                        heightFactor: 1.0,
-                        child: Container(
-                          margin: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2C7BE5).withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(9),
-                            border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.55)),
+                    TweenAnimationBuilder<Color?>(
+                      tween: ColorTween(end: _pillIndicatorColor),
+                      duration: const Duration(milliseconds: 300),
+                      builder: (_, color, __) {
+                        final c = color ?? const Color(0xFF2C7BE5);
+                        return AnimatedAlign(
+                          alignment: _rewardPillActive ? Alignment.centerRight : Alignment.centerLeft,
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.5,
+                            heightFactor: 1.0,
+                            child: Container(
+                              margin: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: c.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(9),
+                                border: Border.all(color: c.withValues(alpha: 0.55)),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                     Row(children: [
                       Expanded(child: GestureDetector(
@@ -1366,6 +1373,15 @@ class _ClientHomeState extends State<ClientHome>
 
 
   // ── TAB CONTENT ────────────────────────────────────────────────────────────
+
+  // Couleur de l'indicateur glissant : bleu si côté Cartes, couleur de la 1re carte de récompense si côté Récompenses
+  Color get _pillIndicatorColor {
+    if (_rewardPillActive && _rewards.isNotEmpty) {
+      final style = CardStyle.fromDesign(_rewards.first['card_design'], fallbackColor: const Color(0xFF2C7BE5));
+      return style.bgColors.isNotEmpty ? style.bgColors.first : const Color(0xFF2C7BE5);
+    }
+    return const Color(0xFF2C7BE5);
+  }
 
   Widget _buildTabContent() {
     switch (_tab) {
