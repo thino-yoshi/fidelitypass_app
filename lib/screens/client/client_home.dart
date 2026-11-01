@@ -8,6 +8,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -646,43 +647,123 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
+  void _showPhotoOptions() {
+    final hasPhoto = _profileImageUrl != null || _profileImagePath != null;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: context.qBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + MediaQuery.of(context).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 36, height: 4, decoration: BoxDecoration(color: context.qBorder, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 18),
+          _photoOptionRow(
+            icon: Icons.photo_library_outlined,
+            label: 'Changer la photo',
+            onTap: () { Navigator.pop(context); _pickProfileImage(); },
+          ),
+          if (hasPhoto) ...[
+            const SizedBox(height: 4),
+            _photoOptionRow(
+              icon: Icons.delete_outline_rounded,
+              label: 'Supprimer la photo',
+              color: const Color(0xFFE24B4A),
+              onTap: () { Navigator.pop(context); _deleteProfileImage(); },
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _photoOptionRow({required IconData icon, required String label, required VoidCallback onTap, Color? color}) {
+    final c = color ?? context.qText;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: context.qSurface,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(children: [
+          Icon(icon, color: c, size: 20),
+          const SizedBox(width: 14),
+          Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c)),
+        ]),
+      ),
+    );
+  }
+
   Future<void> _pickProfileImage() async {
     AppLogger.client('Photo profil → ouverture galerie');
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
     if (picked == null) {
       AppLogger.client('Photo profil → annulée');
       return;
     }
 
+    // Recadrage
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Recadrer',
+          toolbarColor: const Color(0xFF0B1220),
+          toolbarWidgetColor: Colors.white,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: false,
+        ),
+        IOSUiSettings(title: 'Recadrer'),
+      ],
+    );
+    if (cropped == null) {
+      AppLogger.client('Photo profil → recadrage annulé');
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('profile_image_path', picked.path);
-    if (mounted) setState(() => _profileImagePath = picked.path);
-    AppLogger.client('Photo profil → affichage local immédiat');
+    await prefs.setString('profile_image_path', cropped.path);
+    if (mounted) setState(() => _profileImagePath = cropped.path);
 
     try {
-      AppLogger.client('Photo profil → upload vers serveur...');
-      final req = http.MultipartRequest(
-        'POST',
-        Uri.parse('$apiUrl/users/profile-picture'),
-      )
+      final req = http.MultipartRequest('POST', Uri.parse('$apiUrl/users/profile-picture'))
         ..headers['Authorization'] = 'Bearer ${AuthService.currentToken ?? widget.token}'
-        ..files.add(await http.MultipartFile.fromPath('file', picked.path));
-      final streamed = await req.send();
-      final res = await http.Response.fromStream(streamed);
+        ..files.add(await http.MultipartFile.fromPath('file', cropped.path));
+      final res = await http.Response.fromStream(await req.send());
       if (res.statusCode == 200 && mounted) {
         final url = jsonDecode(res.body)['profile_picture_url'] as String?;
         if (url != null) {
-          final p = await SharedPreferences.getInstance();
-          await p.setString('profile_image_url', url);
+          await prefs.setString('profile_image_url', url);
           setState(() => _profileImageUrl = url);
-          AppLogger.client('Photo profil → upload succès, url: $url');
         }
       } else {
         AppLogger.error('Photo profil → upload échoué : ${res.statusCode}');
       }
     } catch (e) {
       AppLogger.error('Photo profil → exception : $e');
+    }
+  }
+
+  Future<void> _deleteProfileImage() async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$apiUrl/users/profile-picture'),
+        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
+      );
+      if (res.statusCode == 200 && mounted) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('profile_image_url');
+        await prefs.remove('profile_image_path');
+        setState(() { _profileImageUrl = null; _profileImagePath = null; });
+      }
+    } catch (e) {
+      AppLogger.error('Delete photo profil → exception : $e');
     }
   }
 
@@ -1474,7 +1555,7 @@ class _ClientHomeState extends State<ClientHome>
           // ── Avatar profil ──────────────────────────────────────────────────
           const SizedBox(height: 8),
           GestureDetector(
-            onTap: _pickProfileImage,
+            onTap: _showPhotoOptions,
             child: Stack(
               children: [
                 Container(
