@@ -836,7 +836,7 @@ class _ClientHomeState extends State<ClientHome>
   void _showStampPopup(StampEvent e) {
     _stampBadgeTimer?.cancel();
     setState(() => _stampBadge = e);
-    _stampBadgeTimer = Timer(const Duration(seconds: 2), () {
+    _stampBadgeTimer = Timer(const Duration(milliseconds: 1200), () {
       if (!mounted) return;
       setState(() => _stampBadge = null);
       if (e.reward) {
@@ -907,7 +907,7 @@ class _ClientHomeState extends State<ClientHome>
     });
     _refreshAll(); // synchro DB en arrière-plan
     _slideInTimer?.cancel();
-    _slideInTimer = Timer(const Duration(milliseconds: 430), () {
+    _slideInTimer = Timer(const Duration(milliseconds: 280), () {
       if (mounted) setState(() => _slidingInCardId = null);
     });
   }

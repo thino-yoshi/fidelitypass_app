@@ -1370,7 +1370,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   void _startPolling() {
     AppLogger.client('QRModal → polling démarré (toutes les 2s)');
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _checkForNewStamp());
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _checkForNewStamp());
   }
 
   Future<void> _checkForNewStamp() async {
@@ -1959,7 +1959,7 @@ class _FlyingCardState extends State<_FlyingCard> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    _ctrl    = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
+    _ctrl    = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _scale   = Tween<double>(begin: 1.0, end: 0.05)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInCubic));
     _slide   = Tween<Offset>(begin: Offset.zero, end: const Offset(0.35, -6.0))
@@ -2001,7 +2001,7 @@ class _SlideInCardState extends State<_SlideInCard> with SingleTickerProviderSta
   @override
   void initState() {
     super.initState();
-    _ctrl  = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+    _ctrl  = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
     _slide = Tween<Offset>(begin: const Offset(-1.2, 0), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
     _fade  = Tween<double>(begin: 0.0, end: 1.0)
