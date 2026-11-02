@@ -42,6 +42,7 @@ void main() async {
   await Future.wait([
     Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey),
     Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)
+        .then<void>((_) {})
         .catchError((_) {}),
   ]);
   AppLogger.splash('Supabase + Firebase initialisés ✓');
@@ -347,7 +348,7 @@ class _SplashRouterState extends State<SplashRouter> {
       final res = await http.get(
         Uri.parse('$apiUrl/cards/my-history'),
         headers: {'Authorization': 'Bearer $token'},
-      );
+      ).timeout(const Duration(seconds: 6));
       if (res.statusCode == 200) return jsonDecode(res.body) as List;
     } catch (_) {}
     return [];
@@ -358,7 +359,7 @@ class _SplashRouterState extends State<SplashRouter> {
       final res = await http.get(
         Uri.parse('$apiUrl/notifications/client'),
         headers: {'Authorization': 'Bearer $token'},
-      );
+      ).timeout(const Duration(seconds: 6));
       if (res.statusCode == 200) return jsonDecode(res.body) as List;
     } catch (_) {}
     return [];
