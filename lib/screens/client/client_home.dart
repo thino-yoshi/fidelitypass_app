@@ -34,12 +34,16 @@ class ClientHome extends StatefulWidget {
   final String userName;
   final List<dynamic> initialCards;
   final List<dynamic> initialHistory;
+  final List<dynamic> initialRewards;
+  final List<dynamic> initialRawNotifs;
   const ClientHome({
     super.key,
     required this.token,
     required this.userName,
-    this.initialCards = const [],
-    this.initialHistory = const [],
+    this.initialCards    = const [],
+    this.initialHistory  = const [],
+    this.initialRewards  = const [],
+    this.initialRawNotifs = const [],
   });
 
   @override
@@ -106,13 +110,22 @@ class _ClientHomeState extends State<ClientHome>
     } else {
       _loadStats();
     }
-    _loadRewardsCount();
+    if (widget.initialRewards.isNotEmpty) {
+      _rewards = List<dynamic>.from(widget.initialRewards);
+      _rewardCount = _rewards.length;
+    } else {
+      _loadRewardsCount();
+    }
     if (widget.initialHistory.isNotEmpty) {
       _history = List<dynamic>.from(widget.initialHistory);
     } else {
       _loadHistory();
     }
-    _loadNotifs();
+    if (widget.initialRawNotifs.isNotEmpty) {
+      _applyRawNotifs(widget.initialRawNotifs);
+    } else {
+      _loadNotifs();
+    }
     _loadProfileImage();
     _loadPhone();
     _loadSessionInfo();
@@ -770,6 +783,31 @@ class _ClientHomeState extends State<ClientHome>
     } catch (e) {
       AppLogger.error('Delete photo profil → exception : $e');
     }
+  }
+
+  void _applyRawNotifs(List<dynamic> raw) {
+    final mapped = raw.map((n) {
+      final type = n['type'] as String? ?? 'promo';
+      final style = _notifStyle[type] ?? _notifStyle['promo']!;
+      final dt = DateTime.tryParse(n['created_at'] as String? ?? '')?.toLocal();
+      final time = dt != null
+          ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
+          : '';
+      return <String, dynamic>{
+        'id': n['id'],
+        'icon': style['icon'],
+        'commerce': n['merchant_name'] ?? '',
+        'title': n['title'] ?? '',
+        'body': n['body'] ?? '',
+        'time': time,
+        'color': style['color'],
+        'read': n['read'] ?? false,
+        'type': type,
+      };
+    }).toList();
+    _notifs = mapped;
+    _notifsLoaded = true;
+    _notifCount = _notifs.where((n) => !(n['read'] as bool)).length;
   }
 
   Future<void> _loadNotifs() async {

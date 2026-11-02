@@ -37,16 +37,17 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
 
-  // ── Supabase (avant Firebase) ──────────────────────────────────────────────
-  AppLogger.splash('Démarrage app — init Supabase...');
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-  AppLogger.splash('Supabase initialisé ✓');
+  // ── Supabase + Firebase en parallèle ─────────────────────────────────────
+  AppLogger.splash('Démarrage app — init Supabase + Firebase...');
+  await Future.wait([
+    Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey),
+    Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)
+        .catchError((_) {}),
+  ]);
+  AppLogger.splash('Supabase + Firebase initialisés ✓');
 
   try {
-    AppLogger.splash('Init Firebase...');
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-    // Init local notifications
+    // Init local notifications (dépend de Firebase)
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings initializationSettingsIOS =
@@ -58,7 +59,7 @@ void main() async {
       ),
     );
 
-    AppLogger.splash('Firebase initialisé ✓');
+    AppLogger.splash('Notifications initialisées ✓');
 
     // Demande de permission et config foreground après runApp (évite crash watchdog iOS)
     Future.microtask(() async {
@@ -156,6 +157,8 @@ class _PreloadedData {
   // Client
   final List<dynamic> cards;
   final List<dynamic> history;
+  final List<dynamic> rewards;
+  final List<dynamic> rawNotifs;
   // Merchant
   final Map? merchantProfile;
   final Map? merchantStats;
@@ -168,6 +171,8 @@ class _PreloadedData {
     required this.session,
     this.cards           = const [],
     this.history         = const [],
+    this.rewards         = const [],
+    this.rawNotifs       = const [],
     this.merchantProfile,
     this.merchantStats,
     this.recentClients   = const [],
@@ -194,7 +199,7 @@ class _SplashRouterState extends State<SplashRouter> {
     _preloadFuture = _preload();
     Future.wait([
       _preloadFuture,
-      Future.delayed(const Duration(milliseconds: 1800)),
+      Future.delayed(const Duration(milliseconds: 600)),
     ]).then((_) {
       if (mounted) _onSplashComplete();
     });
@@ -296,26 +301,42 @@ class _SplashRouterState extends State<SplashRouter> {
       );
     }
 
-    // ── Client : cartes + historique en parallèle ────────────────────────────
+    // ── Client : cartes + historique + récompenses + notifs en parallèle ────
     if (session['user_type'] == 'client') {
       final token = session['token']!;
       final results = await Future.wait([
-        ApiService.instance.getMyCards(),
-        _fetchHistory(token),
+        ApiService.instance.getMyCards(),  // [0]
+        _fetchHistory(token),              // [1]
+        ApiService.instance.getMyRewards(), // [2]
+        _fetchNotifs(token),               // [3]
       ]);
 
-      final cardsResult = results[0] as dynamic;
-      final history     = results[1] as List<dynamic>;
+      final cardsResult   = results[0] as dynamic;
+      final history       = results[1] as List<dynamic>;
+      final rewardsResult = results[2] as dynamic;
+      final rawNotifs     = results[3] as List<dynamic>;
 
-      List<dynamic> cards = [];
+      List<dynamic> cards   = [];
+      List<dynamic> rewards = [];
       if (cardsResult.isOk) {
         cards = (cardsResult.value as List)
             .map((c) => Map<String, dynamic>.from(c as Map))
             .toList();
         AppLogger.splash('Cartes préchargées → ${cards.length} carte(s)');
       }
+      if (rewardsResult.isOk && rewardsResult.value != null) {
+        rewards = rewardsResult.value as List;
+        AppLogger.splash('Récompenses préchargées → ${rewards.length} récompense(s)');
+      }
+      AppLogger.splash('Notifs préchargées → ${rawNotifs.length} notif(s)');
 
-      return _PreloadedData(session: session, cards: cards, history: history);
+      return _PreloadedData(
+        session: session,
+        cards: cards,
+        history: history,
+        rewards: rewards,
+        rawNotifs: rawNotifs,
+      );
     }
 
     return _PreloadedData(session: session);
@@ -325,6 +346,17 @@ class _SplashRouterState extends State<SplashRouter> {
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/cards/my-history'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode == 200) return jsonDecode(res.body) as List;
+    } catch (_) {}
+    return [];
+  }
+
+  Future<List<dynamic>> _fetchNotifs(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$apiUrl/notifications/client'),
         headers: {'Authorization': 'Bearer $token'},
       );
       if (res.statusCode == 200) return jsonDecode(res.body) as List;
@@ -366,6 +398,8 @@ class _SplashRouterState extends State<SplashRouter> {
                 userName: session['name']!,
                 initialCards: data.cards,
                 initialHistory: data.history,
+                initialRewards: data.rewards,
+                initialRawNotifs: data.rawNotifs,
               )));
     }
   }
