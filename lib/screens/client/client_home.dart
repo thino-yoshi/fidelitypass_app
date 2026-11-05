@@ -113,12 +113,16 @@ class _ClientHomeState extends State<ClientHome>
       _loadStats();
     }
     if (widget.fromCache) {
-      // Données du cache : cartes visibles immédiatement, reste chargé en background
-      _loadRewardsCount();
-      _loadHistory();
-      _loadNotifs();
-      // Refresh silencieux des cartes 400ms après l'ouverture (laisse l'UI se poser)
-      Future.delayed(const Duration(milliseconds: 400), _silentRefreshCards);
+      // Données du cache : cartes + récompenses + historique visibles immédiatement
+      if (widget.initialRewards.isNotEmpty) {
+        _rewards = List<dynamic>.from(widget.initialRewards);
+        _rewardCount = _rewards.length;
+      }
+      if (widget.initialHistory.isNotEmpty) {
+        _history = List<dynamic>.from(widget.initialHistory);
+      }
+      _loadNotifs(); // Notifs toujours fraîches (trop dynamiques pour le cache)
+      Future.delayed(const Duration(milliseconds: 400), _silentRefreshAll);
     } else {
       if (widget.initialRewards.isNotEmpty) {
         _rewards = List<dynamic>.from(widget.initialRewards);
@@ -907,21 +911,46 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
-  // Refresh silencieux après chargement depuis le cache
-  Future<void> _silentRefreshCards() async {
+  // Refresh silencieux global après chargement depuis le cache
+  Future<void> _silentRefreshAll() async {
     if (!mounted) return;
-    final r = await ApiService.instance.getMyCards();
-    if (!mounted || r.isErr) return;
-    final fresh = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
-    _applyCards(fresh);
-    _saveCardsCache(fresh);
+    final results = await Future.wait([
+      ApiService.instance.getMyCards(),
+      ApiService.instance.getMyRewards(),
+    ]);
+    if (!mounted) return;
+    final cardsResult   = results[0] as dynamic;
+    final rewardsResult = results[1] as dynamic;
+    if (cardsResult.isOk) {
+      final fresh = (cardsResult.value as List).map((c) => Map<String, dynamic>.from(c as Map)).toList();
+      _applyCards(fresh);
+      _saveCardsCache(fresh);
+    }
+    if (rewardsResult.isOk && rewardsResult.value != null) {
+      final fresh = rewardsResult.value as List;
+      if (mounted) setState(() { _rewards = fresh; _rewardCount = fresh.length; });
+      _saveRewardsCache(fresh);
+    }
   }
 
   Future<void> _saveCardsCache(List<dynamic> cards) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('cache_client_cards', jsonEncode(cards));
-      AppLogger.client('Cache cartes mis à jour → ${cards.length} carte(s)');
+    } catch (_) {}
+  }
+
+  Future<void> _saveRewardsCache(List<dynamic> rewards) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cache_client_rewards', jsonEncode(rewards));
+    } catch (_) {}
+  }
+
+  Future<void> _saveHistoryCache(List<dynamic> history) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cache_client_history', jsonEncode(history));
     } catch (_) {}
   }
 
@@ -930,7 +959,7 @@ class _ClientHomeState extends State<ClientHome>
     if (!mounted || r.isErr) return;
     final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
     _applyCards(data);
-    _saveCardsCache(data); // Sauvegarder pour le prochain lancement
+    _saveCardsCache(data);
   }
 
   Future<void> _loadHistory() async {
@@ -940,7 +969,9 @@ class _ClientHomeState extends State<ClientHome>
         headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (mounted && res.statusCode == 200) {
-        setState(() => _history = jsonDecode(res.body) as List);
+        final data = jsonDecode(res.body) as List;
+        setState(() => _history = data);
+        _saveHistoryCache(data);
       }
     } catch (_) {}
   }
@@ -949,6 +980,7 @@ class _ClientHomeState extends State<ClientHome>
     final r = await ApiService.instance.getMyRewards();
     if (mounted && r.isOk) {
       setState(() { _rewards = r.value; _rewardCount = r.value.length; });
+      _saveRewardsCache(r.value as List);
     }
   }
 

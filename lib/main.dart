@@ -254,8 +254,30 @@ class _SplashRouterState extends State<SplashRouter> {
     AuthService.saveFCMToken(session['token']!);
     AppLogger.splash('Session → user_type: ${session['user_type']}, name: ${session['name']}');
 
-    // ── Commerçant : 6 appels en parallèle ──────────────────────────────────
+    // ── Commerçant : cache-first ────────────────────────────────────────────
     if (session['user_type'] == 'merchant') {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedMerchantJson = prefs.getString('cache_merchant_data');
+      if (cachedMerchantJson != null) {
+        try {
+          final c = jsonDecode(cachedMerchantJson) as Map<String, dynamic>;
+          AppLogger.splash('Cache merchant ⚡ → ${c['profile']?['business_name']}');
+          return _PreloadedData(
+            session:         session,
+            merchantProfile: c['profile'] as Map?,
+            merchantStats:   c['stats'] as Map?,
+            recentClients:   (c['clients'] as List? ?? []),
+            daily:           (c['daily'] as List? ?? []),
+            scanHistory:     (c['scanHistory'] as List? ?? []),
+            cardDesign:      c['cardDesign'] as Map?,
+            fromCache:       true,
+          );
+        } catch (_) {
+          prefs.remove('cache_merchant_data');
+        }
+      }
+
+      // Pas de cache → 6 appels en parallèle
       final results = await Future.wait([
         ApiService.instance.getMerchantProfile(),       // [0]
         ApiService.instance.getMerchantStats(),          // [1]
@@ -293,6 +315,17 @@ class _SplashRouterState extends State<SplashRouter> {
       }
 
       AppLogger.splash('Merchant préchargé → ${merchantProfile?['business_name']}, ${recentClients.length} clients, ${daily.length} jours');
+      // Sauvegarder pour le prochain lancement
+      if (merchantProfile != null) {
+        prefs.setString('cache_merchant_data', jsonEncode({
+          'profile':     merchantProfile,
+          'stats':       merchantStats,
+          'clients':     recentClients,
+          'daily':       daily,
+          'scanHistory': scanHistory,
+          'cardDesign':  cardDesign,
+        }));
+      }
       return _PreloadedData(
         session:         session,
         merchantProfile: merchantProfile,
@@ -310,17 +343,30 @@ class _SplashRouterState extends State<SplashRouter> {
       final prefs = await SharedPreferences.getInstance();
       final cachedJson = prefs.getString('cache_client_cards');
 
-      // Cache disponible → affichage instantané, le reste se charge en background
+      // Cache disponible → affichage instantané
       if (cachedJson != null) {
         try {
-          final cachedCards = (jsonDecode(cachedJson) as List)
+          final cachedCards   = (jsonDecode(cachedJson) as List)
               .map((c) => Map<String, dynamic>.from(c as Map))
               .toList();
-          AppLogger.splash('Cartes depuis le cache → ${cachedCards.length} carte(s) ⚡');
-          return _PreloadedData(session: session, cards: cachedCards, fromCache: true);
+          final cachedRewardsJson = prefs.getString('cache_client_rewards');
+          final cachedHistoryJson = prefs.getString('cache_client_history');
+          final cachedRewards = cachedRewardsJson != null
+              ? jsonDecode(cachedRewardsJson) as List : <dynamic>[];
+          final cachedHistory = cachedHistoryJson != null
+              ? jsonDecode(cachedHistoryJson) as List : <dynamic>[];
+          AppLogger.splash('Cache client ⚡ → ${cachedCards.length} cartes, ${cachedRewards.length} récompenses, ${cachedHistory.length} historique');
+          return _PreloadedData(
+            session: session,
+            cards: cachedCards,
+            rewards: cachedRewards,
+            history: cachedHistory,
+            fromCache: true,
+          );
         } catch (_) {
-          // Cache corrompu → on le supprime et on continue normalement
           prefs.remove('cache_client_cards');
+          prefs.remove('cache_client_rewards');
+          prefs.remove('cache_client_history');
         }
       }
 
@@ -350,6 +396,10 @@ class _SplashRouterState extends State<SplashRouter> {
       if (rewardsResult.isOk && rewardsResult.value != null) {
         rewards = rewardsResult.value as List;
         AppLogger.splash('Récompenses préchargées → ${rewards.length} récompense(s)');
+        prefs.setString('cache_client_rewards', jsonEncode(rewards));
+      }
+      if (history.isNotEmpty) {
+        prefs.setString('cache_client_history', jsonEncode(history));
       }
       AppLogger.splash('Notifs préchargées → ${rawNotifs.length} notif(s)');
 
@@ -412,6 +462,7 @@ class _SplashRouterState extends State<SplashRouter> {
                 initialDaily:        data.daily,
                 initialScanHistory:  data.scanHistory,
                 initialCardDesign:   data.cardDesign,
+                fromCache:           data.fromCache,
               )));
     } else {
       AppLogger.nav('Redirection → ClientHome (${session['name']})');

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,6 +45,7 @@ class MerchantHome extends StatefulWidget {
   final List<dynamic> initialDaily;
   final List<dynamic> initialScanHistory;
   final Map? initialCardDesign;
+  final bool fromCache;
 
   const MerchantHome({
     super.key,
@@ -55,6 +57,7 @@ class MerchantHome extends StatefulWidget {
     this.initialDaily          = const [],
     this.initialScanHistory    = const [],
     this.initialCardDesign,
+    this.fromCache             = false,
   });
 
   @override
@@ -111,7 +114,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     super.initState();
     AppLogger.merchant('MerchantHome chargé → merchantName: ${widget.merchantName}');
     if (widget.initialProfile != null) {
-      // Données préchargées depuis le splash → affichage immédiat sans spinner
+      // Données préchargées (API ou cache) → affichage immédiat sans spinner
       merchantInfo   = widget.initialProfile;
       stats          = widget.initialStats;
       _recentClients = List<dynamic>.from(widget.initialRecentClients);
@@ -119,7 +122,11 @@ class _MerchantHomeState extends State<MerchantHome> {
       _scanHistory   = List<dynamic>.from(widget.initialScanHistory);
       _cardDesign    = widget.initialCardDesign;
       loading        = false;
-      AppLogger.merchant('Données préchargées appliquées → ${merchantInfo?['business_name']}');
+      AppLogger.merchant('Données appliquées → ${merchantInfo?['business_name']} (cache: ${widget.fromCache})');
+      if (widget.fromCache) {
+        // Refresh silencieux en background
+        Future.delayed(const Duration(milliseconds: 400), _silentRefresh);
+      }
     } else {
       _loadData();
     }
@@ -135,6 +142,55 @@ class _MerchantHomeState extends State<MerchantHome> {
     } else {
       AppLogger.merchant('Onboarding → déjà complété, skip');
     }
+  }
+
+  Future<void> _silentRefresh() async {
+    if (!mounted) return;
+    final api = ApiService.instance;
+    final results = await Future.wait([
+      api.getMerchantProfile(),
+      api.getMerchantStats(),
+      api.getMerchantClients(),
+      api.getDailyStats(),
+      api.getMerchantCardDesign(),
+    ]);
+    if (!mounted) return;
+    final r0 = results[0] as dynamic;
+    final r1 = results[1] as dynamic;
+    final r2 = results[2] as dynamic;
+    final r3 = results[3] as dynamic;
+    final r4 = results[4] as dynamic;
+    final profile = r0.isOk ? r0.value as Map : merchantInfo;
+    final st      = r1.isOk ? r1.value as Map : stats;
+    final clients = r2.isOk ? r2.value as List : _recentClients;
+    final daily   = r3.isOk ? r3.value as List : _daily;
+    Map? design = _cardDesign;
+    if (r4.isOk && r4.value != null) {
+      design = (r4.value as Map)['card_design'] as Map?;
+    }
+    setState(() {
+      merchantInfo   = profile;
+      stats          = st;
+      _recentClients = clients;
+      _daily         = daily;
+      _cardDesign    = design;
+    });
+    _saveMerchantCache(profile, st, clients, daily, _scanHistory, design);
+  }
+
+  Future<void> _saveMerchantCache(Map? profile, Map? st, List clients, List daily, List scanHistory, Map? design) async {
+    if (profile == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cache_merchant_data', jsonEncode({
+        'profile':     profile,
+        'stats':       st,
+        'clients':     clients,
+        'daily':       daily,
+        'scanHistory': scanHistory,
+        'cardDesign':  design,
+      }));
+    } catch (_) {}
   }
 
   Future<void> _loadData({bool showSpinner = true}) async {
