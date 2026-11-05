@@ -36,6 +36,7 @@ class ClientHome extends StatefulWidget {
   final List<dynamic> initialHistory;
   final List<dynamic> initialRewards;
   final List<dynamic> initialRawNotifs;
+  final bool fromCache;
   const ClientHome({
     super.key,
     required this.token,
@@ -44,6 +45,7 @@ class ClientHome extends StatefulWidget {
     this.initialHistory  = const [],
     this.initialRewards  = const [],
     this.initialRawNotifs = const [],
+    this.fromCache       = false,
   });
 
   @override
@@ -110,21 +112,30 @@ class _ClientHomeState extends State<ClientHome>
     } else {
       _loadStats();
     }
-    if (widget.initialRewards.isNotEmpty) {
-      _rewards = List<dynamic>.from(widget.initialRewards);
-      _rewardCount = _rewards.length;
-    } else {
+    if (widget.fromCache) {
+      // Données du cache : cartes visibles immédiatement, reste chargé en background
       _loadRewardsCount();
-    }
-    if (widget.initialHistory.isNotEmpty) {
-      _history = List<dynamic>.from(widget.initialHistory);
-    } else {
       _loadHistory();
-    }
-    if (widget.initialRawNotifs.isNotEmpty) {
-      _applyRawNotifs(widget.initialRawNotifs);
-    } else {
       _loadNotifs();
+      // Refresh silencieux des cartes 400ms après l'ouverture (laisse l'UI se poser)
+      Future.delayed(const Duration(milliseconds: 400), _silentRefreshCards);
+    } else {
+      if (widget.initialRewards.isNotEmpty) {
+        _rewards = List<dynamic>.from(widget.initialRewards);
+        _rewardCount = _rewards.length;
+      } else {
+        _loadRewardsCount();
+      }
+      if (widget.initialHistory.isNotEmpty) {
+        _history = List<dynamic>.from(widget.initialHistory);
+      } else {
+        _loadHistory();
+      }
+      if (widget.initialRawNotifs.isNotEmpty) {
+        _applyRawNotifs(widget.initialRawNotifs);
+      } else {
+        _loadNotifs();
+      }
     }
     _loadProfileImage();
     _loadPhone();
@@ -896,11 +907,30 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
+  // Refresh silencieux après chargement depuis le cache
+  Future<void> _silentRefreshCards() async {
+    if (!mounted) return;
+    final r = await ApiService.instance.getMyCards();
+    if (!mounted || r.isErr) return;
+    final fresh = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
+    _applyCards(fresh);
+    _saveCardsCache(fresh);
+  }
+
+  Future<void> _saveCardsCache(List<dynamic> cards) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cache_client_cards', jsonEncode(cards));
+      AppLogger.client('Cache cartes mis à jour → ${cards.length} carte(s)');
+    } catch (_) {}
+  }
+
   Future<void> _loadStats() async {
     final r = await ApiService.instance.getMyCards();
     if (!mounted || r.isErr) return;
     final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
     _applyCards(data);
+    _saveCardsCache(data); // Sauvegarder pour le prochain lancement
   }
 
   Future<void> _loadHistory() async {

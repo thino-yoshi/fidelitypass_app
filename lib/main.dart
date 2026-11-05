@@ -155,6 +155,7 @@ class MyApp extends StatelessWidget {
 // Données préchargées pendant le splash
 class _PreloadedData {
   final Map<String, dynamic>? session;
+  final bool fromCache;
   // Client
   final List<dynamic> cards;
   final List<dynamic> history;
@@ -170,6 +171,7 @@ class _PreloadedData {
 
   _PreloadedData({
     required this.session,
+    this.fromCache       = false,
     this.cards           = const [],
     this.history         = const [],
     this.rewards         = const [],
@@ -302,9 +304,27 @@ class _SplashRouterState extends State<SplashRouter> {
       );
     }
 
-    // ── Client : cartes + historique + récompenses + notifs en parallèle ────
+    // ── Client : cache-first ────────────────────────────────────────────────
     if (session['user_type'] == 'client') {
       final token = session['token']!;
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString('cache_client_cards');
+
+      // Cache disponible → affichage instantané, le reste se charge en background
+      if (cachedJson != null) {
+        try {
+          final cachedCards = (jsonDecode(cachedJson) as List)
+              .map((c) => Map<String, dynamic>.from(c as Map))
+              .toList();
+          AppLogger.splash('Cartes depuis le cache → ${cachedCards.length} carte(s) ⚡');
+          return _PreloadedData(session: session, cards: cachedCards, fromCache: true);
+        } catch (_) {
+          // Cache corrompu → on le supprime et on continue normalement
+          prefs.remove('cache_client_cards');
+        }
+      }
+
+      // Pas de cache (premier lancement) → 4 appels en parallèle
       final results = await Future.wait([
         ApiService.instance.getMyCards(),  // [0]
         _fetchHistory(token),              // [1]
@@ -324,6 +344,8 @@ class _SplashRouterState extends State<SplashRouter> {
             .map((c) => Map<String, dynamic>.from(c as Map))
             .toList();
         AppLogger.splash('Cartes préchargées → ${cards.length} carte(s)');
+        // Sauvegarder pour le prochain lancement
+        prefs.setString('cache_client_cards', jsonEncode(cards));
       }
       if (rewardsResult.isOk && rewardsResult.value != null) {
         rewards = rewardsResult.value as List;
@@ -401,6 +423,7 @@ class _SplashRouterState extends State<SplashRouter> {
                 initialHistory: data.history,
                 initialRewards: data.rewards,
                 initialRawNotifs: data.rawNotifs,
+                fromCache: data.fromCache,
               )));
     }
   }
