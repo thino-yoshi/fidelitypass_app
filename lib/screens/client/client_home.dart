@@ -827,6 +827,7 @@ class _ClientHomeState extends State<ClientHome>
 
   Future<void> _loadNotifs() async {
     AppLogger.client('Chargement notifications client...');
+    final sw = Stopwatch()..start();
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/notifications/client'),
@@ -834,7 +835,7 @@ class _ClientHomeState extends State<ClientHome>
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as List;
-        AppLogger.client('Notifications → ${data.length} reçues');
+        AppLogger.client('[PERF] Notifications chargées en ${sw.elapsedMilliseconds}ms (${data.length} notifs)');
         final mapped = data.map((n) {
           final type = n['type'] as String? ?? 'promo';
           final style = _notifStyle[type] ?? _notifStyle['promo']!;
@@ -914,11 +915,14 @@ class _ClientHomeState extends State<ClientHome>
   // Refresh silencieux global après chargement depuis le cache
   Future<void> _silentRefreshAll() async {
     if (!mounted) return;
+    AppLogger.client('[PERF] Refresh silencieux démarré');
+    final sw = Stopwatch()..start();
     final results = await Future.wait([
       ApiService.instance.getMyCards(),
       ApiService.instance.getMyRewards(),
     ]);
     if (!mounted) return;
+    AppLogger.client('[PERF] Refresh silencieux terminé en ${sw.elapsedMilliseconds}ms');
     final cardsResult   = results[0] as dynamic;
     final rewardsResult = results[1] as dynamic;
     if (cardsResult.isOk) {
@@ -955,14 +959,17 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   Future<void> _loadStats() async {
+    final sw = Stopwatch()..start();
     final r = await ApiService.instance.getMyCards();
     if (!mounted || r.isErr) return;
     final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
+    AppLogger.client('[PERF] Cartes chargées en ${sw.elapsedMilliseconds}ms (${data.length} cartes)');
     _applyCards(data);
     _saveCardsCache(data);
   }
 
   Future<void> _loadHistory() async {
+    final sw = Stopwatch()..start();
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/cards/my-history'),
@@ -970,6 +977,7 @@ class _ClientHomeState extends State<ClientHome>
       );
       if (mounted && res.statusCode == 200) {
         final data = jsonDecode(res.body) as List;
+        AppLogger.client('[PERF] Historique chargé en ${sw.elapsedMilliseconds}ms (${data.length} entrées)');
         setState(() => _history = data);
         _saveHistoryCache(data);
       }
@@ -977,8 +985,10 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   Future<void> _loadRewardsCount() async {
+    final sw = Stopwatch()..start();
     final r = await ApiService.instance.getMyRewards();
     if (mounted && r.isOk) {
+      AppLogger.client('[PERF] Récompenses chargées en ${sw.elapsedMilliseconds}ms (${r.value.length} récompenses)');
       setState(() { _rewards = r.value; _rewardCount = r.value.length; });
       _saveRewardsCache(r.value as List);
     }

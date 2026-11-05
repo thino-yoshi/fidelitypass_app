@@ -247,7 +247,9 @@ class _SplashRouterState extends State<SplashRouter> {
   }
 
   Future<_PreloadedData> _preload() async {
+    final swTotal = Stopwatch()..start();
     final session = await AuthService.getSession();
+    AppLogger.splash('[PERF] Session chargée en ${swTotal.elapsedMilliseconds}ms');
     if (session == null) {
       return _PreloadedData(session: null);
     }
@@ -260,8 +262,10 @@ class _SplashRouterState extends State<SplashRouter> {
       final cachedMerchantJson = prefs.getString('cache_merchant_data');
       if (cachedMerchantJson != null) {
         try {
+          final swCache = Stopwatch()..start();
           final c = jsonDecode(cachedMerchantJson) as Map<String, dynamic>;
-          AppLogger.splash('Cache merchant ⚡ → ${c['profile']?['business_name']}');
+          AppLogger.splash('[PERF] Cache merchant lu en ${swCache.elapsedMilliseconds}ms ⚡ → ${c['profile']?['business_name']}');
+          AppLogger.splash('[PERF] Temps total splash (avec cache) : ${swTotal.elapsedMilliseconds}ms');
           return _PreloadedData(
             session:         session,
             merchantProfile: c['profile'] as Map?,
@@ -346,6 +350,7 @@ class _SplashRouterState extends State<SplashRouter> {
       // Cache disponible → affichage instantané
       if (cachedJson != null) {
         try {
+          final swCache = Stopwatch()..start();
           final cachedCards   = (jsonDecode(cachedJson) as List)
               .map((c) => Map<String, dynamic>.from(c as Map))
               .toList();
@@ -355,7 +360,8 @@ class _SplashRouterState extends State<SplashRouter> {
               ? jsonDecode(cachedRewardsJson) as List : <dynamic>[];
           final cachedHistory = cachedHistoryJson != null
               ? jsonDecode(cachedHistoryJson) as List : <dynamic>[];
-          AppLogger.splash('Cache client ⚡ → ${cachedCards.length} cartes, ${cachedRewards.length} récompenses, ${cachedHistory.length} historique');
+          AppLogger.splash('[PERF] Cache client lu en ${swCache.elapsedMilliseconds}ms ⚡ → ${cachedCards.length} cartes, ${cachedRewards.length} récompenses, ${cachedHistory.length} historique');
+          AppLogger.splash('[PERF] Temps total splash (avec cache) : ${swTotal.elapsedMilliseconds}ms');
           return _PreloadedData(
             session: session,
             cards: cachedCards,
@@ -371,12 +377,14 @@ class _SplashRouterState extends State<SplashRouter> {
       }
 
       // Pas de cache (premier lancement) → 4 appels en parallèle
+      final swApi = Stopwatch()..start();
       final results = await Future.wait([
         ApiService.instance.getMyCards(),  // [0]
         _fetchHistory(token),              // [1]
         ApiService.instance.getMyRewards(), // [2]
         _fetchNotifs(token),               // [3]
       ]);
+      AppLogger.splash('[PERF] 4 appels API parallèles client en ${swApi.elapsedMilliseconds}ms');
 
       final cardsResult   = results[0] as dynamic;
       final history       = results[1] as List<dynamic>;
@@ -402,6 +410,7 @@ class _SplashRouterState extends State<SplashRouter> {
         prefs.setString('cache_client_history', jsonEncode(history));
       }
       AppLogger.splash('Notifs préchargées → ${rawNotifs.length} notif(s)');
+      AppLogger.splash('[PERF] Temps total splash (premier lancement) : ${swTotal.elapsedMilliseconds}ms');
 
       return _PreloadedData(
         session: session,
