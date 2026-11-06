@@ -1578,6 +1578,7 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                     Row(children: [
                       Expanded(child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () {
                           setState(() { _rewardPillActive = false; _tab = 0; });
                           _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
