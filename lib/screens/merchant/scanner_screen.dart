@@ -382,23 +382,24 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       body: Stack(children: [
         Column(children: [
           _header(),
-          // Caméra — moitié haute
-          Expanded(child: _cameraSection()),
-          // Historique — moitié basse
-          Expanded(child: _historySection()),
+          // Caméra — 60% de l'écran disponible
+          Expanded(flex: 3, child: _cameraSection()),
+          // Historique — 40% restant
+          Expanded(flex: 2, child: _historySection()),
         ]),
         if (_overlay != null) _successOverlay(_overlay!),
       ]),
     );
   }
 
-  // ── Header navy ───────────────────────────────────────────────────────────────
+  // ── Header compact (onglets + retour) ────────────────────────────────────────
   Widget _header() {
     return Container(
       color: _kNavy,
       child: Column(children: [
+        // ── Safe area + bouton retour + onglets ───────────────────────────────
         Padding(
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12, left: 16, right: 16, bottom: 10),
+          padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 10, 16, 12),
           child: Center(child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
             child: Row(children: [
@@ -406,21 +407,12 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 onTap: () => Navigator.pop(context),
                 child: Container(
                   width: 34, height: 34,
+                  margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
                   child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22),
                 ),
               ),
-              const SizedBox(width: 12),
-              const Text('Scanner un client', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-            ]),
-          )),
-        ),
-        // ── Onglets Tampons / Récompenses ────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Center(child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
-            child: Container(
+              Expanded(child: Container(
               height: 38,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.06),
@@ -458,9 +450,10 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                   )),
                 ]),
               ]),
-            ),
-          )),
-        ),
+            )),    // ferme Container height:38 + Expanded
+          ]),      // ferme Row [bouton + onglets]
+        )),        // ferme ConstrainedBox + Center
+      ),           // ferme Padding
       ]),
     );
   }

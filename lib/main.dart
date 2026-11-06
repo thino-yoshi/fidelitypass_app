@@ -65,14 +65,22 @@ void main() async {
     // Demande de permission et config foreground après runApp (évite crash watchdog iOS)
     Future.microtask(() async {
       try {
+        final prefs = await SharedPreferences.getInstance();
+        final notifPush = prefs.getBool('notif_push') ?? true;
         final messaging = FirebaseMessaging.instance;
-        await messaging.requestPermission(alert: true, badge: true, sound: true);
-        await messaging.setForegroundNotificationPresentationOptions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-        AppLogger.fcm('Permission notifications accordée ✓');
+        if (notifPush) {
+          await messaging.requestPermission(alert: true, badge: true, sound: true);
+          await messaging.setForegroundNotificationPresentationOptions(
+            alert: true, badge: true, sound: true,
+          );
+          AppLogger.fcm('Permission notifications accordée ✓');
+        } else {
+          // Push désactivé par l'utilisateur → couper l'affichage foreground
+          await messaging.setForegroundNotificationPresentationOptions(
+            alert: false, badge: false, sound: false,
+          );
+          AppLogger.fcm('Push désactivé par préférence utilisateur');
+        }
       } catch (e) {
         AppLogger.error('Erreur permission notifications : $e');
       }

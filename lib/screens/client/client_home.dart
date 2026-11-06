@@ -105,7 +105,7 @@ class _ClientHomeState extends State<ClientHome>
     AppLogger.client('ClientHome chargé → userName: ${widget.userName}');
     _userName = widget.userName;
     WidgetsBinding.instance.addObserver(this);
-    _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
+    _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
     _pillPageCtrl = PageController();
     if (widget.initialCards.isNotEmpty) {
       _applyCards(widget.initialCards);
@@ -309,21 +309,24 @@ class _ClientHomeState extends State<ClientHome>
       );
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final url      = body['profile_picture_url'] as String?;
-        final email    = body['email'] as String? ?? '';
+        final url        = body['profile_picture_url'] as String?;
+        final email      = body['email'] as String? ?? '';
+        final serverName = body['name']  as String? ?? '';
         // is_google : on garde true si déjà true en local (le serveur peut se tromper)
         final serverIsGoogle = body['is_google'] as bool? ?? false;
         final localIsGoogle  = prefs.getBool('is_google') ?? false;
         final isGoogle = serverIsGoogle || localIsGoogle;
         final isOAuth  = (body['is_oauth'] as bool? ?? false) || isGoogle;
-        // Persister tout en local
+        // Persister tout en local — nom inclus pour affichage instantané au prochain lancement
         if (url != null && url.isNotEmpty) await prefs.setString('profile_image_url', url);
         if (email.isNotEmpty) await prefs.setString('email', email);
+        if (serverName.isNotEmpty) await prefs.setString('name', serverName);
         await prefs.setBool('is_google', isGoogle);
         await prefs.setBool('is_oauth', isOAuth);
         setState(() {
           if (url != null && url.isNotEmpty) _profileImageUrl = url;
           if (email.isNotEmpty) _userEmail = email;
+          if (serverName.isNotEmpty) _userName = serverName;
           _isGoogle  = isGoogle;
           _isOAuth   = isOAuth;
         });
@@ -1392,16 +1395,6 @@ class _ClientHomeState extends State<ClientHome>
       color: context.qNavy,
       child: Stack(
         children: [
-          // Logo Q en filigrane (comme sur Figma : hgrid background-image)
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.07,
-              child: Image.asset(
-                'assets/images/89.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
           // Orbe lumineux
           Positioned(
             top: -20, right: -10,
@@ -1427,40 +1420,52 @@ class _ClientHomeState extends State<ClientHome>
                 // ── Ligne avatar + notifs
                 Row(
                   children: [
-                    GestureDetector(
-                      onTap: () => _openProfil(),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38, height: 38,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                              border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                              image: _profileImageUrl != null
-                                  ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                  : _profileImagePath != null
-                                      ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                      : null,
+                    if (_tab == 3)
+                      // Profil : bulle label à gauche, pas de bouton retour
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                        ),
+                        child: const Text('Profil', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () => _openProfil(),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                image: _profileImageUrl != null
+                                    ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                    : _profileImagePath != null
+                                        ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                        : null,
+                              ),
+                              child: (_profileImageUrl == null && _profileImagePath == null)
+                                  ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
+                                  : null,
                             ),
-                            child: (_profileImageUrl == null && _profileImagePath == null)
-                                ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
-                                : null,
-                          ),
-                          const SizedBox(width: 9),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Bonjour', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, height: 1)),
-                              const SizedBox(height: 2),
-                              Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
-                            ],
-                          ),
-                        ],
+                            const SizedBox(width: 9),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Bonjour', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, height: 1)),
+                                const SizedBox(height: 2),
+                                Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     const Spacer(),
-                    // Bouton notifs
+                    // Bouton notifs (toujours visible)
                     GestureDetector(
                       onTap: _openNotifs,
                       child: Stack(
@@ -2016,8 +2021,8 @@ class _ClientHomeState extends State<ClientHome>
           // Sheet
           Positioned(
             top: 0, left: 0, right: 0,
-            child: FractionalTranslation(
-              translation: Offset(0, -1 + _notifAnim.value),
+            child: Opacity(
+              opacity: _notifAnim.value,
               child: Container(
                 decoration: BoxDecoration(
                   color: context.qBg,
@@ -2027,30 +2032,36 @@ class _ClientHomeState extends State<ClientHome>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header
-                    Container(
-                      color: const Color(0xFF0B1220),
-                      padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + 16,
-                        left: 20, right: 20, bottom: 16,
-                      ),
-                      child: Row(
-                        children: [
-                          const Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: _markAllRead,
-                            child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
-                          ),
-                          GestureDetector(
-                            onTap: _closeNotifs,
-                            child: Container(
-                              width: 30, height: 30,
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.1)),
-                              child: const Icon(Icons.close, color: Colors.white, size: 14),
+                    // Header notifications
+                    SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: context.qNavy,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
                             ),
-                          ),
-                        ],
+                            const Spacer(),
+                            TextButton(
+                              onPressed: _markAllRead,
+                              child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
+                            ),
+                            GestureDetector(
+                              onTap: _closeNotifs,
+                              child: Container(
+                                width: 30, height: 30,
+                                decoration: BoxDecoration(shape: BoxShape.circle, color: context.qBorder),
+                                child: Icon(Icons.close, color: context.qText, size: 14),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     // Filtres
