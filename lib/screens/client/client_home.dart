@@ -915,6 +915,14 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
+  // Pull-to-refresh manuel : récompenses + historique + notifs immédiatement,
+  // cartes en arrière-plan (/cards/me prend 8s+ → ne bloque pas l'UI)
+  Future<void> _refreshManual() async {
+    AppLogger.client('Refresh manuel → historique + récompenses + notifs (cartes en arrière-plan)');
+    _loadStats(); // fire-and-forget
+    await Future.wait([_loadHistory(), _loadRewardsCount(), _loadNotifs()]);
+  }
+
   // Refresh silencieux global après chargement depuis le cache
   Future<void> _silentRefreshAll() async {
     if (!mounted) return;
@@ -1603,8 +1611,8 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
-            RewardsTab(token: widget.token, userName: widget.userName, initialRewards: _rewards, onChanged: _refreshAll),
+            CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
+            RewardsTab(token: widget.token, userName: widget.userName, initialRewards: _rewards, onChanged: _refreshManual),
           ],
         );
       case 1:
@@ -1614,7 +1622,7 @@ class _ClientHomeState extends State<ClientHome>
           onBack: () => setState(() => _tab = 0),
         );
       case 2:
-        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshAll);
+        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual);
       case 3:
         return _buildProfilTab();
       default:
@@ -1744,7 +1752,7 @@ class _ClientHomeState extends State<ClientHome>
                     userName: widget.userName,
                     cards: _cards,
                     rewards: _rewards,
-                    onRefresh: _refreshAll,
+                    onRefresh: _refreshManual,
                   ),
                 ),
               ),
