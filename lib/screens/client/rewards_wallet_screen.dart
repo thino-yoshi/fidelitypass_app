@@ -36,12 +36,10 @@ class _RewardsTabState extends State<RewardsTab> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialRewards.isNotEmpty) {
-      _rewards = List<dynamic>.from(widget.initialRewards);
-      _loading = false;
-    } else {
-      _load();
-    }
+    // Le parent (client_home) gère tous les refreshs via _loadRewardsCount + didUpdateWidget.
+    // On n'appelle plus _load() automatiquement pour éviter les appels API redondants.
+    _rewards = List<dynamic>.from(widget.initialRewards);
+    _loading = false;
   }
 
   @override
