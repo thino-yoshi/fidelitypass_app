@@ -165,47 +165,23 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
           child: Column(
             children: [
               const SizedBox(height: 12),
-              // En-tête avec bouton retour
+              // Flèche retour uniquement
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(children: [
                   GestureDetector(
                     onTap: widget.onBack,
                     child: Container(
-                      width: 34, height: 34,
+                      width: 36, height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.black.withValues(alpha: 0.35),
+                        shape: BoxShape.circle,
                         border: Border.all(color: Colors.white24),
                       ),
-                      child: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 22),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Scanner le QR du commerce',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        shadows: [Shadow(color: Colors.black45, blurRadius: 6)],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 46),
                 ]),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Pointe la caméra vers le QR code affiché en caisse',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
-                ),
               ),
               const Spacer(),
 

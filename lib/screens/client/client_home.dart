@@ -1411,13 +1411,16 @@ class _ClientHomeState extends State<ClientHome>
         extendBody: true,
         body: Stack(
           children: [
-            Column(
-              children: [
-                _buildHeader(),
-                Expanded(child: _buildTabContent()),
-              ],
-            ),
-            _buildBottomNav(),
+            if (_tab == 1)
+              Positioned.fill(child: _buildTabContent())
+            else
+              Column(
+                children: [
+                  _buildHeader(),
+                  Expanded(child: _buildTabContent()),
+                ],
+              ),
+            if (_tab != 1) _buildBottomNav(),
             if (_notifOpen) _buildNotifOverlay(),
             if (_stampBadge != null) _buildStampBadge(_stampBadge!),
           ],
