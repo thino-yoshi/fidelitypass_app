@@ -74,9 +74,8 @@ class _ClientHomeState extends State<ClientHome>
   StreamSubscription<Uri>? _deepLinkSub;
   StreamSubscription<dynamic>? _fcmForegroundSub;
   Uri? _lastHandledDeepLink;
-  bool _notifOpen = false;
+  int _prevTab = 0;
   DateTime? _lastCardsRefresh;
-  late AnimationController _notifAnim;
   late PageController _pillPageCtrl;
 
   List<Map> _notifs = [];
@@ -106,7 +105,6 @@ class _ClientHomeState extends State<ClientHome>
     AppLogger.client('ClientHome chargé → userName: ${widget.userName}');
     _userName = widget.userName;
     WidgetsBinding.instance.addObserver(this);
-    _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
     _pillPageCtrl = PageController();
     if (widget.initialCards.isNotEmpty) {
       _applyCards(widget.initialCards);
@@ -878,7 +876,6 @@ class _ClientHomeState extends State<ClientHome>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _notifAnim.dispose();
     _pillPageCtrl.dispose();
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
@@ -1364,17 +1361,15 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _openNotifs() {
-    setState(() => _notifOpen = true);
-    _notifAnim.forward();
+    _prevTab = _tab;
+    setState(() => _tab = 4);
     // Marque toutes comme lues dès l'ouverture (comme WhatsApp)
     if (_notifCount > 0) _markAllRead();
   }
 
   void _closeNotifs() {
     if (_notifCount > 0) _markAllRead();
-    _notifAnim.reverse().then((_) {
-      if (mounted) setState(() => _notifOpen = false);
-    });
+    setState(() => _tab = _prevTab);
   }
 
   Future<void> _markAllRead() async {
@@ -1421,7 +1416,6 @@ class _ClientHomeState extends State<ClientHome>
                 ],
               ),
             if (_tab != 1) _buildBottomNav(),
-            if (_notifOpen) _buildNotifOverlay(),
             if (_stampBadge != null) _buildStampBadge(_stampBadge!),
           ],
         ),
@@ -1462,15 +1456,61 @@ class _ClientHomeState extends State<ClientHome>
                 Row(
                   children: [
                     if (_tab == 3)
-                      // Profil : bulle label à gauche, pas de bouton retour
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                      // Profil : avatar + prénom + bouton caméra
+                      GestureDetector(
+                        onTap: _showPhotoOptions,
+                        child: Row(
+                          children: [
+                            Stack(
+                              children: [
+                                Container(
+                                  width: 38, height: 38,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                    border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                    image: _profileImageUrl != null
+                                        ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                        : _profileImagePath != null
+                                            ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                            : null,
+                                  ),
+                                  child: (_profileImageUrl == null && _profileImagePath == null)
+                                      ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
+                                      : null,
+                                ),
+                                Positioned(
+                                  bottom: 0, right: 0,
+                                  child: Container(
+                                    width: 14, height: 14,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFF2C7BE5),
+                                      border: Border.all(color: context.qNavy, width: 1.5),
+                                    ),
+                                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 10),
+                            Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                          ],
                         ),
-                        child: const Text('Profil', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                      )
+                    else if (_tab == 4)
+                      // Notifications : bouton retour
+                      GestureDetector(
+                        onTap: _closeNotifs,
+                        child: Container(
+                          width: 34, height: 34,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.10),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                          ),
+                          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                        ),
                       )
                     else
                       GestureDetector(
@@ -1542,7 +1582,18 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                   ],
                 ),
-                if (_tab != 3) ...[
+                if (_tab == 3 || _tab == 4) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 42,
+                  child: Center(
+                    child: Text(
+                      _tab == 4 ? 'Notifications' : _userName,
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1),
+                    ),
+                  ),
+                ),
+                ] else ...[
                 const SizedBox(height: 20),
                 // ── Pills avec indicateur glissant
                 SizedBox(
@@ -1617,7 +1668,7 @@ class _ClientHomeState extends State<ClientHome>
                     ]),
                   ]),
                 ),
-                ], // fin if (_tab != 3)
+                ], // fin else (pills)
               ],
             ),
           ),
@@ -1665,6 +1716,8 @@ class _ClientHomeState extends State<ClientHome>
         return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual);
       case 3:
         return _buildProfilTab();
+      case 4:
+        return _buildNotifsTab();
       default:
         return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
@@ -1715,57 +1768,11 @@ class _ClientHomeState extends State<ClientHome>
   // ── PROFIL TAB ─────────────────────────────────────────────────────────────
 
   Widget _buildProfilTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 76),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 76),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Avatar profil ──────────────────────────────────────────────────
-          const SizedBox(height: 16),
-          Center(
-            child: Column(
-              children: [
-                GestureDetector(
-                  onTap: _showPhotoOptions,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 90, height: 90,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF2C7BE5).withValues(alpha: 0.15),
-                          border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.35), width: 2.5),
-                          image: _profileImageUrl != null
-                              ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                              : _profileImagePath != null
-                                  ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                  : null,
-                        ),
-                        child: (_profileImageUrl == null && _profileImagePath == null)
-                            ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF2C7BE5), fontSize: 28, fontWeight: FontWeight.w800)))
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 2, right: 2,
-                        child: Container(
-                          width: 26, height: 26,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFF2C7BE5),
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(_userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
           // Section 1: compte
           _profSec([
             _profRow(
@@ -2061,122 +2068,79 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  // ── NOTIF OVERLAY ──────────────────────────────────────────────────────────
+  // ── NOTIF TAB ──────────────────────────────────────────────────────────────
 
-  Widget _buildNotifOverlay() {
-    return AnimatedBuilder(
-      animation: _notifAnim,
-      builder: (_, __) => Stack(
-        children: [
-          // Backdrop
-          GestureDetector(
-            onTap: _closeNotifs,
-            child: Container(color: Colors.black.withValues(alpha: 0.4 * _notifAnim.value)),
-          ),
-          // Sheet
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: Opacity(
-              opacity: _notifAnim.value,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.qBg,
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
-                ),
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header notifications
-                    SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: context.qNavy,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+  Widget _buildNotifsTab() {
+    final filtered = _notifFilter == 'tout'
+        ? _notifs
+        : _notifs.where((n) => n['type'] == _notifFilter).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Filtres
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final f in [
+                        {'key': 'tout', 'label': 'Tout'},
+                        {'key': 'tampon', 'label': 'Tampons'},
+                        {'key': 'recompense', 'label': 'Récompenses'},
+                        {'key': 'promo', 'label': 'Promos'},
+                      ])
+                        GestureDetector(
+                          onTap: () => setState(() => _notifFilter = f['key']!),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: _notifFilter == f['key'] ? const Color(0xFF2C7BE5) : context.qSurface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: _notifFilter == f['key'] ? Colors.transparent : context.qBorder),
                             ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: _markAllRead,
-                              child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
-                            ),
-                            GestureDetector(
-                              onTap: _closeNotifs,
-                              child: Container(
-                                width: 30, height: 30,
-                                decoration: BoxDecoration(shape: BoxShape.circle, color: context.qBorder),
-                                child: Icon(Icons.close, color: context.qText, size: 14),
+                            child: Text(
+                              f['label']!,
+                              style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600,
+                                color: _notifFilter == f['key'] ? Colors.white : context.qChipText,
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    // Filtres
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final f in [
-                              {'key': 'tout', 'label': 'Tout'},
-                              {'key': 'tampon', 'label': 'Tampons'},
-                              {'key': 'recompense', 'label': 'Récompenses'},
-                              {'key': 'promo', 'label': 'Promos'},
-                            ]) ...[
-                              GestureDetector(
-                                onTap: () => setState(() => _notifFilter = f['key']!),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  margin: const EdgeInsets.only(right: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: _notifFilter == f['key'] ? const Color(0xFF2C7BE5) : context.qBg,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    f['label']!,
-                                    style: TextStyle(
-                                      fontSize: 12, fontWeight: FontWeight.w600,
-                                      color: _notifFilter == f['key'] ? Colors.white : context.qChipText,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
-                              child: Text("Aujourd'hui", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFBBBBBB), letterSpacing: 0.06)),
-                            ),
-                            ...(_notifFilter == 'tout' ? _notifs : _notifs.where((n) => n['type'] == _notifFilter).toList()).map((n) => _notifItem(n)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+              TextButton(
+                onPressed: _markAllRead,
+                child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const Divider(height: 1),
+        // Liste
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(child: Text('Aucune notification', style: TextStyle(color: context.qSub, fontSize: 14)))
+              : ListView(
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 76),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text("Aujourd'hui", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFBBBBBB), letterSpacing: 0.06)),
+                    ),
+                    ...filtered.map((n) => _notifItem(n)),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 
