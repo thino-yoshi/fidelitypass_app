@@ -34,18 +34,12 @@ class ClientHome extends StatefulWidget {
   final String userName;
   final List<dynamic> initialCards;
   final List<dynamic> initialHistory;
-  final List<dynamic> initialRewards;
-  final List<dynamic> initialRawNotifs;
-  final bool fromCache;
   const ClientHome({
     super.key,
     required this.token,
     required this.userName,
-    this.initialCards    = const [],
-    this.initialHistory  = const [],
-    this.initialRewards  = const [],
-    this.initialRawNotifs = const [],
-    this.fromCache       = false,
+    this.initialCards = const [],
+    this.initialHistory = const [],
   });
 
   @override
@@ -70,7 +64,6 @@ class _ClientHomeState extends State<ClientHome>
   StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
   Timer?     _stampBadgeTimer;
   Timer?     _slideInTimer;
-  Timer?     _keepAliveTimer;
   StreamSubscription<Uri>? _deepLinkSub;
   StreamSubscription<dynamic>? _fcmForegroundSub;
   Uri? _lastHandledDeepLink;
@@ -106,52 +99,26 @@ class _ClientHomeState extends State<ClientHome>
     AppLogger.client('ClientHome chargé → userName: ${widget.userName}');
     _userName = widget.userName;
     WidgetsBinding.instance.addObserver(this);
-    _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
+    _notifAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
     _pillPageCtrl = PageController();
     if (widget.initialCards.isNotEmpty) {
       _applyCards(widget.initialCards);
     } else {
       _loadStats();
     }
-    if (widget.fromCache) {
-      // Données du cache : cartes + récompenses + historique visibles immédiatement
-      if (widget.initialRewards.isNotEmpty) {
-        _rewards = List<dynamic>.from(widget.initialRewards);
-        _rewardCount = _rewards.length;
-      }
-      if (widget.initialHistory.isNotEmpty) {
-        _history = List<dynamic>.from(widget.initialHistory);
-      }
-      _loadNotifs(); // Notifs toujours fraîches (trop dynamiques pour le cache)
-      Future.delayed(const Duration(milliseconds: 400), _silentRefreshAll);
+    _loadRewardsCount();
+    if (widget.initialHistory.isNotEmpty) {
+      _history = List<dynamic>.from(widget.initialHistory);
     } else {
-      if (widget.initialRewards.isNotEmpty) {
-        _rewards = List<dynamic>.from(widget.initialRewards);
-        _rewardCount = _rewards.length;
-      } else {
-        _loadRewardsCount();
-      }
-      if (widget.initialHistory.isNotEmpty) {
-        _history = List<dynamic>.from(widget.initialHistory);
-      } else {
-        _loadHistory();
-      }
-      if (widget.initialRawNotifs.isNotEmpty) {
-        _applyRawNotifs(widget.initialRawNotifs);
-      } else {
-        _loadNotifs();
-      }
+      _loadHistory();
     }
+    _loadNotifs();
     _loadProfileImage();
     _loadPhone();
     _loadSessionInfo();
     _checkPendingJoin();
     _initDeepLinks();
     _initNotifTapHandlers();
-    // Keep-alive Railway : ping toutes les 8 min pour éviter le cold start
-    _keepAliveTimer = Timer.periodic(const Duration(minutes: 8), (_) {
-      http.get(Uri.parse(apiUrl)).catchError((_) => http.Response('', 0));
-    });
   }
 
   void _initNotifTapHandlers() {
@@ -224,8 +191,7 @@ class _ClientHomeState extends State<ClientHome>
     );
     if (!mounted) return;
     if (res.statusCode == 200 || res.statusCode == 201) {
-      final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
-      if (cardId != null) await _refreshCard(cardId); else _loadStats();
+      await _refreshAll();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carte ajoutée !'),
@@ -256,8 +222,7 @@ class _ClientHomeState extends State<ClientHome>
       body: jsonEncode({'merchant_id': merchantId}),
     );
     if ((res.statusCode == 200 || res.statusCode == 201) && mounted) {
-      final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
-      if (cardId != null) await _refreshCard(cardId); else _loadStats();
+      await _refreshAll();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carte ajoutée !'),
@@ -273,18 +238,13 @@ class _ClientHomeState extends State<ClientHome>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _checkLatestDeepLink();
+      _loadNotifs();
       final now = DateTime.now();
       final stale = _lastCardsRefresh == null ||
           now.difference(_lastCardsRefresh!).inSeconds >= 30;
       if (stale) {
-        // Délai pour laisser l'animation de retour iOS/Android se terminer avant de charger
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (!mounted) return;
-          AppLogger.client('App revenue au premier plan → refresh cartes + récompenses');
-          Future.wait([_loadStats(), _loadRewardsCount(), _loadNotifs()]);
-        });
-      } else {
-        _loadNotifs();
+        AppLogger.client('App revenue au premier plan → refresh complet');
+        _refreshAll();
       }
     }
   }
@@ -316,24 +276,21 @@ class _ClientHomeState extends State<ClientHome>
       );
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final url        = body['profile_picture_url'] as String?;
-        final email      = body['email'] as String? ?? '';
-        final serverName = body['name']  as String? ?? '';
+        final url      = body['profile_picture_url'] as String?;
+        final email    = body['email'] as String? ?? '';
         // is_google : on garde true si déjà true en local (le serveur peut se tromper)
         final serverIsGoogle = body['is_google'] as bool? ?? false;
         final localIsGoogle  = prefs.getBool('is_google') ?? false;
         final isGoogle = serverIsGoogle || localIsGoogle;
         final isOAuth  = (body['is_oauth'] as bool? ?? false) || isGoogle;
-        // Persister tout en local — nom inclus pour affichage instantané au prochain lancement
+        // Persister tout en local
         if (url != null && url.isNotEmpty) await prefs.setString('profile_image_url', url);
         if (email.isNotEmpty) await prefs.setString('email', email);
-        if (serverName.isNotEmpty) await prefs.setString('name', serverName);
         await prefs.setBool('is_google', isGoogle);
         await prefs.setBool('is_oauth', isOAuth);
         setState(() {
           if (url != null && url.isNotEmpty) _profileImageUrl = url;
           if (email.isNotEmpty) _userEmail = email;
-          if (serverName.isNotEmpty) _userName = serverName;
           _isGoogle  = isGoogle;
           _isOAuth   = isOAuth;
         });
@@ -810,34 +767,8 @@ class _ClientHomeState extends State<ClientHome>
     }
   }
 
-  void _applyRawNotifs(List<dynamic> raw) {
-    final mapped = raw.map((n) {
-      final type = n['type'] as String? ?? 'promo';
-      final style = _notifStyle[type] ?? _notifStyle['promo']!;
-      final dt = DateTime.tryParse(n['created_at'] as String? ?? '')?.toLocal();
-      final time = dt != null
-          ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
-          : '';
-      return <String, dynamic>{
-        'id': n['id'],
-        'icon': style['icon'],
-        'commerce': n['merchant_name'] ?? '',
-        'title': n['title'] ?? '',
-        'body': n['body'] ?? '',
-        'time': time,
-        'color': style['color'],
-        'read': n['read'] ?? false,
-        'type': type,
-      };
-    }).toList();
-    _notifs = mapped;
-    _notifsLoaded = true;
-    _notifCount = _notifs.where((n) => !(n['read'] as bool)).length;
-  }
-
   Future<void> _loadNotifs() async {
     AppLogger.client('Chargement notifications client...');
-    final sw = Stopwatch()..start();
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/notifications/client'),
@@ -845,7 +776,7 @@ class _ClientHomeState extends State<ClientHome>
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as List;
-        AppLogger.client('[PERF] Notifications chargées en ${sw.elapsedMilliseconds}ms (${data.length} notifs)');
+        AppLogger.client('Notifications → ${data.length} reçues');
         final mapped = data.map((n) {
           final type = n['type'] as String? ?? 'promo';
           final style = _notifStyle[type] ?? _notifStyle['promo']!;
@@ -882,7 +813,6 @@ class _ClientHomeState extends State<ClientHome>
     _pillPageCtrl.dispose();
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
-    _keepAliveTimer?.cancel();
     _deepLinkSub?.cancel();
     _fcmForegroundSub?.cancel();
     notifOpenNotifier.removeListener(_onNotifOpen);
@@ -923,115 +853,29 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
-  /// Met à jour une seule carte sans recharger toutes les cartes.
-  /// Utilisé après un scan ou un ajout de carte.
-  Future<void> _refreshCard(String cardId) async {
-    final r = await ApiService.instance.getCardDetail(cardId);
-    if (!mounted || r.isErr) return;
-    final updated = r.value;
-    setState(() {
-      final idx = _cards.indexWhere((c) => c['id'] == cardId);
-      if (idx >= 0) {
-        _cards[idx] = updated;
-      } else {
-        // Nouvelle carte → l'ajouter en tête de liste
-        _cards.insert(0, updated);
-      }
-    });
-    AppLogger.client('[PERF] Carte ${updated['merchants']?['business_name'] ?? cardId} actualisée');
-  }
-
-  // Pull-to-refresh manuel : tout part en fire-and-forget, spinner = 500ms de feedback visuel.
-  // Railway peut être froid (5-9s), bloquer le spinner dessus est inutile.
-  // L UI se met à jour automatiquement via setState quand chaque requête rentre.
-  Future<void> _refreshManual() async {
-    AppLogger.client('Refresh manuel → tout en arrière-plan');
-    _loadStats();
-    _loadRewardsCount();
-    _loadHistory();
-    _loadNotifs();
-    await Future.delayed(const Duration(milliseconds: 500));
-  }
-
-  // Refresh silencieux global après chargement depuis le cache
-  Future<void> _silentRefreshAll() async {
-    if (!mounted) return;
-    AppLogger.client('[PERF] Refresh silencieux démarré');
-    final sw = Stopwatch()..start();
-    final results = await Future.wait([
-      ApiService.instance.getMyCards(),
-      ApiService.instance.getMyRewards(),
-    ]);
-    if (!mounted) return;
-    AppLogger.client('[PERF] Refresh silencieux terminé en ${sw.elapsedMilliseconds}ms');
-    final cardsResult   = results[0] as dynamic;
-    final rewardsResult = results[1] as dynamic;
-    if (cardsResult.isOk) {
-      final fresh = (cardsResult.value as List).map((c) => Map<String, dynamic>.from(c as Map)).toList();
-      _applyCards(fresh);
-      _saveCardsCache(fresh);
-    }
-    if (rewardsResult.isOk && rewardsResult.value != null) {
-      final fresh = rewardsResult.value as List;
-      if (mounted) setState(() { _rewards = fresh; _rewardCount = fresh.length; });
-      _saveRewardsCache(fresh);
-    }
-  }
-
-  Future<void> _saveCardsCache(List<dynamic> cards) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cache_client_cards', jsonEncode(cards));
-    } catch (_) {}
-  }
-
-  Future<void> _saveRewardsCache(List<dynamic> rewards) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cache_client_rewards', jsonEncode(rewards));
-    } catch (_) {}
-  }
-
-  Future<void> _saveHistoryCache(List<dynamic> history) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cache_client_history', jsonEncode(history));
-    } catch (_) {}
-  }
-
   Future<void> _loadStats() async {
-    final sw = Stopwatch()..start();
     final r = await ApiService.instance.getMyCards();
     if (!mounted || r.isErr) return;
     final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
-    AppLogger.client('[PERF] Cartes chargées en ${sw.elapsedMilliseconds}ms (${data.length} cartes)');
     _applyCards(data);
-    _saveCardsCache(data);
   }
 
   Future<void> _loadHistory() async {
-    final sw = Stopwatch()..start();
     try {
       final res = await http.get(
         Uri.parse('$apiUrl/cards/my-history'),
         headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
       );
       if (mounted && res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        AppLogger.client('[PERF] Historique chargé en ${sw.elapsedMilliseconds}ms (${data.length} entrées)');
-        setState(() => _history = data);
-        _saveHistoryCache(data);
+        setState(() => _history = jsonDecode(res.body) as List);
       }
     } catch (_) {}
   }
 
   Future<void> _loadRewardsCount() async {
-    final sw = Stopwatch()..start();
     final r = await ApiService.instance.getMyRewards();
     if (mounted && r.isOk) {
-      AppLogger.client('[PERF] Récompenses chargées en ${sw.elapsedMilliseconds}ms (${r.value.length} récompenses)');
       setState(() { _rewards = r.value; _rewardCount = r.value.length; });
-      _saveRewardsCache(r.value as List);
     }
   }
 
@@ -1079,7 +923,7 @@ class _ClientHomeState extends State<ClientHome>
       if (e.reward) {
         setState(() => _animatingCardId = e.cardId);
       } else {
-        _refreshCard(e.cardId); // 1 seule carte au lieu de tout recharger
+        _refreshAll();
       }
     });
   }
@@ -1142,7 +986,7 @@ class _ClientHomeState extends State<ClientHome>
       _animatingCardId = null;
       _slidingInCardId = cardId; // déclenche le slide-in depuis la gauche
     });
-    if (cardId != null) _refreshCard(cardId); // 1 seule carte au lieu de tout recharger
+    _refreshAll(); // synchro DB en arrière-plan
     _slideInTimer?.cancel();
     _slideInTimer = Timer(const Duration(milliseconds: 280), () {
       if (mounted) setState(() => _slidingInCardId = null);
@@ -1433,6 +1277,16 @@ class _ClientHomeState extends State<ClientHome>
       color: context.qNavy,
       child: Stack(
         children: [
+          // Logo Q en filigrane (comme sur Figma : hgrid background-image)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.07,
+              child: Image.asset(
+                'assets/images/89.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
           // Orbe lumineux
           Positioned(
             top: -20, right: -10,
@@ -1458,52 +1312,40 @@ class _ClientHomeState extends State<ClientHome>
                 // ── Ligne avatar + notifs
                 Row(
                   children: [
-                    if (_tab == 3)
-                      // Profil : bulle label à gauche, pas de bouton retour
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                        ),
-                        child: const Text('Profil', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: () => _openProfil(),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38, height: 38,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                image: _profileImageUrl != null
-                                    ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                    : _profileImagePath != null
-                                        ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                        : null,
-                              ),
-                              child: (_profileImageUrl == null && _profileImagePath == null)
-                                  ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
-                                  : null,
+                    GestureDetector(
+                      onTap: () => _openProfil(),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38, height: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                              border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                              image: _profileImageUrl != null
+                                  ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                  : _profileImagePath != null
+                                      ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                      : null,
                             ),
-                            const SizedBox(width: 9),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Bonjour', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, height: 1)),
-                                const SizedBox(height: 2),
-                                Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
-                              ],
-                            ),
-                          ],
-                        ),
+                            child: (_profileImageUrl == null && _profileImagePath == null)
+                                ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
+                                : null,
+                          ),
+                          const SizedBox(width: 9),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Bonjour', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, height: 1)),
+                              const SizedBox(height: 2),
+                              Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
                     const Spacer(),
-                    // Bouton notifs (toujours visible)
+                    // Bouton notifs
                     GestureDetector(
                       onTap: _openNotifs,
                       child: Stack(
@@ -1578,7 +1420,6 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                     Row(children: [
                       Expanded(child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
                         onTap: () {
                           setState(() { _rewardPillActive = false; _tab = 0; });
                           _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
@@ -1642,31 +1483,18 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
-            RewardsTab(token: widget.token, userName: widget.userName, initialRewards: _rewards, onChanged: _refreshManual),
+            CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshAll, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
+            RewardsTab(token: widget.token, userName: widget.userName, initialRewards: _rewards, onChanged: _refreshAll),
           ],
         );
       case 1:
         return ScanTab(
           token: widget.token,
-          onCardAdded: (card, merchant) {
-            // Optimistic update : carte visible immédiatement, refresh en arrière-plan
-            final localCard = Map<String, dynamic>.from(card)
-              ..['merchants']    = merchant
-              ..['card_design']  = null
-              ..['last_scan_at'] = null;
-            setState(() {
-              _cards.insert(0, localCard);
-              _tab = 0;
-            });
-            // Confirme + complète (design) depuis le serveur
-            final cardId = card['id'] as String?;
-            if (cardId != null) _refreshCard(cardId);
-          },
+          onCardAdded: () { _refreshAll(); setState(() => _tab = 0); },
           onBack: () => setState(() => _tab = 0),
         );
       case 2:
-        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual);
+        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshAll);
       case 3:
         return _buildProfilTab();
       default:
@@ -1725,43 +1553,50 @@ class _ClientHomeState extends State<ClientHome>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Avatar profil ──────────────────────────────────────────────────
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _showPhotoOptions,
-            child: Stack(
+          const SizedBox(height: 16),
+          Center(
+            child: Column(
               children: [
-                Container(
-                  width: 86, height: 86,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF2C7BE5).withValues(alpha: 0.15),
-                    border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.35), width: 2.5),
-                    image: _profileImageUrl != null
-                        ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                        : _profileImagePath != null
-                            ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                GestureDetector(
+                  onTap: _showPhotoOptions,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 90, height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF2C7BE5).withValues(alpha: 0.15),
+                          border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.35), width: 2.5),
+                          image: _profileImageUrl != null
+                              ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                              : _profileImagePath != null
+                                  ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                  : null,
+                        ),
+                        child: (_profileImageUrl == null && _profileImagePath == null)
+                            ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF2C7BE5), fontSize: 28, fontWeight: FontWeight.w800)))
                             : null,
+                      ),
+                      Positioned(
+                        bottom: 2, right: 2,
+                        child: Container(
+                          width: 26, height: 26,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF2C7BE5),
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: (_profileImageUrl == null && _profileImagePath == null)
-                      ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF2C7BE5), fontSize: 28, fontWeight: FontWeight.w800)))
-                      : null,
                 ),
-                Positioned(
-                  bottom: 0, right: 0,
-                  child: Container(
-                    width: 26, height: 26,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF2C7BE5),
-                    ),
-                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                  ),
-                ),
+                const SizedBox(height: 8),
+                Text(_userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(_userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 20),
           // Section 1: compte
           _profSec([
@@ -1796,7 +1631,7 @@ class _ClientHomeState extends State<ClientHome>
                     userName: widget.userName,
                     cards: _cards,
                     rewards: _rewards,
-                    onRefresh: _refreshManual,
+                    onRefresh: _refreshAll,
                   ),
                 ),
               ),
@@ -2073,8 +1908,8 @@ class _ClientHomeState extends State<ClientHome>
           // Sheet
           Positioned(
             top: 0, left: 0, right: 0,
-            child: Opacity(
-              opacity: _notifAnim.value,
+            child: FractionalTranslation(
+              translation: Offset(0, -1 + _notifAnim.value),
               child: Container(
                 decoration: BoxDecoration(
                   color: context.qBg,
@@ -2084,36 +1919,30 @@ class _ClientHomeState extends State<ClientHome>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header notifications
-                    SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: context.qNavy,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                    // Header
+                    Container(
+                      color: const Color(0xFF0B1220),
+                      padding: EdgeInsets.only(
+                        top: MediaQuery.of(context).padding.top + 16,
+                        left: 20, right: 20, bottom: 16,
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: _markAllRead,
+                            child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
+                          ),
+                          GestureDetector(
+                            onTap: _closeNotifs,
+                            child: Container(
+                              width: 30, height: 30,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.1)),
+                              child: const Icon(Icons.close, color: Colors.white, size: 14),
                             ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: _markAllRead,
-                              child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
-                            ),
-                            GestureDetector(
-                              onTap: _closeNotifs,
-                              child: Container(
-                                width: 30, height: 30,
-                                decoration: BoxDecoration(shape: BoxShape.circle, color: context.qBorder),
-                                child: Icon(Icons.close, color: context.qText, size: 14),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                     // Filtres
