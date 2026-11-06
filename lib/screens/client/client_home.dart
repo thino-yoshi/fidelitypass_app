@@ -921,6 +921,24 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
+  /// Met à jour une seule carte sans recharger toutes les cartes.
+  /// Utilisé après un scan ou un ajout de carte.
+  Future<void> _refreshCard(String cardId) async {
+    final r = await ApiService.instance.getCardDetail(cardId);
+    if (!mounted || r.isErr) return;
+    final updated = r.value;
+    setState(() {
+      final idx = _cards.indexWhere((c) => c['id'] == cardId);
+      if (idx >= 0) {
+        _cards[idx] = updated;
+      } else {
+        // Nouvelle carte → l'ajouter en tête de liste
+        _cards.insert(0, updated);
+      }
+    });
+    AppLogger.client('[PERF] Carte ${updated['merchants']?['business_name'] ?? cardId} actualisée');
+  }
+
   // Pull-to-refresh manuel : tout part en fire-and-forget, spinner = 500ms de feedback visuel.
   // Railway peut être froid (5-9s), bloquer le spinner dessus est inutile.
   // L UI se met à jour automatiquement via setState quand chaque requête rentre.
@@ -1059,7 +1077,7 @@ class _ClientHomeState extends State<ClientHome>
       if (e.reward) {
         setState(() => _animatingCardId = e.cardId);
       } else {
-        _refreshAll();
+        _refreshCard(e.cardId); // 1 seule carte au lieu de tout recharger
       }
     });
   }
@@ -1122,7 +1140,7 @@ class _ClientHomeState extends State<ClientHome>
       _animatingCardId = null;
       _slidingInCardId = cardId; // déclenche le slide-in depuis la gauche
     });
-    _refreshAll(); // synchro DB en arrière-plan
+    if (cardId != null) _refreshCard(cardId); // 1 seule carte au lieu de tout recharger
     _slideInTimer?.cancel();
     _slideInTimer = Timer(const Duration(milliseconds: 280), () {
       if (mounted) setState(() => _slidingInCardId = null);

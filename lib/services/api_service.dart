@@ -267,6 +267,13 @@ class ApiService {
     return ApiResult.ok(r.data as List<dynamic>);
   }
 
+  /// Une seule carte complète (merchant + design + dernier scan).
+  Future<ApiResult<Map<String, dynamic>>> getCardDetail(String cardId) async {
+    final r = await _get('/cards/$cardId/detail');
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
   /// Rejoindre un programme de fidélité via le QR statique du commerçant.
   Future<ApiResult<Map<String, dynamic>>> joinMerchant(String staticQrToken) async {
     final r = await _post('/cards/join', {'static_qr_token': staticQrToken});
