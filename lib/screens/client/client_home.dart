@@ -921,13 +921,14 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
-  // Pull-to-refresh manuel : spinner visible le temps que cartes + récompenses chargent,
-  // historique et notifs en arrière-plan (moins critiques)
+  // Pull-to-refresh manuel : spinner visible le temps que /rewards/me charge (~2s),
+  // cartes + historique + notifs en arrière-plan (/cards/me trop lent pour bloquer l UI)
   Future<void> _refreshManual() async {
-    AppLogger.client('Refresh manuel → cartes + récompenses (historique + notifs en arrière-plan)');
+    AppLogger.client('Refresh manuel → récompenses (cartes + historique + notifs en arrière-plan)');
+    _loadStats();   // fire-and-forget
     _loadHistory(); // fire-and-forget
     _loadNotifs();  // fire-and-forget
-    await Future.wait([_loadStats(), _loadRewardsCount()]);
+    await _loadRewardsCount(); // seul qui bloque le spinner (~2s)
   }
 
   // Refresh silencieux global après chargement depuis le cache
