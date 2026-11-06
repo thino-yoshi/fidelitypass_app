@@ -1562,60 +1562,59 @@ class _ClientHomeState extends State<ClientHome>
                         ),
                       )
                     else if (_tab == 4)
-                      // Notifications : retour gauche + titre centré + cloche+Tout lu droite
+                      // Notifications : Row propre — retour | titre centré | cloche+Tout lu
                       Expanded(
-                        child: Stack(
-                          alignment: Alignment.center,
+                        child: Row(
                           children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: GestureDetector(
-                                onTap: _closeNotifs,
-                                child: Container(
+                            // Retour
+                            GestureDetector(
+                              onTap: _closeNotifs,
+                              child: Container(
+                                width: 34, height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.10),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                ),
+                                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                              ),
+                            ),
+                            // Titre centré
+                            const Expanded(
+                              child: Text('Notifications',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                            ),
+                            // Cloche + Tout lu
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
                                   width: 34, height: 34,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: Colors.white.withValues(alpha: 0.10),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                                   ),
-                                  child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                                  child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 17),
                                 ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 60),
-                              child: const Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    width: 34, height: 34,
+                                const SizedBox(height: 4),
+                                GestureDetector(
+                                  onTap: _markAllRead,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white.withValues(alpha: 0.08),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                                      color: const Color(0xFF0F1E3A),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.7)),
                                     ),
-                                    child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 17),
+                                    child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 10, fontWeight: FontWeight.w600)),
                                   ),
-                                  const SizedBox(height: 4),
-                                  GestureDetector(
-                                    onTap: _markAllRead,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F1E3A),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.7)),
-                                      ),
-                                      child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 10, fontWeight: FontWeight.w600)),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -1653,9 +1652,9 @@ class _ClientHomeState extends State<ClientHome>
                           ],
                         ),
                       ),
-                    if (_tab != 3) const Spacer(),
-                    // Bouton notifs (masqué sur profil car déjà dans le Stack)
-                    if (_tab != 3) GestureDetector(
+                    if (_tab != 3 && _tab != 4) const Spacer(),
+                    // Bouton notifs (masqué sur profil et notifications car déjà dans le Stack)
+                    if (_tab != 3 && _tab != 4) GestureDetector(
                       onTap: _openNotifs,
                       child: Stack(
                         clipBehavior: Clip.none,
