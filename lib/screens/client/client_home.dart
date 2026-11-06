@@ -224,7 +224,8 @@ class _ClientHomeState extends State<ClientHome>
     );
     if (!mounted) return;
     if (res.statusCode == 200 || res.statusCode == 201) {
-      await _refreshAll();
+      final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
+      if (cardId != null) await _refreshCard(cardId); else _loadStats();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carte ajoutée !'),
@@ -255,7 +256,8 @@ class _ClientHomeState extends State<ClientHome>
       body: jsonEncode({'merchant_id': merchantId}),
     );
     if ((res.statusCode == 200 || res.statusCode == 201) && mounted) {
-      await _refreshAll();
+      final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
+      if (cardId != null) await _refreshCard(cardId); else _loadStats();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carte ajoutée !'),
@@ -1646,7 +1648,20 @@ class _ClientHomeState extends State<ClientHome>
       case 1:
         return ScanTab(
           token: widget.token,
-          onCardAdded: () { _refreshAll(); setState(() => _tab = 0); },
+          onCardAdded: (card, merchant) {
+            // Optimistic update : carte visible immédiatement, refresh en arrière-plan
+            final localCard = Map<String, dynamic>.from(card)
+              ..['merchants']    = merchant
+              ..['card_design']  = null
+              ..['last_scan_at'] = null;
+            setState(() {
+              _cards.insert(0, localCard);
+              _tab = 0;
+            });
+            // Confirme + complète (design) depuis le serveur
+            final cardId = card['id'] as String?;
+            if (cardId != null) _refreshCard(cardId);
+          },
           onBack: () => setState(() => _tab = 0),
         );
       case 2:

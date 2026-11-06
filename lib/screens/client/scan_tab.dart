@@ -7,7 +7,7 @@ import '../../utils/logger.dart';
 
 class ScanTab extends StatefulWidget {
   final String token;
-  final VoidCallback onCardAdded;
+  final void Function(Map<String, dynamic> card, Map<String, dynamic> merchant) onCardAdded;
   final VoidCallback? onBack;
 
   const ScanTab({super.key, required this.token, required this.onCardAdded, this.onBack});
@@ -88,9 +88,10 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
     if (r.isOk) {
       final alreadyMember = r.value['already_member'] as bool? ?? false;
       final merchant = r.value['merchant'] as Map<String, dynamic>? ?? {};
+      final card    = r.value['card']     as Map<String, dynamic>? ?? {};
       final name = merchant['business_name'] as String? ?? '';
       AppLogger.client('ScanTab → joinMerchant ✓ already_member: $alreadyMember, commerce: $name');
-      _showResult(success: true, alreadyMember: alreadyMember, merchantName: name);
+      _showResult(success: true, alreadyMember: alreadyMember, merchantName: name, card: card, merchant: merchant);
     } else {
       AppLogger.error('ScanTab → joinMerchant erreur: ${r.error}');
       _showError(r.error ?? 'QR code invalide');
@@ -107,6 +108,8 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
     required bool success,
     required bool alreadyMember,
     required String merchantName,
+    Map<String, dynamic> card     = const {},
+    Map<String, dynamic> merchant = const {},
   }) {
     if (!mounted) return;
     showModalBottomSheet(
@@ -119,7 +122,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
         merchantName: merchantName,
         onDone: () {
           Navigator.pop(context);
-          if (!alreadyMember) widget.onCardAdded();
+          if (!alreadyMember) widget.onCardAdded(card, merchant);
           _resetScan();
         },
       ),
