@@ -915,12 +915,13 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
-  // Pull-to-refresh manuel : récompenses + historique + notifs immédiatement,
-  // cartes en arrière-plan (/cards/me prend 8s+ → ne bloque pas l'UI)
+  // Pull-to-refresh manuel : historique + notifs seulement,
+  // cartes ET récompenses en arrière-plan (changent uniquement après un scan)
   Future<void> _refreshManual() async {
-    AppLogger.client('Refresh manuel → historique + récompenses + notifs (cartes en arrière-plan)');
-    _loadStats(); // fire-and-forget
-    await Future.wait([_loadHistory(), _loadRewardsCount(), _loadNotifs()]);
+    AppLogger.client('Refresh manuel → historique + notifs (cartes + récompenses en arrière-plan)');
+    _loadStats();         // fire-and-forget (~8s)
+    _loadRewardsCount();  // fire-and-forget (~3s)
+    await Future.wait([_loadHistory(), _loadNotifs()]);
   }
 
   // Refresh silencieux global après chargement depuis le cache
