@@ -160,8 +160,7 @@ class _ClientHomeState extends State<ClientHome>
           await _loadNotifs();
           if (!mounted) return;
           if (msg.data['type'] == 'recompense') {
-            setState(() { _rewardPillActive = true; _tab = 0; });
-            _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+            _goToRewards();
           } else {
             _openNotifs();
           }
@@ -177,8 +176,7 @@ class _ClientHomeState extends State<ClientHome>
         await _loadNotifs();
         if (!mounted) return;
         if (msg.data['type'] == 'recompense') {
-          setState(() { _rewardPillActive = true; _tab = 0; });
-          _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+          _goToRewards();
         } else {
           _openNotifs();
         }
@@ -1372,6 +1370,30 @@ class _ClientHomeState extends State<ClientHome>
     setState(() => _tab = _prevTab);
   }
 
+  void _goToRewards() {
+    final already = _tab == 0;
+    setState(() { _rewardPillActive = true; _tab = 0; });
+    if (already) {
+      _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pillPageCtrl.jumpToPage(1);
+      });
+    }
+  }
+
+  void _goToCards() {
+    final already = _tab == 0;
+    setState(() { _rewardPillActive = false; _tab = 0; });
+    if (already) {
+      _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pillPageCtrl.jumpToPage(0);
+      });
+    }
+  }
+
   Future<void> _markAllRead() async {
     setState(() {
       for (var n in _notifs) {
@@ -1456,60 +1478,143 @@ class _ClientHomeState extends State<ClientHome>
                 Row(
                   children: [
                     if (_tab == 3)
-                      // Profil : avatar + prénom + bouton caméra
-                      GestureDetector(
-                        onTap: _showPhotoOptions,
-                        child: Row(
+                      // Profil : "Profil" à gauche + avatar centré + cloche à droite
+                      Expanded(
+                        child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            Stack(
-                              children: [
-                                Container(
-                                  width: 38, height: 38,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                    border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                    image: _profileImageUrl != null
-                                        ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                        : _profileImagePath != null
-                                            ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                            : null,
-                                  ),
-                                  child: (_profileImageUrl == null && _profileImagePath == null)
-                                      ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
-                                      : null,
-                                ),
-                                Positioned(
-                                  bottom: 0, right: 0,
-                                  child: Container(
-                                    width: 14, height: 14,
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('Profil', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                            ),
+                            GestureDetector(
+                              onTap: _showPhotoOptions,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: 50, height: 50,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: const Color(0xFF2C7BE5),
-                                      border: Border.all(color: context.qNavy, width: 1.5),
+                                      color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                      image: _profileImageUrl != null
+                                          ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                          : _profileImagePath != null
+                                              ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                              : null,
                                     ),
-                                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 7),
+                                    child: (_profileImageUrl == null && _profileImagePath == null)
+                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 15, fontWeight: FontWeight.w700)))
+                                        : null,
                                   ),
-                                ),
-                              ],
+                                  Positioned(
+                                    bottom: 1, right: 1,
+                                    child: Container(
+                                      width: 16, height: 16,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFF2C7BE5),
+                                        border: Border.all(color: context.qNavy, width: 1.5),
+                                      ),
+                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 8),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: 10),
-                            Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: GestureDetector(
+                                onTap: _openNotifs,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      width: 38, height: 38,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.white.withValues(alpha: 0.08),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                      ),
+                                      child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 18),
+                                    ),
+                                    if (_notifCount > 0)
+                                      Positioned(
+                                        top: -2, right: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                                          height: 16,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE24B4A),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: context.qNavy, width: 2),
+                                          ),
+                                          child: Center(
+                                            child: Text('$_notifCount', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       )
                     else if (_tab == 4)
-                      // Notifications : bouton retour
-                      GestureDetector(
-                        onTap: _closeNotifs,
-                        child: Container(
-                          width: 34, height: 34,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.10),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                          ),
-                          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                      // Notifications : retour gauche + titre centré + cloche+Tout lu droite
+                      Expanded(
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: GestureDetector(
+                                onTap: _closeNotifs,
+                                child: Container(
+                                  width: 34, height: 34,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(alpha: 0.10),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                  ),
+                                  child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                                ),
+                              ),
+                            ),
+                            const Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Container(
+                                    width: 34, height: 34,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white.withValues(alpha: 0.08),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                                    ),
+                                    child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 17),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  GestureDetector(
+                                    onTap: _markAllRead,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F1E3A),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.7)),
+                                      ),
+                                      child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 10, fontWeight: FontWeight.w600)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       )
                     else
@@ -1545,9 +1650,9 @@ class _ClientHomeState extends State<ClientHome>
                           ],
                         ),
                       ),
-                    const Spacer(),
-                    // Bouton notifs (toujours visible)
-                    GestureDetector(
+                    if (_tab != 3) const Spacer(),
+                    // Bouton notifs (masqué sur profil car déjà dans le Stack)
+                    if (_tab != 3) GestureDetector(
                       onTap: _openNotifs,
                       child: Stack(
                         clipBehavior: Clip.none,
@@ -1582,15 +1687,57 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                   ],
                 ),
-                if (_tab == 3 || _tab == 4) ...[
+                if (_tab == 3) ...[
                 const SizedBox(height: 14),
                 SizedBox(
                   height: 42,
                   child: Center(
                     child: Text(
-                      _tab == 4 ? 'Notifications' : _userName,
+                      _userName,
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1),
                     ),
+                  ),
+                ),
+                ] else if (_tab == 4) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 36,
+                  child: Row(
+                    children: [
+                      for (final f in [
+                        {'key': 'tout', 'label': 'Tout'},
+                        {'key': 'tampon', 'label': 'Tampons'},
+                        {'key': 'recompense', 'label': 'Récompenses'},
+                        {'key': 'promo', 'label': 'Promos'},
+                      ])
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _notifFilter = f['key']!),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(
+                                color: _notifFilter == f['key'] ? const Color(0xFF2C7BE5) : const Color(0xFF0F1E3A),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _notifFilter == f['key']
+                                      ? Colors.transparent
+                                      : const Color(0xFF4A9EFF).withValues(alpha: 0.6),
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  f['label']!,
+                                  style: TextStyle(
+                                    color: _notifFilter == f['key'] ? Colors.white : const Color(0xFF4A9EFF),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 ] else ...[
@@ -1633,10 +1780,7 @@ class _ClientHomeState extends State<ClientHome>
                     Row(children: [
                       Expanded(child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          setState(() { _rewardPillActive = false; _tab = 0; });
-                          _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
-                        },
+                        onTap: _goToCards,
                         child: Center(child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1650,10 +1794,7 @@ class _ClientHomeState extends State<ClientHome>
                       )),
                       Expanded(child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          setState(() { _rewardPillActive = true; _tab = 0; });
-                          _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
-                        },
+                        onTap: _goToRewards,
                         child: Center(child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -2078,53 +2219,6 @@ class _ClientHomeState extends State<ClientHome>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Filtres
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final f in [
-                        {'key': 'tout', 'label': 'Tout'},
-                        {'key': 'tampon', 'label': 'Tampons'},
-                        {'key': 'recompense', 'label': 'Récompenses'},
-                        {'key': 'promo', 'label': 'Promos'},
-                      ])
-                        GestureDetector(
-                          onTap: () => setState(() => _notifFilter = f['key']!),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: _notifFilter == f['key'] ? const Color(0xFF2C7BE5) : context.qSurface,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: _notifFilter == f['key'] ? Colors.transparent : context.qBorder),
-                            ),
-                            child: Text(
-                              f['label']!,
-                              style: TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w600,
-                                color: _notifFilter == f['key'] ? Colors.white : context.qChipText,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: _markAllRead,
-                child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-        ),
         const Divider(height: 1),
         // Liste
         Expanded(
