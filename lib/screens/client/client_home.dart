@@ -1492,7 +1492,7 @@ class _ClientHomeState extends State<ClientHome>
                               child: Stack(
                                 children: [
                                   Container(
-                                    width: 50, height: 50,
+                                    width: 70, height: 70,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
@@ -1504,19 +1504,19 @@ class _ClientHomeState extends State<ClientHome>
                                               : null,
                                     ),
                                     child: (_profileImageUrl == null && _profileImagePath == null)
-                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 15, fontWeight: FontWeight.w700)))
+                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 20, fontWeight: FontWeight.w700)))
                                         : null,
                                   ),
                                   Positioned(
-                                    bottom: 1, right: 1,
+                                    bottom: 2, right: 2,
                                     child: Container(
-                                      width: 16, height: 16,
+                                      width: 20, height: 20,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: const Color(0xFF2C7BE5),
                                         border: Border.all(color: context.qNavy, width: 1.5),
                                       ),
-                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 8),
+                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 11),
                                     ),
                                   ),
                                 ],
@@ -1582,7 +1582,10 @@ class _ClientHomeState extends State<ClientHome>
                                 ),
                               ),
                             ),
-                            const Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 60),
+                              child: const Text('Notifications', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
                             Align(
                               alignment: Alignment.centerRight,
                               child: Column(
@@ -1725,12 +1728,15 @@ class _ClientHomeState extends State<ClientHome>
                                 ),
                               ),
                               child: Center(
-                                child: Text(
-                                  f['label']!,
-                                  style: TextStyle(
-                                    color: _notifFilter == f['key'] ? Colors.white : const Color(0xFF4A9EFF),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    f['label']!,
+                                    style: TextStyle(
+                                      color: _notifFilter == f['key'] ? Colors.white : const Color(0xFF4A9EFF),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
