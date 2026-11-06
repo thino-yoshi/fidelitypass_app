@@ -37,6 +37,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
 
+  // Pre-warm Railway dès que possible (fire-and-forget)
+  // Railway cold start peut prendre 5-9s — on lance le ping pendant Supabase+Firebase init
+  http.get(Uri.parse(apiUrl)).catchError((_) => http.Response('', 0));
+
   // ── Supabase + Firebase en parallèle ─────────────────────────────────────
   AppLogger.splash('Démarrage app — init Supabase + Firebase...');
   await Future.wait([
