@@ -1772,6 +1772,7 @@ class _ClientHomeState extends State<ClientHome>
       padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 76),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Section 1: compte
           _profSec([
