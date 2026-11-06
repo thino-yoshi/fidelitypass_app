@@ -1626,14 +1626,7 @@ class _ClientHomeState extends State<ClientHome>
 
   // ── TAB CONTENT ────────────────────────────────────────────────────────────
 
-  // Couleur de l'indicateur glissant : bleu si côté Cartes, couleur de la 1re carte de récompense si côté Récompenses
-  Color get _pillIndicatorColor {
-    if (_rewardPillActive && _rewards.isNotEmpty) {
-      final style = CardStyle.fromDesign(_rewards.first['card_design'], fallbackColor: const Color(0xFF2C7BE5));
-      return style.bgColors.isNotEmpty ? style.bgColors.first : const Color(0xFF2C7BE5);
-    }
-    return const Color(0xFF2C7BE5);
-  }
+  Color get _pillIndicatorColor => const Color(0xFF2C7BE5);
 
   Widget _buildTabContent() {
     switch (_tab) {
