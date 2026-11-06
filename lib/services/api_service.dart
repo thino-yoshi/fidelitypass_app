@@ -33,7 +33,7 @@ class ApiService {
   ApiService._();
   static final ApiService instance = ApiService._();
 
-  static const _timeout = Duration(seconds: 10);
+  static const _timeout = Duration(seconds: 6);
 
   // Token toujours frais (Supabase SDK gère le refresh automatiquement)
   String get _token => AuthService.currentToken ?? '';

@@ -70,6 +70,7 @@ class _ClientHomeState extends State<ClientHome>
   StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
   Timer?     _stampBadgeTimer;
   Timer?     _slideInTimer;
+  Timer?     _keepAliveTimer;
   StreamSubscription<Uri>? _deepLinkSub;
   StreamSubscription<dynamic>? _fcmForegroundSub;
   Uri? _lastHandledDeepLink;
@@ -147,6 +148,10 @@ class _ClientHomeState extends State<ClientHome>
     _checkPendingJoin();
     _initDeepLinks();
     _initNotifTapHandlers();
+    // Keep-alive Railway : ping toutes les 8 min pour éviter le cold start
+    _keepAliveTimer = Timer.periodic(const Duration(minutes: 8), (_) {
+      http.get(Uri.parse(apiUrl)).catchError((_) => http.Response('', 0));
+    });
   }
 
   void _initNotifTapHandlers() {
@@ -875,6 +880,7 @@ class _ClientHomeState extends State<ClientHome>
     _pillPageCtrl.dispose();
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
+    _keepAliveTimer?.cancel();
     _deepLinkSub?.cancel();
     _fcmForegroundSub?.cancel();
     notifOpenNotifier.removeListener(_onNotifOpen);
@@ -915,13 +921,13 @@ class _ClientHomeState extends State<ClientHome>
     await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
   }
 
-  // Pull-to-refresh manuel : historique + notifs seulement,
-  // cartes ET récompenses en arrière-plan (changent uniquement après un scan)
+  // Pull-to-refresh manuel : spinner visible le temps que cartes + récompenses chargent,
+  // historique et notifs en arrière-plan (moins critiques)
   Future<void> _refreshManual() async {
-    AppLogger.client('Refresh manuel → historique + notifs (cartes + récompenses en arrière-plan)');
-    _loadStats();         // fire-and-forget (~8s)
-    _loadRewardsCount();  // fire-and-forget (~3s)
-    await Future.wait([_loadHistory(), _loadNotifs()]);
+    AppLogger.client('Refresh manuel → cartes + récompenses (historique + notifs en arrière-plan)');
+    _loadHistory(); // fire-and-forget
+    _loadNotifs();  // fire-and-forget
+    await Future.wait([_loadStats(), _loadRewardsCount()]);
   }
 
   // Refresh silencieux global après chargement depuis le cache
