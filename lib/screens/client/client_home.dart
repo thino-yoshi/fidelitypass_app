@@ -1575,34 +1575,8 @@ class _ClientHomeState extends State<ClientHome>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
                             ),
-                            // Tout lu + cloche sur la même ligne
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: _markAllRead,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0F1E3A),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.7)),
-                                    ),
-                                    child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 11, fontWeight: FontWeight.w600)),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  width: 34, height: 34,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-                                  ),
-                                  child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 17),
-                                ),
-                              ],
-                            ),
+                            // Spacer pour équilibrer la flèche retour et garder le titre centré
+                            const SizedBox(width: 34),
                           ],
                         ),
                       )
