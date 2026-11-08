@@ -1487,22 +1487,37 @@ class _ClientHomeState extends State<ClientHome>
                 Row(
                   children: [
                     if (_tab == 3)
-                      // Profil : flèche retour | avatar centré | blase à droite
+                      // Profil : 5 colonnes égales — [←] [Profil] [avatar] [nom] [vide]
                       Expanded(
                         child: Row(
                           children: [
-                            GestureDetector(
-                              onTap: () => _setTab(0),
-                              child: Container(
-                                width: 34, height: 34,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withValues(alpha: 0.10),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                            // 1 — Flèche retour
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: GestureDetector(
+                                  onTap: () => _setTab(0),
+                                  child: Container(
+                                    width: 34, height: 34,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white.withValues(alpha: 0.10),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                    ),
+                                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                                  ),
                                 ),
-                                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
                               ),
                             ),
+                            // 2 — "Profil"
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text('Profil',
+                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                              ),
+                            ),
+                            // 3 — Avatar centré
                             Expanded(
                               child: Center(
                                 child: GestureDetector(
@@ -1542,10 +1557,18 @@ class _ClientHomeState extends State<ClientHome>
                                 ),
                               ),
                             ),
-                            Text(_userName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                            // 4 — Nom
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(_userName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                              ),
+                            ),
+                            // 5 — Vide
+                            const Expanded(child: SizedBox()),
                           ],
                         ),
                       )
