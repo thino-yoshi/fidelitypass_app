@@ -1701,7 +1701,7 @@ class _ClientHomeState extends State<ClientHome>
                     ],
                   ),
                 ),
-                ] else ...[
+                ] else if (_tab != 3) ...[
                 const SizedBox(height: 20),
                 // ── Pills avec indicateur glissant
                 SizedBox(
