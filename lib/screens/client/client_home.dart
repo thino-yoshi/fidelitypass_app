@@ -1866,11 +1866,11 @@ class _ClientHomeState extends State<ClientHome>
               child: Stack(
                 children: [
                   Container(
-                    width: 90, height: 90,
+                    width: 110, height: 110,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0xFF2C7BE5).withValues(alpha: 0.15),
-                      border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.4), width: 2),
+                      border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.4), width: 2.5),
                       image: _profileImageUrl != null
                           ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
                           : _profileImagePath != null
@@ -1878,19 +1878,19 @@ class _ClientHomeState extends State<ClientHome>
                               : null,
                     ),
                     child: (_profileImageUrl == null && _profileImagePath == null)
-                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF2C7BE5), fontSize: 26, fontWeight: FontWeight.w700)))
+                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF2C7BE5), fontSize: 32, fontWeight: FontWeight.w700)))
                         : null,
                   ),
                   Positioned(
-                    bottom: 2, right: 2,
+                    bottom: 3, right: 3,
                     child: Container(
-                      width: 26, height: 26,
+                      width: 30, height: 30,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: const Color(0xFF2C7BE5),
                         border: Border.all(color: Colors.white, width: 2),
                       ),
-                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 15),
                     ),
                   ),
                 ],
