@@ -1803,8 +1803,8 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
-            RewardsTab(token: widget.token, userName: widget.userName, initialRewards: _rewards, onChanged: _refreshManual),
+            CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
+            RewardsTab(token: widget.token, userName: _userName, initialRewards: _rewards, onChanged: _refreshManual),
           ],
         );
       case 1:
@@ -1833,7 +1833,7 @@ class _ClientHomeState extends State<ClientHome>
       case 4:
         return _buildNotifsTab();
       default:
-        return CardsTab(token: widget.token, userName: widget.userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
+        return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
   }
 
@@ -1918,7 +1918,7 @@ class _ClientHomeState extends State<ClientHome>
                 platformRoute(
                   builder: (_) => ManageCardsScreen(
                     token: widget.token,
-                    userName: widget.userName,
+                    userName: _userName,
                     cards: _cards,
                     rewards: _rewards,
                     onRefresh: _refreshManual,
