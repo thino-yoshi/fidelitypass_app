@@ -1509,22 +1509,41 @@ class _ClientHomeState extends State<ClientHome>
                             const Text('Profil',
                               style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
                             const Spacer(),
-                            // Avatar compact (même taille que header principal)
-                            Container(
-                              width: 38, height: 38,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                image: _profileImageUrl != null
-                                    ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                    : _profileImagePath != null
-                                        ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                            // Avatar grand cliquable
+                            GestureDetector(
+                              onTap: _showPhotoOptions,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: 100, height: 100,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                      image: _profileImageUrl != null
+                                          ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                          : _profileImagePath != null
+                                              ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                              : null,
+                                    ),
+                                    child: (_profileImageUrl == null && _profileImagePath == null)
+                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 28, fontWeight: FontWeight.w700)))
                                         : null,
+                                  ),
+                                  Positioned(
+                                    bottom: 2, right: 2,
+                                    child: Container(
+                                      width: 26, height: 26,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFF2C7BE5),
+                                        border: Border.all(color: context.qNavy, width: 1.5),
+                                      ),
+                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              child: (_profileImageUrl == null && _profileImagePath == null)
-                                  ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
-                                  : null,
                             ),
                             const SizedBox(width: 10),
                             // Nom
@@ -1682,8 +1701,6 @@ class _ClientHomeState extends State<ClientHome>
                     ],
                   ),
                 ),
-                ] else if (_tab == 3) ...[
-                const SizedBox(height: 62), // espace vide = hauteur des pills (20 + 42)
                 ] else ...[
                 const SizedBox(height: 20),
                 // ── Pills avec indicateur glissant
@@ -1859,51 +1876,6 @@ class _ClientHomeState extends State<ClientHome>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Avatar grand cliquable
-          Center(
-            child: GestureDetector(
-              onTap: _showPhotoOptions,
-              child: Stack(
-                children: [
-                  Container(
-                    width: 110, height: 110,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF2C7BE5).withValues(alpha: 0.15),
-                      border: Border.all(color: const Color(0xFF2C7BE5).withValues(alpha: 0.4), width: 2.5),
-                      image: _profileImageUrl != null
-                          ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                          : _profileImagePath != null
-                              ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                              : null,
-                    ),
-                    child: (_profileImageUrl == null && _profileImagePath == null)
-                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF2C7BE5), fontSize: 32, fontWeight: FontWeight.w700)))
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 3, right: 3,
-                    child: Container(
-                      width: 30, height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF2C7BE5),
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 15),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(_userName,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.qText, fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
           // Section 1: compte
           _profSec([
             _profRow(
