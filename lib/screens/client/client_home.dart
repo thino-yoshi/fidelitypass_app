@@ -1555,18 +1555,6 @@ class _ClientHomeState extends State<ClientHome>
                                   ),
                                 ),
                               ),
-                              // Nom positionné à partir du bord droit de l'avatar
-                              Positioned(
-                                left: constraints.maxWidth / 2 + 60, // centre + rayon(50) + marge(10)
-                                top: 0, bottom: 0, right: 0,
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(_userName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                                ),
-                              ),
                             ],
                           ),
                         ),
