@@ -1487,72 +1487,88 @@ class _ClientHomeState extends State<ClientHome>
                 Row(
                   children: [
                     if (_tab == 3)
-                      // Profil : [← Profil] ··· [avatar] [nom] ···
+                      // Profil : Stack — avatar centré exact, flèche+Profil à gauche, nom à droite
                       Expanded(
-                        child: Row(
-                          children: [
-                            // Flèche retour
-                            GestureDetector(
-                              onTap: () => _setTab(0),
-                              child: Container(
-                                width: 34, height: 34,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withValues(alpha: 0.10),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                                ),
-                                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // "Profil" collé à la flèche
-                            const Text('Profil',
-                              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                            const Spacer(),
-                            // Avatar grand cliquable
-                            GestureDetector(
-                              onTap: _showPhotoOptions,
-                              child: Stack(
-                                children: [
-                                  Container(
-                                    width: 100, height: 100,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                      image: _profileImageUrl != null
-                                          ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                          : _profileImagePath != null
-                                              ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                              : null,
-                                    ),
-                                    child: (_profileImageUrl == null && _profileImagePath == null)
-                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 28, fontWeight: FontWeight.w700)))
-                                        : null,
-                                  ),
-                                  Positioned(
-                                    bottom: 2, right: 2,
-                                    child: Container(
-                                      width: 26, height: 26,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: const Color(0xFF2C7BE5),
-                                        border: Border.all(color: context.qNavy, width: 1.5),
+                        child: LayoutBuilder(
+                          builder: (_, constraints) => Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Flèche + "Profil" collés à gauche
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _setTab(0),
+                                      child: Container(
+                                        width: 34, height: 34,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white.withValues(alpha: 0.10),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                        ),
+                                        child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
                                       ),
-                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    const Text('Profil',
+                                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            // Nom
-                            Text(_userName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                            const Spacer(),
-                          ],
+                              // Avatar au centre exact
+                              Center(
+                                child: GestureDetector(
+                                  onTap: _showPhotoOptions,
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        width: 100, height: 100,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                          border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                          image: _profileImageUrl != null
+                                              ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                              : _profileImagePath != null
+                                                  ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                                  : null,
+                                        ),
+                                        child: (_profileImageUrl == null && _profileImagePath == null)
+                                            ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 28, fontWeight: FontWeight.w700)))
+                                            : null,
+                                      ),
+                                      Positioned(
+                                        bottom: 2, right: 2,
+                                        child: Container(
+                                          width: 26, height: 26,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFF2C7BE5),
+                                            border: Border.all(color: context.qNavy, width: 1.5),
+                                          ),
+                                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Nom positionné à partir du bord droit de l'avatar
+                              Positioned(
+                                left: constraints.maxWidth / 2 + 60, // centre + rayon(50) + marge(10)
+                                top: 0, bottom: 0, right: 0,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(_userName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       )
                     else if (_tab == 4)
