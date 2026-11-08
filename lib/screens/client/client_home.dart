@@ -790,20 +790,28 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   Future<void> _deleteProfileImage() async {
-    try {
-      final res = await http.delete(
-        Uri.parse('$apiUrl/users/profile-picture'),
-        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-      );
-      if (res.statusCode == 200 && mounted) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('profile_image_url');
-        await prefs.remove('profile_image_path');
-        setState(() { _profileImageUrl = null; _profileImagePath = null; });
+    // Optimistic update : suppression UI immédiate
+    final prevUrl = _profileImageUrl;
+    final prevPath = _profileImagePath;
+    setState(() { _profileImageUrl = null; _profileImagePath = null; });
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove('profile_image_url');
+      prefs.remove('profile_image_path');
+    });
+    // Requête API en arrière-plan
+    http.delete(
+      Uri.parse('$apiUrl/users/profile-picture'),
+      headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
+    ).then((res) {
+      if (res.statusCode != 200 && mounted) {
+        // Rollback si échec
+        setState(() { _profileImageUrl = prevUrl; _profileImagePath = prevPath; });
+        AppLogger.error('Delete photo profil → HTTP ${res.statusCode}');
       }
-    } catch (e) {
+    }).catchError((e) {
+      if (mounted) setState(() { _profileImageUrl = prevUrl; _profileImagePath = prevPath; });
       AppLogger.error('Delete photo profil → exception : $e');
-    }
+    });
   }
 
   void _applyRawNotifs(List<dynamic> raw) {
