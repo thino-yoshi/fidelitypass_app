@@ -1487,88 +1487,71 @@ class _ClientHomeState extends State<ClientHome>
                 Row(
                   children: [
                     if (_tab == 3)
-                      // Profil : 5 colonnes égales — [←] [Profil] [avatar] [nom] [vide]
+                      // Profil : [← Profil] ··· [avatar] [nom] ···
                       Expanded(
                         child: Row(
                           children: [
-                            // 1 — Flèche retour
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: GestureDetector(
-                                  onTap: () => _setTab(0),
-                                  child: Container(
-                                    width: 34, height: 34,
+                            // Flèche retour
+                            GestureDetector(
+                              onTap: () => _setTab(0),
+                              child: Container(
+                                width: 34, height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.10),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                ),
+                                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // "Profil" collé à la flèche
+                            const Text('Profil',
+                              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                            const Spacer(),
+                            // Avatar
+                            GestureDetector(
+                              onTap: _showPhotoOptions,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: 80, height: 80,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: Colors.white.withValues(alpha: 0.10),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                      color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                      image: _profileImageUrl != null
+                                          ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                          : _profileImagePath != null
+                                              ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                              : null,
                                     ),
-                                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
+                                    child: (_profileImageUrl == null && _profileImagePath == null)
+                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 22, fontWeight: FontWeight.w700)))
+                                        : null,
                                   ),
-                                ),
-                              ),
-                            ),
-                            // 2 — "Profil"
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text('Profil',
-                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                              ),
-                            ),
-                            // 3 — Avatar centré
-                            Expanded(
-                              child: Center(
-                                child: GestureDetector(
-                                  onTap: _showPhotoOptions,
-                                  child: Stack(
-                                    children: [
-                                      Container(
-                                        width: 70, height: 70,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                          border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                          image: _profileImageUrl != null
-                                              ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                              : _profileImagePath != null
-                                                  ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                                  : null,
-                                        ),
-                                        child: (_profileImageUrl == null && _profileImagePath == null)
-                                            ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 20, fontWeight: FontWeight.w700)))
-                                            : null,
+                                  Positioned(
+                                    bottom: 2, right: 2,
+                                    child: Container(
+                                      width: 22, height: 22,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFF2C7BE5),
+                                        border: Border.all(color: context.qNavy, width: 1.5),
                                       ),
-                                      Positioned(
-                                        bottom: 2, right: 2,
-                                        child: Container(
-                                          width: 20, height: 20,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: const Color(0xFF2C7BE5),
-                                            border: Border.all(color: context.qNavy, width: 1.5),
-                                          ),
-                                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 11),
-                                        ),
-                                      ),
-                                    ],
+                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
-                            // 4 — Nom
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(_userName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                              ),
-                            ),
-                            // 5 — Vide
-                            const Expanded(child: SizedBox()),
+                            const SizedBox(width: 10),
+                            // Nom avec marge gauche
+                            Text(_userName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                            const Spacer(),
                           ],
                         ),
                       )
@@ -1718,6 +1701,8 @@ class _ClientHomeState extends State<ClientHome>
                     ],
                   ),
                 ),
+                ] else if (_tab == 3) ...[
+                const SizedBox(height: 62), // espace vide = hauteur des pills (20 + 42)
                 ] else ...[
                 const SizedBox(height: 20),
                 // ── Pills avec indicateur glissant
