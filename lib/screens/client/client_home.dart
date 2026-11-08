@@ -1651,9 +1651,9 @@ class _ClientHomeState extends State<ClientHome>
                   ],
                 ),
                 if (_tab == 4) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 20),
                 SizedBox(
-                  height: 36,
+                  height: 42,
                   child: Row(
                     children: [
                       for (final f in [
