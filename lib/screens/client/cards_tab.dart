@@ -1244,7 +1244,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Modal QR dynamique (inchangée) ───────────────────────────────────────────
+// ── Modal QR fixe ────────────────────────────────────────────────────────────
 
 class QRModal extends StatefulWidget {
   final String token;
@@ -1264,11 +1264,6 @@ class QRModal extends StatefulWidget {
 }
 
 class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
-  String? dynamicToken;
-  int timeLeft = 60;
-  bool loadingQR = true;
-  String? qrError;
-  Timer? _timer;
   Timer? _pollTimer;           // ← polling détection tampon
   int    _initialStamps = 0;   // ← valeur de référence (utilisée pour le delta affiché)
   String? _initialScanAt;      // ← horodatage du dernier scan à l'ouverture (base de comparaison)
@@ -1344,7 +1339,6 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     _flipAnim = Tween<double>(begin: 0, end: pi).animate(
       CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOut),
     );
-    fetchDynamicQR();
     _initialStamps = stamps0; // ← mémoriser pour le calcul du delta
     // Récupérer le dernier scan_at pour détecter un nouveau scan (comparaison timestamp)
     ApiService.instance.pollCard(widget.card['id'] as String).then((r) {
@@ -1359,7 +1353,6 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   @override
   void dispose() {
     AppLogger.client('QRModal → fermé, polling arrêté');
-    _timer?.cancel();
     _pollTimer?.cancel();
     _confettiCtrl.dispose();
     _flipCtrl.dispose();
@@ -1423,42 +1416,6 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> fetchDynamicQR() async {
-    AppLogger.client('QRModal → génération QR dynamique (cardId: ${widget.card['id']})');
-    setState(() { loadingQR = true; dynamicToken = null; qrError = null; });
-    final r = await ApiService.instance.getDynamicQR(widget.card['id'] as String);
-    if (!mounted) return;
-    if (r.isOk) {
-      final tok = r.value['dynamic_token'] as String?;
-      final exp = r.value['expires_in'] as int? ?? 60;
-      AppLogger.client('QRModal → QR généré ✓, expire dans ${exp}s, token: ${tok?.substring(0, 8) ?? "null"}...');
-      setState(() {
-        dynamicToken = tok;
-        timeLeft     = exp;
-        loadingQR    = false;
-        qrError      = null;
-      });
-      startTimer();
-    } else {
-      AppLogger.error('QRModal → getDynamicQR erreur: ${r.error}');
-      setState(() { loadingQR = false; qrError = r.error ?? 'Erreur de génération du QR'; });
-    }
-  }
-
-  void startTimer() {
-    AppLogger.client('QRModal → timer QR démarré (${timeLeft}s)');
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
-      setState(() => timeLeft--);
-      if (timeLeft <= 0) {
-        AppLogger.client('QRModal → QR expiré → renouvellement');
-        t.cancel();
-        fetchDynamicQR();
-      }
-    });
-  }
-
   // ── ZOOM QR ──────────────────────────────────────────────────────────────────
   void _showQRZoom(BuildContext context, Color color) {
     showDialog(
@@ -1482,7 +1439,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 30, spreadRadius: 5)],
                   ),
                   child: QrImageView(
-                    data: dynamicToken ?? '',
+                    data: widget.card['qr_token'] as String? ?? '',
                     version: QrVersions.auto,
                     size: 240,
                     foregroundColor: const Color(0xFF0B1220),
@@ -1490,15 +1447,6 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                '🔒 Renouvellement dans ${timeLeft}s',
-                style: TextStyle(
-                  color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withValues(alpha: 0.7),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
                 'Appuie n\'importe où pour fermer',
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11),
@@ -1577,7 +1525,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               const SizedBox(height: 12),
               // QR code (fond blanc = scan optimal)
               GestureDetector(
-                onTap: loadingQR ? null : () => _showQRZoom(context, color),
+                onTap: () => _showQRZoom(context, color),
                 child: Hero(
                   tag: 'qr-${widget.card['id']}',
                   child: Container(
@@ -1586,38 +1534,15 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16)]),
-                    child: loadingQR
-                        ? SizedBox(width: 150, height: 150, child: Center(child: CircularProgressIndicator.adaptive()))
-                        : qrError != null
-                            ? SizedBox(width: 150, height: 150, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                const Icon(Icons.wifi_off_rounded, color: Color(0xFFE24B4A), size: 32),
-                                const SizedBox(height: 8),
-                                Text('Erreur réseau', style: TextStyle(color: Colors.black.withValues(alpha: 0.6), fontSize: 11)),
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  onTap: fetchDynamicQR,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-                                    child: const Text('Réessayer', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                                  ),
-                                ),
-                              ]))
-                            : QrImageView(data: dynamicToken ?? '', version: QrVersions.auto, size: 150, foregroundColor: const Color(0xFF0B1220)),
+                    child: QrImageView(
+                      data: widget.card['qr_token'] as String? ?? '',
+                      version: QrVersions.auto,
+                      size: 150,
+                      foregroundColor: const Color(0xFF0B1220),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text('🔒 Renouvellement dans ${timeLeft}s',
-                  style: TextStyle(fontSize: 11, color: timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withValues(alpha: 0.5), fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                      value: timeLeft / 60,
-                      minHeight: 2,
-                      backgroundColor: Colors.white.withValues(alpha: 0.12),
-                      valueColor: AlwaysStoppedAnimation(timeLeft < 15 ? const Color(0xFFE24B4A) : Colors.white.withValues(alpha: 0.4)))),
               const SizedBox(height: 10),
               Text('Tapez la carte pour voir les infos',
                   style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
