@@ -1,8 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class HelpSheet extends StatelessWidget {
+class HelpSheet extends StatefulWidget {
   const HelpSheet({super.key});
+
+  @override
+  State<HelpSheet> createState() => _HelpSheetState();
+}
+
+class _HelpSheetState extends State<HelpSheet> {
+  bool _copied = false;
+
+  void _copyEmail() async {
+    await Clipboard.setData(const ClipboardData(text: 'qarta.contact@gmail.com'));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
 
   static const _faqs = [
     (
@@ -103,24 +119,23 @@ class HelpSheet extends StatelessWidget {
                       )),
                 ),
                 GestureDetector(
-                  onTap: () {
-                    Clipboard.setData(const ClipboardData(text: 'qarta.contact@gmail.com'));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Email copié !'),
-                        behavior: SnackBarBehavior.floating,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  child: Container(
+                  onTap: _copyEmail,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2C7BE5),
+                      color: _copied ? const Color(0xFF27AE60) : const Color(0xFF2C7BE5),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text('Copier',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_copied ? Icons.check_rounded : Icons.copy_rounded, color: Colors.white, size: 13),
+                        const SizedBox(width: 4),
+                        Text(_copied ? 'Copié !' : 'Copier',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
                   ),
                 ),
               ],

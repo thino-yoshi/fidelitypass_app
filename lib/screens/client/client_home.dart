@@ -885,7 +885,7 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _openProfil() {
-    setState(() => _tab = 3);
+    _setTab(3);
   }
 
   void _applyCards(List<dynamic> data) {
@@ -1370,6 +1370,15 @@ class _ClientHomeState extends State<ClientHome>
     setState(() => _tab = _prevTab);
   }
 
+  // Centralise les changements de tab — reset Cartes si on quitte tab 0 avec Récompenses actif
+  void _setTab(int tab) {
+    if (_tab == 0 && tab != 0 && _rewardPillActive) {
+      _rewardPillActive = false;
+      _pillPageCtrl.jumpToPage(0);
+    }
+    setState(() => _tab = tab);
+  }
+
   void _goToRewards() {
     final already = _tab == 0;
     setState(() { _rewardPillActive = true; _tab = 0; });
@@ -1478,86 +1487,65 @@ class _ClientHomeState extends State<ClientHome>
                 Row(
                   children: [
                     if (_tab == 3)
-                      // Profil : "Profil" à gauche + avatar centré + cloche à droite
+                      // Profil : flèche retour | avatar centré | blase à droite
                       Expanded(
-                        child: Stack(
-                          alignment: Alignment.center,
+                        child: Row(
                           children: [
-                            const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text('Profil', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                            ),
                             GestureDetector(
-                              onTap: _showPhotoOptions,
-                              child: Stack(
-                                children: [
-                                  Container(
-                                    width: 70, height: 70,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                      image: _profileImageUrl != null
-                                          ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                          : _profileImagePath != null
-                                              ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                              : null,
-                                    ),
-                                    child: (_profileImageUrl == null && _profileImagePath == null)
-                                        ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 20, fontWeight: FontWeight.w700)))
-                                        : null,
-                                  ),
-                                  Positioned(
-                                    bottom: 2, right: 2,
-                                    child: Container(
-                                      width: 20, height: 20,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: const Color(0xFF2C7BE5),
-                                        border: Border.all(color: context.qNavy, width: 1.5),
-                                      ),
-                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 11),
-                                    ),
-                                  ),
-                                ],
+                              onTap: () => _setTab(0),
+                              child: Container(
+                                width: 34, height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.10),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                ),
+                                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
                               ),
                             ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: GestureDetector(
-                                onTap: _openNotifs,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Container(
-                                      width: 38, height: 38,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.white.withValues(alpha: 0.08),
-                                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            Expanded(
+                              child: Center(
+                                child: GestureDetector(
+                                  onTap: _showPhotoOptions,
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        width: 70, height: 70,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
+                                          border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
+                                          image: _profileImageUrl != null
+                                              ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
+                                              : _profileImagePath != null
+                                                  ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
+                                                  : null,
+                                        ),
+                                        child: (_profileImageUrl == null && _profileImagePath == null)
+                                            ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 20, fontWeight: FontWeight.w700)))
+                                            : null,
                                       ),
-                                      child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 18),
-                                    ),
-                                    if (_notifCount > 0)
                                       Positioned(
-                                        top: -2, right: -2,
+                                        bottom: 2, right: 2,
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                                          height: 16,
+                                          width: 20, height: 20,
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFE24B4A),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: context.qNavy, width: 2),
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFF2C7BE5),
+                                            border: Border.all(color: context.qNavy, width: 1.5),
                                           ),
-                                          child: Center(
-                                            child: Text('$_notifCount', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-                                          ),
+                                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 11),
                                         ),
                                       ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
+                            Text(_userName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       )
@@ -1587,11 +1575,23 @@ class _ClientHomeState extends State<ClientHome>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
                             ),
-                            // Cloche + Tout lu
-                            Column(
+                            // Tout lu + cloche sur la même ligne
+                            Row(
                               mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
+                                GestureDetector(
+                                  onTap: _markAllRead,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F1E3A),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.7)),
+                                    ),
+                                    child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 11, fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
                                 Container(
                                   width: 34, height: 34,
                                   decoration: BoxDecoration(
@@ -1600,19 +1600,6 @@ class _ClientHomeState extends State<ClientHome>
                                     border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                                   ),
                                   child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 17),
-                                ),
-                                const SizedBox(height: 4),
-                                GestureDetector(
-                                  onTap: _markAllRead,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0F1E3A),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.7)),
-                                    ),
-                                    child: const Text('Tout lu', style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 10, fontWeight: FontWeight.w600)),
-                                  ),
                                 ),
                               ],
                             ),
@@ -1689,18 +1676,7 @@ class _ClientHomeState extends State<ClientHome>
                     ),
                   ],
                 ),
-                if (_tab == 3) ...[
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: 42,
-                  child: Center(
-                    child: Text(
-                      _userName,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1),
-                    ),
-                  ),
-                ),
-                ] else if (_tab == 4) ...[
+                if (_tab == 4) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 36,
@@ -1856,7 +1832,7 @@ class _ClientHomeState extends State<ClientHome>
             final cardId = card['id'] as String?;
             if (cardId != null) _refreshCard(cardId);
           },
-          onBack: () => setState(() => _tab = 0),
+          onBack: () => _setTab(0),
         );
       case 2:
         return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual);
@@ -2172,7 +2148,7 @@ class _ClientHomeState extends State<ClientHome>
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () { AppLogger.client('Onglet → ${["Cartes","Scan","Historique","Profil"][idx]}'); setState(() => _tab = idx); },
+        onTap: () { AppLogger.client('Onglet → ${["Cartes","Scan","Historique","Profil"][idx]}'); _setTab(idx); },
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -2196,7 +2172,7 @@ class _ClientHomeState extends State<ClientHome>
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _tab = 1),
+        onTap: () => _setTab(1),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
