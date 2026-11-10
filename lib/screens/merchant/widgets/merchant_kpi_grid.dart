@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import '../merchant_tokens.dart';
 import '../../../config/app_colors.dart';
@@ -17,7 +16,7 @@ class MerchantKpiGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = Platform.isIOS;
+    final isIOS = kIsIOS;
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _KpiCard(

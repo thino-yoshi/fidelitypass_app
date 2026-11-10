@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../merchant_tokens.dart';
@@ -30,7 +29,7 @@ class MerchantCardPreview extends StatelessWidget {
       fallbackColor: kPrimary,
     );
 
-    if (Platform.isIOS) return _buildIOS(context, card, style);
+    if (kIsIOS) return _buildIOS(context, card, style);
     return _buildMaterial(context, card, style);
   }
 

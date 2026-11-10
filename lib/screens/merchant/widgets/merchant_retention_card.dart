@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../merchant_tokens.dart';
@@ -25,7 +24,7 @@ class MerchantRetentionCard extends StatelessWidget {
     final deltaStr = delta > 0 ? '+$delta%' : (delta < 0 ? '$delta%' : '= même');
     final isDark   = context.isDark;
 
-    if (Platform.isIOS) return _buildIOS(context, r, delta, deltaStr, isDark);
+    if (kIsIOS) return _buildIOS(context, r, delta, deltaStr, isDark);
     return _buildMaterial(context, r, delta, deltaStr, isDark);
   }
 

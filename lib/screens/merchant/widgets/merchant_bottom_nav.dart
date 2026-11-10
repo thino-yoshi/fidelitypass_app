@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +18,7 @@ class MerchantBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isIOS) return _buildIOS(context);
+    if (kIsIOS) return _buildIOS(context);
     return _buildMaterial(context);
   }
 

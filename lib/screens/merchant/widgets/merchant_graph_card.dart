@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../merchant_tokens.dart';
@@ -49,7 +48,7 @@ class MerchantGraphCard extends StatelessWidget {
         1, (m, g) => (g['stamps'] as int) > m ? (g['stamps'] as int).toDouble() : m);
     final headroom = maxV * 1.28;
 
-    if (Platform.isIOS) return _buildIOS(context, groups, headroom);
+    if (kIsIOS) return _buildIOS(context, groups, headroom);
     return _buildMaterial(context, groups, headroom);
   }
 
