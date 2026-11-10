@@ -1,5 +1,4 @@
-// Les constantes de couleur (kPrimary, kNavy, kNavyCard, etc.) viennent de app_colors.dart.
-// Ce fichier n'exporte que les tokens spécifiques aux widgets marchands.
+import 'package:flutter/material.dart';
 export 'package:fidelitypass_app/config/app_colors.dart'
     show kPrimary, kBlueLight, kNavy, kNavyCard, kError, kGold, kSuccess, kPurple;
 
