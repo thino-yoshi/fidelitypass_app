@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 // Fixed colors — same in light and dark
 const kPrimary   = Color(0xFF2C7BE5);
-const kBlueLight = Color(0xFF4A9EFF);
-const kNavy      = Color(0xFF0A1628);
+const kBlueLight = Color(0xFF4A9EF5);
+const kNavy      = Color(0xFF0B1220);
+const kNavyCard  = Color(0xFF1E2D45);
 const kError     = Color(0xFFE24B4A);
 const kGold      = Color(0xFFF59E0B);
 const kSuccess   = Color(0xFF27AE60);

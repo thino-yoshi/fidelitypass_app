@@ -32,6 +32,7 @@ class MerchantHome extends StatefulWidget {
   final List<dynamic> initialDaily;
   final List<dynamic> initialScanHistory;
   final Map? initialCardDesign;
+  final bool fromCache;
 
   const MerchantHome({
     super.key,
@@ -43,6 +44,7 @@ class MerchantHome extends StatefulWidget {
     this.initialDaily          = const [],
     this.initialScanHistory    = const [],
     this.initialCardDesign,
+    this.fromCache             = false,
   });
 
   @override
