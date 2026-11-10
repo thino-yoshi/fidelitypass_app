@@ -141,6 +141,25 @@ class ApiService {
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }
 
+  /// Upload le logo du commerçant, retourne l'URL publique.
+  Future<ApiResult<String>> uploadMerchantLogo(File file) async {
+    final uri = Uri.parse('$apiUrl/merchants/me/logo');
+    final req = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $_token'
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+    try {
+      final streamed = await req.send().timeout(const Duration(seconds: 30));
+      final body = await streamed.stream.bytesToString();
+      if (streamed.statusCode == 200) {
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        return ApiResult.ok(data['logo_url'] as String);
+      }
+      return ApiResult.err('Erreur upload logo (${streamed.statusCode})');
+    } catch (e) {
+      return ApiResult.err('Erreur réseau: $e');
+    }
+  }
+
   /// Crée ou met à jour le design visuel de la carte fidélité.
   Future<ApiResult<Map<String, dynamic>>> saveCardDesign(Map<String, dynamic> design) async {
     final r = await _post('/merchants/me/card-design', {'card_design': design});
@@ -254,6 +273,13 @@ class ApiService {
   /// ensuite combien ajouter via adjustStamp).
   Future<ApiResult<Map<String, dynamic>>> resolveScan(String qrToken) async {
     final r = await _post('/scan/resolve', {'qr_token': qrToken});
+    if (r.isErr) return ApiResult.err(r.error!);
+    return ApiResult.ok(r.data as Map<String, dynamic>);
+  }
+
+  /// Mode scan rapide : résout le QR ET ajoute le tampon en 1 seul appel.
+  Future<ApiResult<Map<String, dynamic>>> quickStamp(String qrToken, {int delta = 1}) async {
+    final r = await _post('/scan/quick-stamp', {'qr_token': qrToken, 'delta': delta});
     if (r.isErr) return ApiResult.err(r.error!);
     return ApiResult.ok(r.data as Map<String, dynamic>);
   }

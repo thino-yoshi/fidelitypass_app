@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
@@ -29,6 +30,11 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
   bool _processing = false;
   bool _sheetOpen = false;
+  bool _torchOn = false;
+  bool _quickMode = false; // T1 : scan rapide (1 appel serveur, +1 tampon immédiat)
+  final Map<String, DateTime> _lastScanByCard = {};
+  List<dynamic> _clients = [];
+  bool _clientsLoaded = false;
   List<dynamic> _history = [];
   bool _loadingHistory = true;
   String _selectedMode = 'stamp'; // 'stamp' | 'reward'
@@ -74,8 +80,42 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   // ── Scan caméra → identifie le QR selon l'onglet actif ──────────────────────
   Future<void> _onScan(String qrToken) async {
     if (_processing || _sheetOpen) return;
-    AppLogger.merchant('ScannerScreen → QR scanné (mode: $_selectedMode): $qrToken');
+    AppLogger.merchant('ScannerScreen → QR scanné (mode: $_selectedMode, rapide: $_quickMode)');
     setState(() => _processing = true);
+
+    // T1 : mode rapide — 1 seul appel réseau pour les tampons
+    if (_quickMode && _selectedMode == 'stamp' && !_isPoints) {
+      final r = await ApiService.instance.quickStamp(qrToken);
+      if (!mounted) { setState(() => _processing = false); return; }
+      setState(() => _processing = false);
+      if (r.isOk) {
+        final v = r.value;
+        if ((v['kind'] as String?) == 'stamp') {
+          final cardId   = v['card_id'] as String? ?? '';
+          final name     = (v['client_name'] ?? 'Client') as String;
+          final newCount = (v['stamps_count'] as int?) ?? 0;
+          final total    = (v['stamps_required'] as int?) ?? _required;
+          final reward   = v['reward_reached'] == true;
+          AppLogger.merchant('ScannerScreen → quickStamp ✓ — $name: $newCount/$total${reward ? " 🎉" : ""}');
+          _lastScanByCard[cardId] = DateTime.now();
+          _showSuccess(name: name, count: newCount, total: total, reward: reward);
+          _loadHistory();
+        } else {
+          // QR de récompense — fallback vers le mode normal
+          _openRewardValidation(
+            qrToken: qrToken,
+            name: (v['client_name'] ?? 'Client') as String,
+            description: 'Récompense',
+          );
+        }
+      } else {
+        AppLogger.error('ScannerScreen → quickStamp erreur: ${r.error}');
+        _toast(r.error ?? 'QR invalide ou expiré', isError: true);
+      }
+      return;
+    }
+
+    // Mode normal : resolveScan puis ouverture de la modale
     final r = await ApiService.instance.resolveScan(qrToken);
     if (!mounted) return;
     setState(() => _processing = false);
@@ -95,8 +135,24 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         }
       } else {
         if (kind == 'stamp') {
+          final cardId = v['card_id'] as String;
+          final last = _lastScanByCard[cardId];
+          if (last != null && DateTime.now().difference(last).inMinutes < 5) {
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Double scan ?'),
+                content: Text('${v['client_name'] ?? "Ce client"} a déjà été scanné il y a moins de 5 minutes. Continuer quand même ?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continuer')),
+                ],
+              ),
+            );
+            if (confirmed != true) return;
+          }
           _openQuantitySheet(
-            cardId:  v['card_id'] as String,
+            cardId:  cardId,
             name:    (v['client_name'] ?? 'Client') as String,
             current: (v['stamps_count'] as int?) ?? 0,
             total:   (v['stamps_required'] as int?) ?? _required,
@@ -340,6 +396,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     if (!mounted) return;
     setState(() => _processing = false);
     if (r.isOk) {
+      _lastScanByCard[cardId] = DateTime.now();
       final v = r.value;
       final newCount = (v['stamps_count'] as int?) ?? 0;
       final rewardReached = v['reward_reached'] == true;
@@ -359,6 +416,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   }
 
   void _showSuccess({required String name, required int count, required int total, required bool reward, String? rewardLabel, bool isPoints = false}) {
+    HapticFeedback.mediumImpact();
     setState(() => _overlay = _Overlay(name: name, count: count, total: total, reward: reward, rewardLabel: rewardLabel, isPoints: isPoints));
     Future.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) setState(() => _overlay = null);
@@ -451,9 +509,50 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 ]),
               ]),
             )),    // ferme Container height:38 + Expanded
-          ]),      // ferme Row [bouton + onglets]
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  _camera.toggleTorch();
+                  setState(() => _torchOn = !_torchOn);
+                },
+                child: Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: _torchOn ? _kGold.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _torchOn ? _kGold.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Icon(_torchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                      color: _torchOn ? _kGold : Colors.white70, size: 18),
+                ),
+              ),
+          ]),      // ferme Row [bouton + onglets + torche]
         )),        // ferme ConstrainedBox + Center
       ),           // ferme Padding
+      // T1 : toggle mode rapide (seulement mode tampons, non points)
+      if (_selectedMode == 'stamp' && !_isPoints)
+        GestureDetector(
+          onTap: () => setState(() => _quickMode = !_quickMode),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: _quickMode ? _kSuccess.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _quickMode ? _kSuccess.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(_quickMode ? Icons.bolt_rounded : Icons.bolt_outlined,
+                  size: 15, color: _quickMode ? _kSuccess : Colors.white54),
+              const SizedBox(width: 6),
+              Text(
+                _quickMode ? 'Mode rapide actif — +1 tampon direct' : 'Mode rapide : +1 tampon sans confirmation',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                    color: _quickMode ? _kSuccess : Colors.white54),
+              ),
+            ]),
+          ),
+        ),
       ]),
     );
   }
@@ -495,7 +594,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(20)),
             child: Text(
-              _selectedMode == 'reward' ? 'Scanne le QR récompense du client' : 'Scanne le QR du client',
+              _selectedMode == 'reward'
+                  ? 'Demande au client d\'afficher son QR récompense'
+                  : 'Demande au client d\'afficher son QR — puis scanne',
               style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
           )),
         ),
@@ -532,7 +633,18 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('Historique des scans', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.cText)),
-            Text('Appui = ajouter', style: TextStyle(fontSize: 10, color: context.cSub)),
+            GestureDetector(
+              onTap: _openClientSearch,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: _kPrimary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: _kPrimary.withValues(alpha: 0.3))),
+                child: const Row(children: [
+                  Icon(Icons.search_rounded, size: 14, color: _kPrimary),
+                  SizedBox(width: 4),
+                  Text('Chercher un client', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kPrimary)),
+                ]),
+              ),
+            ),
           ]),
         ),
         Expanded(child: _loadingHistory
@@ -549,13 +661,42 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   }
 
   Widget _historyRow(Map scan) {
-    final client  = scan['client'] as Map? ?? {};
-    final name    = (client['name'] ?? client['email'] ?? 'Client') as String;
-    final count   = (scan['stamps_count'] as int?) ?? 0;
-    final reward  = scan['reward_reached'] == true;
-    final cardId  = scan['card_id'] as String?;
-    final time    = _fmtTime(scan['scanned_at'] as String?);
-    final c = reward ? _kGold : _kSuccess;
+    final client   = scan['client'] as Map? ?? {};
+    final name     = (client['name'] ?? client['email'] ?? 'Client') as String;
+    final photoUrl = client['profile_picture_url'] as String?;
+    final count    = (scan['stamps_count'] as int?) ?? 0;
+    final delta    = (scan['delta'] as int?) ?? 1;
+    final reward   = scan['reward_reached'] == true;
+    final cardId   = scan['card_id'] as String?;
+    final time     = _fmtTime(scan['scanned_at'] as String?);
+    final isPoints = (scan['program_type'] as String?) == 'points';
+
+    // P1 : entrée visuellement différente pour récompense
+    if (reward) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _kGold.withValues(alpha: 0.5)),
+        ),
+        child: Row(children: [
+          UserAvatar(imageUrl: photoUrl, name: name, size: 34),
+          const SizedBox(width: 11),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF92400E))),
+            const Row(children: [
+              Icon(Icons.emoji_events_rounded, size: 11, color: Color(0xFFF59E0B)),
+              SizedBox(width: 4),
+              Text('Récompense atteinte 🎉', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF92400E))),
+            ]),
+          ])),
+          if (time.isNotEmpty) Text(time, style: const TextStyle(fontSize: 10, color: Color(0xFFB45309))),
+        ]),
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -570,14 +711,20 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(children: [
-              UserAvatar(imageUrl: client['profile_picture_url'] as String?, name: name, size: 34),
+              UserAvatar(imageUrl: photoUrl, name: name, size: 34),
               const SizedBox(width: 11),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
                 Row(children: [
-                  Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-                  const SizedBox(width: 5),
-                  Text(reward ? 'Récompense atteinte' : '$count/$_required ${_isPoints ? "points" : "tampons"}', style: TextStyle(fontSize: 10, color: context.cSub)),
+                  // P1 : afficher +delta tampon(s)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(color: _kSuccess.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
+                    child: Text('+$delta ${isPoints ? "pt${delta > 1 ? "s" : ""}" : "tampon${delta > 1 ? "s" : ""}"}',
+                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _kSuccess)),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('$count/$_required', style: TextStyle(fontSize: 10, color: context.cSub)),
                 ]),
               ])),
               if (time.isNotEmpty) Text(time, style: TextStyle(fontSize: 10, color: context.cSub)),
@@ -592,6 +739,34 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         ),
       ),
     );
+  }
+
+  Future<void> _loadClients() async {
+    if (_clientsLoaded) return;
+    final r = await ApiService.instance.getMerchantClients(limit: 200);
+    if (mounted && r.isOk) {
+      setState(() { _clients = r.value; _clientsLoaded = true; });
+    }
+  }
+
+  Future<void> _openClientSearch() async {
+    if (_sheetOpen) return;
+    if (!_clientsLoaded) await _loadClients();
+    if (!mounted) return;
+    setState(() => _sheetOpen = true);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ClientSearchSheet(
+        clients: _clients,
+        required: _required,
+        onSelect: (cardId, name, current) {
+          _openQuantitySheet(cardId: cardId, name: name, current: current, total: _required);
+        },
+      ),
+    );
+    if (mounted) setState(() => _sheetOpen = false);
   }
 
   String _fmtTime(String? iso) {
@@ -654,4 +829,148 @@ class _Overlay {
   final bool isPoints;
   final String? rewardLabel;
   _Overlay({required this.name, required this.count, required this.total, required this.reward, this.rewardLabel, this.isPoints = false});
+}
+
+// ── Recherche client manuelle ────────────────────────────────────────────────
+class _ClientSearchSheet extends StatefulWidget {
+  final List<dynamic> clients;
+  final int required;
+  final void Function(String cardId, String name, int current) onSelect;
+  const _ClientSearchSheet({required this.clients, required this.required, required this.onSelect});
+
+  @override
+  State<_ClientSearchSheet> createState() => _ClientSearchSheetState();
+}
+
+class _ClientSearchSheetState extends State<_ClientSearchSheet> {
+  final _ctrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  List<dynamic> get _filtered {
+    if (_query.isEmpty) return widget.clients;
+    final q = _query.toLowerCase();
+    return widget.clients.where((c) {
+      final name = ((c['client'] as Map?)?['name'] as String? ?? '').toLowerCase();
+      final email = ((c['client'] as Map?)?['email'] as String? ?? '').toLowerCase();
+      return name.contains(q) || email.contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (ctx, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(children: [
+          // ── Poignée
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // ── Titre + fermer
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+            child: Row(children: [
+              const Text('Chercher un client', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ]),
+          ),
+          // ── Barre de recherche
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: TextField(
+              controller: _ctrl,
+              autofocus: true,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'Nom ou email…',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () { _ctrl.clear(); setState(() => _query = ''); },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          // ── Liste
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.person_search_rounded, size: 40, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      Text(
+                        _query.isEmpty ? 'Aucun client pour ce commerce' : 'Aucun résultat',
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                    ]),
+                  )
+                : ListView.builder(
+                    controller: scrollCtrl,
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final c = filtered[i] as Map;
+                      final client = c['client'] as Map? ?? {};
+                      final name = client['name'] as String? ?? 'Client';
+                      final photoUrl = client['profile_picture_url'] as String?;
+                      final stamps = c['stamps_count'] as int? ?? 0;
+                      final points = c['points_count'] as int? ?? 0;
+                      final isPoints = (c['is_points'] as bool?) == true;
+                      final current = isPoints ? points : stamps;
+                      final cardId = c['id'] as String? ?? '';
+                      return InkWell(
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          widget.onSelect(cardId, name, current);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          child: Row(children: [
+                            UserAvatar(imageUrl: photoUrl, name: name, size: 38),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                              Text(
+                                isPoints ? '$current pts' : '$current/${widget.required} tampons',
+                                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                              ),
+                            ])),
+                            const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                          ]),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ]),
+      ),
+    );
+  }
 }

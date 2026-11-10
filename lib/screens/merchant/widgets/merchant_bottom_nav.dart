@@ -27,18 +27,18 @@ class MerchantBottomNav extends StatelessWidget {
     return Positioned(
       bottom: 0, left: 0, right: 0,
       child: Container(
-        height: 84 + MediaQuery.of(context).padding.bottom,
+        height: 74 + MediaQuery.of(context).padding.bottom,
         decoration: BoxDecoration(
           color: context.cSurface,
           border: Border(top: BorderSide(color: context.cBorder)),
         ),
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 2),
         child: Center(child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
           child: Row(children: [
-            _NavItem(icon: Icons.home_outlined,   label: 'Accueil',    index: 0, currentTab: currentTab, onTap: onTabChanged),
+            _NavItem(icon: Icons.home,    label: 'Accueil',    index: 0, currentTab: currentTab, onTap: onTabChanged),
             _NavScanFab(onTap: onScanTap),
-            _NavItem(icon: Icons.history_rounded, label: 'Historique', index: 2, currentTab: currentTab, onTap: onTabChanged),
+            _NavItem(icon: Icons.history, label: 'Historique', index: 2, currentTab: currentTab, onTap: onTabChanged),
           ]),
         )),
       ),
@@ -136,7 +136,7 @@ class _NavScanFab extends StatelessWidget {
                   blurRadius: 18, offset: const Offset(0, 6),
                 )],
               ),
-              child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 26),
+              child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 26),
             ),
             const SizedBox(height: 2),
             Text('Scanner',

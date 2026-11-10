@@ -173,6 +173,14 @@ class _ClientHomeState extends State<ClientHome>
       // Tap sur notif depuis background → refresh PUIS route selon le type
       FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
         if (!mounted) return;
+        // T2 : tracker l'ouverture si l'ID est disponible
+        final notifId = msg.data['notification_id'] as String?;
+        if (notifId != null) {
+          try {
+            await http.post(Uri.parse('$apiUrl/notifications/$notifId/opened'),
+                headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'});
+          } catch (_) {}
+        }
         await _loadNotifs();
         if (!mounted) return;
         if (msg.data['type'] == 'recompense') {

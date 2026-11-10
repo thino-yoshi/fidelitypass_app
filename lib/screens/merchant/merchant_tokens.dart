@@ -4,7 +4,7 @@ export 'package:fidelitypass_app/config/app_colors.dart'
     show kPrimary, kBlueLight, kNavy, kNavyCard, kError, kGold, kSuccess, kPurple;
 
 // Mettre true pour tester le design iOS sur Android
-const bool kForceIOSDesign = true;
+const bool kForceIOSDesign = false;
 bool get kIsIOS => kForceIOSDesign || Platform.isIOS;
 
 const double kMaxContentWidth = 500;

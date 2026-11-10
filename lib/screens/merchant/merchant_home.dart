@@ -1,9 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../config/app_colors.dart';
-import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../utils/platform_route.dart';
 import '../auth_screen.dart';
 import 'scanner_screen.dart';
@@ -11,17 +12,13 @@ import 'history_screen.dart';
 import 'notifications_screen.dart';
 import 'clients_screen.dart';
 import 'static_qr_screen.dart';
-import 'merchant_onboarding.dart';
 import 'abonnement_screen.dart';
 import 'stats_screen.dart';
 import 'info_commerce_screen.dart';
 import 'carte_editor_screen.dart';
-import '../../utils/logger.dart';
 import 'merchant_tokens.dart';
 import 'merchant_profil_sheet.dart';
-import 'widgets/merchant_header.dart';
 import 'widgets/merchant_bottom_nav.dart';
-import 'widgets/merchant_dashboard.dart';
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -53,82 +50,132 @@ class MerchantHome extends StatefulWidget {
 
 class _MerchantHomeState extends State<MerchantHome> {
   int _tab = 0;
-  Map? merchantInfo;
-  Map? stats;
-  bool loading = true;
-  bool _showOnboarding = false;
+  int _period = 0;
+  int _carouselPage = 0;
+  late final PageController _carouselCtrl = PageController();
+
+  Map? _merchantInfo;
+  Map? _stats;
+  bool _loading = true;
   List<dynamic> _recentClients = [];
   List<dynamic> _daily = [];
   List<dynamic> _scanHistory = [];
-  String _period = 'today';
-  String _graphRange = '7j';
-  String _retPeriod = 'sem';
   Map? _cardDesign;
 
-  bool get _isPoints => (merchantInfo?['program_type'] as String?) == 'points';
-
-  String get _businessName => merchantInfo?['business_name'] as String? ?? widget.merchantName;
+  String get _businessName =>
+      (_merchantInfo?['business_name'] as String?) ?? widget.merchantName;
 
   String get _initials {
-    final name = _businessName.trim();
-    final parts = name.split(' ');
+    final parts = _businessName.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name.substring(0, name.length.clamp(0, 2)).toUpperCase() : 'Q';
+    final n = _businessName.trim();
+    return n.isNotEmpty ? n.substring(0, n.length.clamp(0, 2)).toUpperCase() : 'Q';
   }
+
+  String get _dateLabel {
+    const jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const mois  = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    final now = DateTime.now();
+    return '${jours[now.weekday - 1]} ${now.day} ${mois[now.month - 1]}';
+  }
+
+  // ── Helpers stats ─────────────────────────────────────────────────────────
+
+  int get _scansToday {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final d = _daily.where((e) => (e['date'] as String?) == today).toList();
+    return d.isEmpty ? 0 : (d.first['scans'] as int? ?? 0);
+  }
+
+  int get _rewardsToday {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final d = _daily.where((e) => (e['date'] as String?) == today).toList();
+    return d.isEmpty ? 0 : (d.first['rewards'] as int? ?? 0);
+  }
+
+  int get _scans7j {
+    final cutoff = DateTime.now()
+        .subtract(const Duration(days: 7))
+        .toIso8601String()
+        .substring(0, 10);
+    return _daily
+        .where((e) => ((e['date'] as String?) ?? '').compareTo(cutoff) >= 0)
+        .fold(0, (sum, e) => sum + (e['scans'] as int? ?? 0));
+  }
+
+  int get _rewards7j {
+    final cutoff = DateTime.now()
+        .subtract(const Duration(days: 7))
+        .toIso8601String()
+        .substring(0, 10);
+    return _daily
+        .where((e) => ((e['date'] as String?) ?? '').compareTo(cutoff) >= 0)
+        .fold(0, (sum, e) => sum + (e['rewards'] as int? ?? 0));
+  }
+
+  int get _scans30j  => _daily.fold(0, (sum, e) => sum + (e['scans']   as int? ?? 0));
+  int get _rewards30j => _daily.fold(0, (sum, e) => sum + (e['rewards'] as int? ?? 0));
+
+  int get _clientsNearReward {
+    int count = 0;
+    for (final c in _recentClients) {
+      final stamps   = (c['stamps_count']    as int?) ?? 0;
+      final required = (c['stamps_required'] as int?) ?? 1;
+      if (stamps >= required * 0.75 && stamps < required) count++;
+    }
+    return count;
+  }
+
+  int _newClients(String period) {
+    final now = DateTime.now().toIso8601String().substring(0, 10);
+    final cutoff7j = DateTime.now()
+        .subtract(const Duration(days: 7))
+        .toIso8601String()
+        .substring(0, 10);
+    return _scanHistory.where((e) {
+      if ((e['stamps_count'] as int? ?? 0) != 1) return false;
+      final date = ((e['created_at'] as String?) ?? '').substring(0, 10);
+      if (period == 'today') return date == now;
+      if (period == '7j')    return date.compareTo(cutoff7j) >= 0;
+      return true;
+    }).length;
+  }
+
+  // ── Chargement données ────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    AppLogger.merchant('MerchantHome chargé → merchantName: ${widget.merchantName}');
     if (widget.initialProfile != null) {
-      merchantInfo   = widget.initialProfile;
-      stats          = widget.initialStats;
+      _merchantInfo  = widget.initialProfile;
+      _stats         = widget.initialStats;
       _recentClients = List<dynamic>.from(widget.initialRecentClients);
       _daily         = List<dynamic>.from(widget.initialDaily);
       _scanHistory   = List<dynamic>.from(widget.initialScanHistory);
       _cardDesign    = widget.initialCardDesign;
-      loading        = false;
-      AppLogger.merchant('Données préchargées appliquées → ${merchantInfo?['business_name']}');
+      _loading       = false;
     } else {
       _loadData();
     }
-    _checkOnboarding();
   }
 
-  Future<void> _checkOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    final done = prefs.getBool('merchant_onboarding_done') ?? false;
-    if (!done && mounted) {
-      AppLogger.merchant('Onboarding → première visite, affichage tutoriel');
-      setState(() => _showOnboarding = true);
-    } else {
-      AppLogger.merchant('Onboarding → déjà complété, skip');
-    }
+  @override
+  void dispose() {
+    _carouselCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData({bool showSpinner = true}) async {
-    AppLogger.merchant('Chargement profil + stats...');
-    if (showSpinner) setState(() => loading = true);
+    if (showSpinner && mounted) setState(() => _loading = true);
     final api = ApiService.instance;
-
     final profileResult = await api.getMerchantProfile();
     final statsResult   = await api.getMerchantStats();
-
     if (mounted) {
-      if (profileResult.isOk) {
-        AppLogger.merchant('Profil → business_name: ${profileResult.value['business_name']}, category: ${profileResult.value['category']}');
-      } else {
-        AppLogger.error('Profil → erreur : ${profileResult.error}');
-      }
-      if (statsResult.isOk) {
-        AppLogger.merchant('Stats → clients: ${statsResult.value['total_clients']}, tampons: ${statsResult.value['total_stamps']}, récompenses: ${statsResult.value['total_rewards']}');
-      } else {
-        AppLogger.error('Stats → erreur : ${statsResult.error}');
-      }
       setState(() {
-        merchantInfo = profileResult.isOk ? profileResult.value : null;
-        stats        = statsResult.isOk   ? statsResult.value   : null;
-        loading      = false;
+        _merchantInfo = profileResult.isOk ? profileResult.value : null;
+        _stats        = statsResult.isOk   ? statsResult.value   : null;
+        _loading      = false;
       });
     }
     await _loadRecentClients();
@@ -137,69 +184,62 @@ class _MerchantHomeState extends State<MerchantHome> {
   }
 
   Future<void> _loadCardDesign() async {
-    AppLogger.merchant('Chargement design carte...');
     final r = await ApiService.instance.getMerchantCardDesign();
     if (mounted && r.isOk) {
-      final hasDesign = r.value != null;
-      AppLogger.merchant('Design carte → ${hasDesign ? "trouvé" : "aucun design créé"}');
       setState(() => _cardDesign = r.value?['card_design'] as Map?);
-    } else if (r.isErr) {
-      AppLogger.error('Design carte → erreur : ${r.error}');
     }
   }
 
   Future<void> _loadRecentClients() async {
     final r = await ApiService.instance.getMerchantClients();
-    if (mounted && r.isOk) {
-      AppLogger.merchant('Clients → ${r.value.length} chargé(s)');
-      setState(() => _recentClients = r.value);
-    }
+    if (mounted && r.isOk) setState(() => _recentClients = r.value);
   }
 
   Future<void> _loadDaily() async {
-    AppLogger.merchant('Chargement stats 30j + historique scans...');
     final r = await ApiService.instance.getDailyStats();
-    if (mounted && r.isOk) {
-      AppLogger.merchant('Stats daily → ${r.value.length} jours reçus');
-      setState(() => _daily = r.value);
-    }
+    if (mounted && r.isOk) setState(() => _daily = r.value);
     final h = await ApiService.instance.getMerchantScanHistory();
-    if (mounted && h.isOk) {
-      AppLogger.merchant('Historique scans → ${h.value.length} entrées');
-      setState(() => _scanHistory = h.value);
-    }
+    if (mounted && h.isOk) setState(() => _scanHistory = h.value);
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+
+  void _openScanner() {
+    Navigator.push(context, platformRoute(
+      builder: (_) => ScannerScreen(
+        token: widget.token,
+        merchantInfo: _merchantInfo,
+        initialHistory: _scanHistory,
+      ),
+    ));
   }
 
   Future<void> _navigateToCarteEditor() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       platformRoute(
-        builder: (_) => CarteEditorScreen(token: widget.token, merchantInfo: merchantInfo ?? {}, initialDesign: _cardDesign),
+        builder: (_) => CarteEditorScreen(
+          token: widget.token,
+          merchantInfo: _merchantInfo ?? {},
+          initialDesign: _cardDesign,
+        ),
       ),
     );
     if (result != null && mounted) {
       setState(() {
         _cardDesign = result;
         final newName = result['cardName'] as String?;
-        if (newName != null && newName.isNotEmpty && merchantInfo != null) {
-          merchantInfo = Map.from(merchantInfo!)..['business_name'] = newName;
+        if (newName != null && newName.isNotEmpty && _merchantInfo != null) {
+          _merchantInfo = Map.from(_merchantInfo!)..['business_name'] = newName;
         }
       });
     }
   }
 
   void _logout() async {
-    AppLogger.auth('Logout merchant → déconnexion');
     await AuthService.logout();
     if (!mounted) return;
-    AppLogger.nav('Logout → retour AuthScreen');
     Navigator.pushReplacement(context, platformRoute(builder: (_) => const AuthScreen()));
-  }
-
-  void _openScanner() {
-    Navigator.push(context, platformRoute(
-      builder: (_) => ScannerScreen(token: widget.token, merchantInfo: merchantInfo, initialHistory: _scanHistory),
-    ));
   }
 
   void _showProfilSheet() {
@@ -209,33 +249,443 @@ class _MerchantHomeState extends State<MerchantHome> {
       backgroundColor: Colors.transparent,
       builder: (_) => MerchantProfilSheet(
         token: widget.token,
-        merchantInfo: merchantInfo,
+        merchantInfo: _merchantInfo,
         onLogout: _logout,
         onNavigateToNotifs: () => Navigator.push(context, platformRoute(
-          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: merchantInfo, initialClients: _recentClients))),
+          builder: (_) => NotificationsScreen(
+            token: widget.token,
+            merchantInfo: _merchantInfo,
+            initialClients: _recentClients,
+          ))),
         onNavigateToQR: () => Navigator.push(context, platformRoute(
-          builder: (_) => StaticQRScreen(token: widget.token, businessName: _businessName, accentColor: kPrimary),
+          builder: (_) => StaticQRScreen(
+            token: widget.token,
+            businessName: _businessName,
+            accentColor: kPrimary,
+          ),
         )),
         onNavigateToAbonnement: () => Navigator.push(context, platformRoute(
           builder: (_) => const AbonnementScreen(),
         )),
         onNavigateToInfo: () => Navigator.push(context, platformRoute(
-          builder: (_) => InfoCommerceScreen(token: widget.token, merchantInfo: merchantInfo ?? {}),
+          builder: (_) => InfoCommerceScreen(
+            token: widget.token,
+            merchantInfo: _merchantInfo ?? {},
+          ),
         )).then((updated) {
-          if (updated != null && mounted) setState(() => merchantInfo = updated as Map);
+          if (updated != null && mounted) setState(() => _merchantInfo = updated as Map);
         }),
         onNavigateToCarteEditor: _navigateToCarteEditor,
         onNavigateToStats: () => Navigator.push(context, platformRoute(
           builder: (_) => StatsScreen(
             token: widget.token,
-            merchantInfo: merchantInfo,
-            initialStats:   stats,
+            merchantInfo: _merchantInfo,
+            initialStats:   _stats,
             initialDaily:   _daily,
             initialHistory: _scanHistory,
             initialClients: _recentClients,
           ),
         )),
       ),
+    );
+  }
+
+  // ── Blocs UI ──────────────────────────────────────────────────────────────
+
+  Widget _headerBlock() => GestureDetector(
+        onTap: _showProfilSheet,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            color: context.cBg,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_dateLabel,
+                style: GoogleFonts.inter(
+                  fontSize: 12, fontWeight: FontWeight.w400,
+                  color: const Color(0xFF9CA3AF))),
+              const SizedBox(height: 2),
+              Text(_businessName,
+                style: GoogleFonts.inter(
+                  fontSize: 22, fontWeight: FontWeight.w800,
+                  color: const Color(0xFF111827))),
+            ])),
+            Container(
+              width: 42, height: 42,
+              decoration: const BoxDecoration(
+                color: Color(0xFF2C7BE5),
+                shape: BoxShape.circle,
+              ),
+              child: Center(child: Text(_initials,
+                style: GoogleFonts.inter(
+                  fontSize: 14, fontWeight: FontWeight.w700,
+                  color: Colors.white))),
+            ),
+          ]),
+        ),
+      );
+
+  Widget _statsBlock() => Container(
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 30),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0B1220),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(children: [
+          // ── Clients fidèles ───────────────────────────────────────────────
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Text('${_stats?['total_clients'] ?? 0}',
+              style: GoogleFonts.inter(
+                fontSize: 28, fontWeight: FontWeight.w800,
+                color: Colors.white, height: 1)),
+            const SizedBox(height: 4),
+            Text('Clients fidèles',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 11, fontWeight: FontWeight.w400,
+                color: const Color(0xFF8B9EB7))),
+          ])),
+          Container(width: 1, height: 40, color: const Color(0xFF1E2D45)),
+          const SizedBox(width: 20),
+          // ── Proches du cadeau ─────────────────────────────────────────────
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Text('$_clientsNearReward',
+              style: GoogleFonts.inter(
+                fontSize: 28, fontWeight: FontWeight.w800,
+                color: const Color(0xFFF59E0B), height: 1)),
+            const SizedBox(height: 4),
+            Text('Proches du cadeau',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 11, fontWeight: FontWeight.w400,
+                color: const Color(0xFF8B9EB7))),
+          ])),
+        ]),
+      );
+
+  Widget _periodSelector() {
+    const labels = ["Aujourd'hui", '7 jours', '30 jours'];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8DFD2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: LayoutBuilder(builder: (ctx, constraints) {
+        final segW = (constraints.maxWidth - 8) / 3;
+        return SizedBox(
+          height: 34,
+          child: Stack(children: [
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              left: _period * segW,
+              top: 0, bottom: 0, width: segW,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(7),
+                  boxShadow: [BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.10),
+                    blurRadius: 6, offset: const Offset(0, 2),
+                  )],
+                ),
+              ),
+            ),
+            Row(children: List.generate(3, (i) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _period = i),
+              child: SizedBox(
+                width: segW, height: 34,
+                child: Center(child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: _period == i ? FontWeight.w700 : FontWeight.w500,
+                    color: _period == i ? const Color(0xFF111827) : const Color(0xFF6B7280),
+                  ),
+                  child: Text(labels[i]),
+                )),
+              ),
+            ))),
+          ]),
+        );
+      }),
+    );
+  }
+
+  Widget _statsListBlock() {
+    final int scans, rewards, newClients;
+    String retourStr;
+
+    if (_period == 0) {
+      scans      = _scansToday;
+      rewards    = _rewardsToday;
+      newClients = _newClients('today');
+      retourStr  = scans > 0 ? '${(rewards * 100 / scans).round()} %' : '0 %';
+    } else if (_period == 1) {
+      scans      = _scans7j;
+      rewards    = _rewards7j;
+      newClients = _newClients('7j');
+      retourStr  = scans > 0 ? '${(rewards * 100 / scans).round()} %' : '0 %';
+    } else {
+      scans      = _scans30j;
+      rewards    = _rewards30j;
+      newClients = _newClients('30j');
+      retourStr  = scans > 0 ? '${(rewards * 100 / scans).round()} %' : '0 %';
+    }
+
+    final rows = [
+      (Icons.people_outline,          'Clients venus',       '$scans'),
+      (Icons.card_giftcard_outlined,  'Récompenses données', '$rewards'),
+      (Icons.add_circle_outline,      'Nouveaux clients',    '$newClients'),
+      (Icons.replay_rounded,          'Taux de retour',      retourStr),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(children: [
+        for (int i = 0; i < rows.length; i++) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            child: Row(children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEBF3FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(rows[i].$1, color: const Color(0xFF2C7BE5), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(rows[i].$2,
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500,
+                  color: const Color(0xFF111827)))),
+              Text(rows[i].$3,
+                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700,
+                  color: const Color(0xFF111827))),
+            ]),
+          ),
+          if (i < rows.length - 1)
+            const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0xFFF3F4F6)),
+        ],
+      ]),
+    );
+  }
+
+  Widget _carouselBlock() {
+    return Column(children: [
+      SizedBox(
+        height: 178,
+        child: PageView(
+          controller: _carouselCtrl,
+          onPageChanged: (i) => setState(() => _carouselPage = i),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _passagesContent(),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: GestureDetector(
+                onTap: _navigateToCarteEditor,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Center(child: Text('Modifier la carte',
+                    style: GoogleFonts.inter(fontSize: 14,
+                      color: const Color(0xFF9CA3AF)))),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(children: [
+          Expanded(child: AnimatedOpacity(
+            opacity: _carouselPage == 1 ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 250),
+            child: Text('← Mon graphique',
+              style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500,
+                color: const Color(0xFF2C7BE5).withValues(alpha: 0.55))),
+          )),
+          for (int i = 0; i < 2; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: _carouselPage == i ? 16.0 : 6.0,
+              height: 6,
+              decoration: BoxDecoration(
+                color: _carouselPage == i
+                  ? const Color(0xFF2C7BE5)
+                  : const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          Expanded(child: AnimatedOpacity(
+            opacity: _carouselPage == 0 ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 250),
+            child: Align(alignment: Alignment.centerRight,
+              child: Text('Ma carte →',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500,
+                  color: const Color(0xFF2C7BE5).withValues(alpha: 0.55)))),
+          )),
+        ]),
+      ),
+      const SizedBox(height: 8),
+    ]);
+  }
+
+  Widget _passagesContent() {
+    final now = DateTime.now();
+    final todayWeekday = now.weekday - 1; // 0=Lundi … 6=Dimanche
+    const labels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+    // 7 derniers jours du plus ancien au plus récent
+    final List<double> values = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: 6 - i));
+      final dateStr =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final entry = _daily.where((e) => (e['date'] as String?) == dateStr).toList();
+      return entry.isEmpty ? 0.0 : (entry.first['scans'] as int? ?? 0).toDouble();
+    });
+    final maxVal = values.reduce((a, b) => a > b ? a : b).clamp(1.0, double.infinity);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Passages',
+              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700,
+                color: const Color(0xFF111827))),
+            const SizedBox(height: 2),
+            Text('Cette semaine',
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400,
+                color: const Color(0xFF9CA3AF))),
+          ])),
+          GestureDetector(
+            onTap: () => Navigator.push(context, platformRoute(
+              builder: (_) => StatsScreen(
+                token: widget.token,
+                merchantInfo: _merchantInfo,
+                initialStats:   _stats,
+                initialDaily:   _daily,
+                initialHistory: _scanHistory,
+                initialClients: _recentClients,
+              ),
+            )),
+            child: Text('Voir tout ›',
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500,
+                color: const Color(0xFF2C7BE5))),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        // Barres
+        SizedBox(
+          height: 60,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(7, (i) {
+              final isActive = i == todayWeekday;
+              final barH = (values[i] / maxVal) * 56;
+              return Expanded(child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeOut,
+                  height: barH < 4 ? 4 : barH,
+                  decoration: BoxDecoration(
+                    color: isActive
+                      ? const Color(0xFF2C7BE5)
+                      : const Color(0xFFBFD7F5),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ));
+            }),
+          ),
+        ),
+        const SizedBox(height: 6),
+        // Labels
+        Row(children: List.generate(7, (i) {
+          final isActive = i == todayWeekday;
+          return Expanded(child: Center(child: Text(labels[i],
+            style: GoogleFonts.inter(
+              fontSize: 11, fontWeight: FontWeight.w500,
+              color: isActive ? const Color(0xFF2C7BE5) : const Color(0xFF9CA3AF)))));
+        })),
+      ]),
+    );
+  }
+
+  Widget _googleReviewBlock() {
+    return GestureDetector(
+      onTap: () {},
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 0.5),
+        ),
+        child: Row(children: [
+          Text('G', style: TextStyle(
+            fontSize: 20, fontWeight: FontWeight.w700,
+            foreground: Paint()..shader = const LinearGradient(
+              colors: [Color(0xFF4285F4), Color(0xFF4285F4)],
+            ).createShader(const Rect.fromLTWH(0, 0, 20, 20)),
+          )),
+          const SizedBox(width: 12),
+          Expanded(child: Text('Demander un avis Google',
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500,
+              color: const Color(0xFF111827)))),
+          const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF), size: 20),
+        ]),
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  Widget _homeContent() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: kPrimary));
+    }
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.of(context).padding.top + 16,
+        16,
+        74 + MediaQuery.of(context).padding.bottom + 24,
+      ),
+      children: [
+        _headerBlock(),
+        _statsBlock(),
+        _periodSelector(),
+        _statsListBlock(),
+        _carouselBlock(),
+        _googleReviewBlock(),
+      ],
     );
   }
 
@@ -247,109 +697,23 @@ class _MerchantHomeState extends State<MerchantHome> {
         backgroundColor: context.cBg,
         body: Stack(
           children: [
-            Column(
-              children: [
-                MerchantHeader(
-                  businessName:  _businessName,
-                  initials:      _initials,
-                  clientsCount:  stats?['total_clients'] ?? 0,
-                  rewardsCount:  stats?['total_rewards'] ?? 0,
-                  isActive:      (merchantInfo?['subscription_status'] as String?) == 'active',
-                  onProfileTap:  _showProfilSheet,
-                  onClientsTap:  () => setState(() => _tab = 1),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 84 + MediaQuery.of(context).padding.bottom),
-                    child: loading
-                        ? const Center(child: CircularProgressIndicator(color: kPrimary))
-                        : _buildTabContent(),
-                  ),
-                ),
-              ],
-            ),
+            _tab == 2
+              ? HistoryScreen(
+                  token: widget.token,
+                  merchantInfo: _merchantInfo,
+                  initialHistory: _scanHistory,
+                  initialClients: _recentClients,
+                  initialCardDesign: _cardDesign,
+                )
+              : _homeContent(),
             MerchantBottomNav(
               currentTab:   _tab,
-              onTabChanged: (idx) { AppLogger.merchant('Onglet → $idx'); setState(() => _tab = idx); },
+              onTabChanged: (i) => setState(() => _tab = i),
               onScanTap:    _openScanner,
-            ),
-            if (_showOnboarding) MerchantOnboardingScreen(
-              onDone: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('merchant_onboarding_done', true);
-                if (mounted) setState(() => _showOnboarding = false);
-              },
             ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildTabContent() {
-    switch (_tab) {
-      case 0:
-        if (merchantInfo == null) return _buildNoProfile();
-        return MerchantDashboard(
-          merchantInfo:        merchantInfo!,
-          stats:               stats,
-          daily:               _daily,
-          scanHistory:         _scanHistory,
-          recentClients:       _recentClients,
-          cardDesign:          _cardDesign,
-          period:              _period,
-          graphRange:          _graphRange,
-          retPeriod:           _retPeriod,
-          isPoints:            _isPoints,
-          onPeriodChanged:     (v) => setState(() => _period = v),
-          onGraphRangeChanged: (v) => setState(() => _graphRange = v),
-          onRetPeriodChanged:  (v) => setState(() => _retPeriod = v),
-          onRefresh:           () => _loadData(showSpinner: false),
-          onNavigateToCarteEditor: _navigateToCarteEditor,
-          token:               widget.token,
-        );
-      case 1: return ClientsScreen(
-          token:               widget.token,
-          merchantInfo:        merchantInfo,
-          cardDesign:          _cardDesign,
-          initialClients:      _recentClients,
-          initialScanHistory:  _scanHistory,
-        );
-      case 2: return HistoryScreen(
-          token:              widget.token,
-          merchantInfo:       merchantInfo,
-          initialHistory:     _scanHistory,
-          initialClients:     _recentClients,
-          initialCardDesign:  _cardDesign,
-        );
-      case 3: return NotificationsScreen(token: widget.token, merchantInfo: merchantInfo, initialClients: _recentClients);
-      default: return const SizedBox();
-    }
-  }
-
-  Widget _buildNoProfile() {
-    return Center(child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Text('⚠️', style: TextStyle(fontSize: 44)),
-        const SizedBox(height: 16),
-        Text('Profil non configuré', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.cText)),
-        const SizedBox(height: 8),
-        Text('Configure ton commerce pour commencer à fidéliser tes clients.',
-            textAlign: TextAlign.center, style: TextStyle(color: context.cSub, fontSize: 14, height: 1.5)),
-        const SizedBox(height: 24),
-        ElevatedButton.icon(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Configurez votre programme sur qarta.be'), duration: Duration(seconds: 3))),
-          icon: const Icon(Icons.open_in_browser_rounded, size: 16),
-          label: const Text('Configurer sur qarta.be'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kPrimary, foregroundColor: Colors.white, elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          ),
-        ),
-      ]),
-    ));
   }
 }

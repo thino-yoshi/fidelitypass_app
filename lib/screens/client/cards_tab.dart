@@ -459,11 +459,11 @@ class _CardsTabState extends State<CardsTab> {
       text: TextSpan(
         style: baseStyle,
         children: [
-          const TextSpan(text: 'Encore '),
+          const TextSpan(text: 'Plus que '),
           TextSpan(
-              text: '$remaining',
+              text: '$remaining tampon${remaining > 1 ? "s" : ""}',
               style: const TextStyle(fontWeight: FontWeight.w800)),
-          TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+          TextSpan(text: ' avant : ${reward.isEmpty ? "récompense" : reward}'),
         ],
       ),
     );
@@ -606,8 +606,8 @@ class _CardsTabState extends State<CardsTab> {
                     full
                         ? '$reward disponible !'
                         : (reward.isEmpty
-                            ? 'Encore $remaining pts pour votre récompense'
-                            : 'Encore $remaining pts pour votre $reward'),
+                            ? 'Plus que $remaining pts avant : récompense'
+                            : 'Plus que $remaining pts avant : $reward'),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -929,9 +929,9 @@ class LoyaltyCardFace extends StatelessWidget {
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(style: base, children: [
-        const TextSpan(text: 'Encore '),
+        const TextSpan(text: 'Plus que '),
         TextSpan(text: '$remaining pts', style: const TextStyle(fontWeight: FontWeight.w700)),
-        TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+        TextSpan(text: ' avant : ${reward.isEmpty ? "récompense" : reward}'),
       ]),
     );
   }
@@ -946,9 +946,9 @@ class LoyaltyCardFace extends StatelessWidget {
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(style: base, children: [
-        const TextSpan(text: 'Encore '),
-        TextSpan(text: '$remaining', style: const TextStyle(fontWeight: FontWeight.w800)),
-        TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+        const TextSpan(text: 'Plus que '),
+        TextSpan(text: '$remaining tampon${remaining > 1 ? "s" : ""}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        TextSpan(text: ' avant : ${reward.isEmpty ? "récompense" : reward}'),
       ]),
     );
   }
