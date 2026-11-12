@@ -16,6 +16,7 @@ import 'config/api.dart';
 import 'screens/auth_screen.dart';
 import 'screens/client/client_home.dart';
 import 'screens/merchant/merchant_home.dart';
+import 'screens/merchant/merchant_tokens.dart' show kIsIOS;
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'screens/splash_screen.dart';
@@ -144,9 +145,10 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.light,
           colorSchemeSeed: const Color(0xFF2C7BE5),
           scaffoldBackgroundColor: const Color(0xFFF4F2EE),
-          textTheme: GoogleFonts.soraTextTheme(
-            ThemeData(brightness: Brightness.light).textTheme,
-          ),
+          // iPhone : police du système (SF Pro). Android : Sora, inchangé.
+          textTheme: kIsIOS
+              ? null
+              : GoogleFonts.soraTextTheme(ThemeData(brightness: Brightness.light).textTheme),
         ),
         darkTheme: ThemeData(
           useMaterial3: true,
@@ -154,9 +156,9 @@ class MyApp extends StatelessWidget {
           colorSchemeSeed: const Color(0xFF2C7BE5),
           scaffoldBackgroundColor: const Color(0xFF0B1220),
           cardColor: const Color(0xFF0F1E35),
-          textTheme: GoogleFonts.soraTextTheme(
-            ThemeData(brightness: Brightness.dark).textTheme,
-          ),
+          textTheme: kIsIOS
+              ? null
+              : GoogleFonts.soraTextTheme(ThemeData(brightness: Brightness.dark).textTheme),
         ),
         home: const SplashRouter(),
       ),

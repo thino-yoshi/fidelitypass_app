@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 class HelpSheet extends StatefulWidget {
   const HelpSheet({super.key});
 
+  /// Questions fréquentes (aussi utilisées par l'écran Aide iOS).
+  static const faqs = _HelpSheetState.faqs;
+
   @override
   State<HelpSheet> createState() => _HelpSheetState();
 }
@@ -20,14 +23,15 @@ class _HelpSheetState extends State<HelpSheet> {
     });
   }
 
-  static const _faqs = [
+  // Réponses corrigées (C10) : elles disent ce que l'appli fait vraiment.
+  static const faqs = [
     (
       q: 'Comment gagner des tampons ?',
-      a: 'À chaque passage en caisse, le commerçant scanne ton QR code ou tu scannes le sien depuis l\'onglet Scan. Un tampon est ajouté automatiquement à la carte concernée.',
+      a: 'À chaque passage en caisse, montre ta carte au commerçant. Il scanne ton QR code et ton tampon s\'ajoute tout seul.',
     ),
     (
       q: 'Comment utiliser une récompense ?',
-      a: 'Quand ta carte est complète, une bannière « Récompense disponible » apparaît en haut de l\'onglet Cartes. Appuie sur « Utiliser » puis montre l\'écran au commerçant.',
+      a: 'Quand ta carte est pleine, ta récompense apparaît dans Récompenses. Touche « Utiliser » et montre le QR code au commerçant.',
     ),
     (
       q: 'Mes tampons peuvent-ils expirer ?',
@@ -35,7 +39,7 @@ class _HelpSheetState extends State<HelpSheet> {
     ),
     (
       q: 'J\'ai changé de téléphone, comment récupérer mes cartes ?',
-      a: 'Connecte-toi avec le même compte (email et mot de passe). Toutes tes cartes, tampons et récompenses sont synchronisés automatiquement.',
+      a: 'Connecte-toi avec le même compte : email, Google ou Apple. Tes cartes, tampons et récompenses reviennent tout seuls.',
     ),
     (
       q: 'Comment ajouter une nouvelle carte ?',
@@ -92,7 +96,7 @@ class _HelpSheetState extends State<HelpSheet> {
                 color: isDark ? const Color(0xFF4A9EFF) : const Color(0xFF0F2044),
               )),
           const SizedBox(height: 8),
-          ...(_faqs.map((faq) => _FaqTile(q: faq.q, a: faq.a, isDark: isDark))),
+          ...(faqs.map((faq) => _FaqTile(q: faq.q, a: faq.a, isDark: isDark))),
           const SizedBox(height: 12),
           Text('NOUS CONTACTER',
               style: TextStyle(

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../merchant/merchant_tokens.dart' show kIsIOS;
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
+import 'widgets/client_history_ios.dart';
+import 'cards_tab.dart' show CardStyle;
 
 const _kPrimary = Color(0xFF2C7BE5);
 const _kGold    = Color(0xFFF59E0B);
@@ -9,7 +12,8 @@ class HistoryTab extends StatefulWidget {
   final String token;
   final List<dynamic> history;
   final Future<void> Function() onRefresh;
-  const HistoryTab({super.key, required this.token, required this.history, required this.onRefresh});
+  final List<dynamic> cards; // pour reprendre la couleur de la carte de chaque commerce (iOS)
+  const HistoryTab({super.key, required this.token, required this.history, required this.onRefresh, this.cards = const []});
 
   @override
   State<HistoryTab> createState() => _HistoryTabState();
@@ -22,6 +26,20 @@ class _HistoryTabState extends State<HistoryTab> {
   Color get _kWhite  => context.cSurface;
 
   String _filter = 'all'; // 'all' | 'stamp' | 'reward'
+
+  static const _jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  static const _mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+  // Couleur de la carte du commerce (design du commerçant), pour l'icône de la ligne.
+  Color? _cardColor(String? merchantId) {
+    if (merchantId == null) return null;
+    for (final c in widget.cards) {
+      if (c['merchant_id'] == merchantId || c['merchants']?['id'] == merchantId) {
+        return CardStyle.fromDesign(c['card_design'], fallbackColor: _kPrimary).primary;
+      }
+    }
+    return null;
+  }
 
   // Convert API data to flat list of items sorted by date
   List<Map<String, dynamic>> _flatItems() {
@@ -48,6 +66,7 @@ class _HistoryTabState extends State<HistoryTab> {
         if (diff == 0) {
           day = "Aujourd'hui";
         } else if (diff == 1) day = 'Hier';
+        else if (kIsIOS) day = '${_jours[dt.weekday - 1]} ${dt.day} ${_mois[dt.month - 1]}';
         else                day = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
       }
 
@@ -55,7 +74,13 @@ class _HistoryTabState extends State<HistoryTab> {
         'type':  type,
         'name':  name,
         'time':  time,
-        'info':     isReward ? 'Récompense débloquée' : (isPoints ? '$stamps pts' : '$stamps tampons'),
+        'info':     isReward
+            ? (kIsIOS ? 'Carte complète' : 'Récompense débloquée')
+            : kIsIOS
+                ? (isPoints ? '$stamps/${scan['merchant']?['points_required'] ?? 100} pts'
+                            : '$stamps/${scan['merchant']?['stamps_required'] ?? 10} tampons')
+                : (isPoints ? '$stamps pts' : '$stamps tampons'),
+        'cardColor': _cardColor(scan['merchant']?['id'] as String?),
         'isPoints': isPoints,
         'delta':    delta,
         'color':    isReward ? _kGold : _kPrimary,
@@ -88,6 +113,19 @@ class _HistoryTabState extends State<HistoryTab> {
     final allItems      = _flatItems();
     final filteredItems = _filtered(allItems);
     final grouped       = _byDay(filteredItems);
+
+    if (kIsIOS) {
+      final now = DateTime.now();
+      bool thisMonth(Map i) { final d = i['dt'] as DateTime?; return d != null && d.year == now.year && d.month == now.month; }
+      return ClientHistoryIos(
+        grouped: grouped,
+        monthVisits: allItems.where((i) => i['type'] == 'stamp' && thisMonth(i)).length,
+        monthRewards: allItems.where((i) => i['type'] == 'reward' && thisMonth(i)).length,
+        filter: _filter,
+        onFilter: (k) { AppLogger.client('HistoryTab → filtre: $k'); setState(() => _filter = k); },
+        onRefresh: widget.onRefresh,
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,

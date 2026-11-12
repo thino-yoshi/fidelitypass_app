@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import '../merchant/merchant_tokens.dart' show kIsIOS;
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoActivityIndicator;
+import '../../config/demo_mode.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -11,6 +15,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
+import 'widgets/client_cards_stack_ios.dart';
+import 'widgets/client_pass_face_ios.dart';
+import 'widgets/client_hours.dart';
+import 'widgets/client_sheets_ios.dart' show showIosAlert;
 
 /// Événement émis quand le commerçant ajoute des tampons/points à une carte
 /// pendant que le client a son QR ouvert (détecté par polling).
@@ -42,6 +50,8 @@ class CardsTab extends StatefulWidget {
   final String? cardIdToAnimate;
   final String? cardIdToSlideIn;
   final VoidCallback? onAnimationDone;
+  final VoidCallback? onScanTap;
+  final ValueChanged<bool>? onSearchActive; // iOS : cache le titre pendant la recherche // iOS : bouton « Scanner un QR code » (nouveau client)
 
   const CardsTab({
     super.key,
@@ -53,6 +63,7 @@ class CardsTab extends StatefulWidget {
     this.cardIdToAnimate,
     this.cardIdToSlideIn,
     this.onAnimationDone,
+    this.onScanTap, this.onSearchActive,
   });
 
   @override
@@ -110,11 +121,74 @@ class _CardsTabState extends State<CardsTab> {
     return val >= req;
   }).toList();
 
-  void _showQRModal(Map card, CardStyle style) {
+  // iOS : la carte sort de la pile et vient au milieu (fond flouté).
+  // Toucher à côté ou glisser vers le bas → elle redescend tout de suite à sa
+  // place, par le même chemin. Toucher la carte → elle s'ouvre en grand.
+  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
+
+  /// Pendant le vol : fondu entre la carte rangée (nom + barre) et la carte entière.
+  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim, {required bool collapsedAtRest}) {
+    final full = ClientPassFaceIos(card: card, style: style);
+    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
+    // Le contenu change vite (au début de la sortie / à la fin du retour),
+    // la carte elle-même glisse sur tout le trajet.
+    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
+    return Material(
+      type: MaterialType.transparency,
+      child: AnimatedBuilder(
+        animation: t,
+        builder: (_, __) => t.value >= 1
+            ? full
+            : Stack(fit: StackFit.expand, children: [
+                ClientPassFaceIos(card: card, style: style, collapsed: true),
+                Opacity(opacity: t.value, child: full),
+              ]),
+      ),
+    );
+  }
+
+  void _popOutCard(Map card, CardStyle style) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      transitionDuration: const Duration(milliseconds: 380),
+      reverseTransitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (ctx, anim, _) => _CardPopOut(
+        heroTag: 'card-${card['id']}',
+        animation: anim,
+        face: ClientPassFaceIos(card: card, style: style),
+        onOpen: () {
+          // La carte s'agrandit d'un seul mouvement vers la carte ouverte
+          // (même carte qui glisse, pas de coupure). En fermant, elle
+          // redescend directement à sa place dans la pile.
+          Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
+        },
+      ),
+    ));
+  }
+
+  Route<void> _openCardRoute(Map card, CardStyle style) => PageRouteBuilder(
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 420),
+        reverseTransitionDuration: const Duration(milliseconds: 340),
+        pageBuilder: (ctx, anim, _) => _OpenCardPage(
+          animation: anim,
+          child: QRModal(
+            token: widget.token,
+            card: card,
+            style: style,
+            userName: widget.userName,
+            onStampAdded: widget.onRefresh,
+            onStampEvent: widget.onStampEvent,
+            heroTag: 'card-${card['id']}',
+          ),
+        ),
+      );
+
+  Future<void> _showQRModal(Map card, CardStyle style) {
     final name = card['merchants']?['business_name'] as String? ?? '?';
     final id   = card['id'] as String? ?? '?';
     AppLogger.client('CardsTab → carte sélectionnée: $name (id: $id)');
-    showModalBottomSheet(
+    return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -139,6 +213,39 @@ class _CardsTabState extends State<CardsTab> {
             final cardName = ((c['card_design'] as Map?)?['cardName'] as String? ?? '').toLowerCase();
             return name.contains(q) || cardName.contains(q);
           }).toList();
+
+    // iOS : cartes empilées + recherche (design Apple). Android : inchangé.
+    if (kIsIOS) {
+      return ClientCardsStackIos(
+        hasAnyCard: widget.cards.isNotEmpty,
+        onSearchActive: widget.onSearchActive,
+        onSearch: (v) => setState(() => _search = v),
+        onRefresh: () async => widget.onRefresh(),
+        onScanTap: widget.onScanTap ?? () {},
+        cards: List.generate(cards.length, (i) {
+          final card  = cards[i];
+          final style = _styleFromCard(card, i);
+          final isAnimating = card['id'] == widget.cardIdToAnimate;
+          final isSliding   = card['id'] == widget.cardIdToSlideIn;
+          final face = Hero(
+            tag: 'card-${card['id']}',
+            createRectTween: _straightRect,
+            flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
+            child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
+          );
+          if (isAnimating) {
+            return _FlyingCard(key: ValueKey('flying_${card['id']}'), onDone: widget.onAnimationDone ?? () {}, child: face);
+          }
+          if (isSliding) return _SlideInCard(key: ValueKey('slidein_${card['id']}'), child: face);
+          return face;
+        }),
+        onOpen: (i) {
+          final card = cards[i];
+          if (card['id'] == widget.cardIdToAnimate) return;
+          _popOutCard(card, _styleFromCard(card, i));
+        },
+      );
+    }
 
     if (widget.cards.isEmpty) {
       return RefreshIndicator(
@@ -1253,7 +1360,9 @@ class QRModal extends StatefulWidget {
   final String userName;
   final VoidCallback? onStampAdded;
   final void Function(StampEvent)? onStampEvent;
-  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded, this.onStampEvent});
+  /// iOS : si fourni, la carte vole depuis la pile (même Hero) au lieu d'apparaître.
+  final String? heroTag;
+  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded, this.onStampEvent, this.heroTag});
 
   // Compat : raccourcis pour l'ancien code interne
   Color get color => style.primary;
@@ -1269,6 +1378,8 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   String? _initialScanAt;      // ← horodatage du dernier scan à l'ouverture (base de comparaison)
   late AnimationController _confettiCtrl;
   final bool _showConfetti = false;
+  DateTime? _stampedAt;        // iOS : « Tampon ajouté · à l'instant » sous la carte
+  Timer? _demoTimer;           // aperçu design uniquement (QartaDemo)
 
   // ── Wallet ────────────────────────────────────────────────────────────────
   final GlobalKey _cardKey = GlobalKey();
@@ -1292,13 +1403,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
         final saveUrl = result.value['save_url'] as String;
         await launchUrl(Uri.parse(saveUrl), mode: LaunchMode.externalApplication);
 
-      } else if (Platform.isIOS) {
+      } else if (kIsIOS) {
         final result = await ApiService.instance.getAppleWalletUrl(cardId);
         if (!mounted) return;
         if (result.isErr) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result.error ?? 'Erreur Apple Wallet')),
-          );
+          showIosAlert(context, 'Apple Wallet', result.error ?? 'La carte n\'a pas pu être ajoutée à Wallet. Réessaie dans un instant.');
           return;
         }
         final passUrl = result.value['url'] as String;
@@ -1340,6 +1449,16 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOut),
     );
     _initialStamps = stamps0; // ← mémoriser pour le calcul du delta
+    if (QartaDemo.enabled) {
+      // Aperçu : le commerçant « ajoute un tampon » 4 s après l'ouverture.
+      _demoTimer = Timer(const Duration(seconds: 4), () {
+        final total = required0;
+        final next = isPoints0 ? stamps0 + 10 : stamps0 + 1;
+        _onNewStamp(newVal: next >= total ? next - total : next, total: total, reward: next >= total,
+            isPoints: isPoints0, merchantName: merchantName);
+      });
+      return;
+    }
     // Récupérer le dernier scan_at pour détecter un nouveau scan (comparaison timestamp)
     ApiService.instance.pollCard(widget.card['id'] as String).then((r) {
       if (r.isOk && mounted) {
@@ -1354,6 +1473,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   void dispose() {
     AppLogger.client('QRModal → fermé, polling arrêté');
     _pollTimer?.cancel();
+    _demoTimer?.cancel();
     _confettiCtrl.dispose();
     _flipCtrl.dispose();
     super.dispose();
@@ -1393,6 +1513,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     final merchantName = (widget.card['merchants']?['business_name'] as String?) ?? 'Le magasin';
 
     AppLogger.client('QRModal → tampon détecté! +$delta chez $merchantName → $newVal/$total${reward ? " 🎉 RÉCOMPENSE" : ""}');
+    if (kIsIOS) {
+      _initialScanAt = latestScanAt; // base pour détecter le tampon suivant
+      _onNewStamp(newVal: newVal, total: total, reward: reward, isPoints: isPoints, merchantName: merchantName, delta: delta);
+      return;
+    }
     _pollTimer?.cancel();
     if (!mounted) return;
 
@@ -1414,6 +1539,37 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     } else if (cbOld != null) {
       Future.microtask(cbOld);
     }
+  }
+
+  // iOS : tampon ajouté → la carte se met à jour dans la fenêtre ouverte,
+  // petite ligne verte + vibration. Carte pleine → on ferme et client_home
+  // affiche « Carte complète ! ».
+  void _onNewStamp({required int newVal, required int total, required bool reward,
+      required bool isPoints, required String merchantName, int? delta}) {
+    if (!mounted) return;
+    final event = StampEvent(
+      cardId: widget.card['id'] as String,
+      merchantName: merchantName,
+      delta: delta ?? (newVal - _initialStamps).clamp(1, total),
+      newCount: newVal,
+      total: total,
+      reward: reward,
+      isPoints: isPoints,
+    );
+    final cb = widget.onStampEvent;
+    if (reward) {
+      _pollTimer?.cancel();
+      Navigator.pop(context);
+      if (cb != null) Future.microtask(() => cb(event));
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {
+      widget.card[isPoints ? 'points_count' : 'stamps_count'] = newVal;
+      _initialStamps = newVal;
+      _stampedAt = DateTime.now();
+    });
+    if (cb != null) cb(event);
   }
 
   // ── ZOOM QR ──────────────────────────────────────────────────────────────────
@@ -1461,11 +1617,14 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   // ── FACE AVANT : carte fidélité (réplique du site) + panneau QR ──────────────
   Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false, bool capture = false]) {
     final merchantId = widget.card['merchant_id'] as String? ?? '';
-    final cardFace = LoyaltyCardFace(
-      card: widget.card,
-      style: widget.style,
-      userName: widget.userName,
-    );
+    if (kIsIOS) return _buildPassIos(color, capture);
+    final cardFace = kIsIOS
+        ? SizedBox(height: 220, child: ClientPassFaceIos(card: widget.card, style: widget.style))
+        : LoyaltyCardFace(
+            card: widget.card,
+            style: widget.style,
+            userName: widget.userName,
+          );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1476,15 +1635,42 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               ? RepaintBoundary(key: _cardKey, child: cardFace)
               : cardFace,
         ),
+        // iOS : confirmation intégrée juste sous la carte après un tampon.
+        if (kIsIOS && _stampedAt != null)
+          TweenAnimationBuilder<double>(
+            key: ValueKey(_stampedAt),
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 380),
+            curve: Curves.easeOutBack,
+            builder: (_, v, child) => Opacity(opacity: v.clamp(0, 1), child: Transform.scale(scale: 0.85 + 0.15 * v, child: child)),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14, bottom: 2),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Container(
+                  width: 24, height: 24,
+                  decoration: const BoxDecoration(color: Color(0xFF27AE60), shape: BoxShape.circle),
+                  child: const Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Text(isPoints ? 'Points ajoutés · à l\'instant' : 'Tampon ajouté · à l\'instant',
+                    style: const TextStyle(color: Color(0xFF27AE60), fontSize: 17, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
         const SizedBox(height: 12),
-        // 2. Panneau QR (fond sombre, indépendant de la carte)
-        Container(
+        // 2. Panneau QR : sur iOS il reprend le fond de la carte (couleur du
+        //    commerçant) ; sur Android, fond sombre comme avant.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(kIsIOS ? 18 : 16),
+          child: Stack(children: [
+          if (kIsIOS) Positioned.fill(child: widget.style.buildBackground()),
+          Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF111726),
+            color: kIsIOS ? null : const Color(0xFF111726),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            border: kIsIOS ? null : Border.all(color: Colors.white.withValues(alpha: 0.06)),
           ),
           child: Column(
             children: [
@@ -1537,24 +1723,158 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     child: QrImageView(
                       data: widget.card['qr_token'] as String? ?? '',
                       version: QrVersions.auto,
-                      size: 150,
+                      size: kIsIOS ? 176 : 150,
                       foregroundColor: const Color(0xFF0B1220),
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 10),
-              Text('Tapez la carte pour voir les infos',
-                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
+              Text(kIsIOS ? 'Montre ce code en caisse' : 'Touche la carte pour voir les infos',
+                  style: kIsIOS
+                      ? TextStyle(fontSize: 15, color: widget.style.textColor, fontWeight: FontWeight.w600, letterSpacing: -0.2)
+                      : TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
+              if (kIsIOS) ...[
+                const SizedBox(height: 2),
+                Text('Touche la carte pour voir les infos',
+                    style: TextStyle(fontSize: 13, color: widget.style.textColor.withValues(alpha: 0.7))),
+              ],
             ],
           ),
+        ),
+          ]),
         ),
       ],
     );
   }
 
+  // iOS : dos de la carte, même style que l'avant : adresse, téléphone, et
+  // les horaires de toute la semaine (aujourd'hui en gras).
+  Widget _buildBackIos(String businessName) {
+    final m = (widget.card['merchants'] as Map?) ?? const {};
+    final fg = widget.style.textColor;
+    final address = (m['address'] as String? ?? '').trim();
+    final phone = (m['phone'] as String? ?? '').trim();
+    final h = MerchantHours.fromMerchant(m);
+    final today = DateTime.now().weekday;
+    Widget info(IconData icon, String label, String value) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 18, color: fg.withValues(alpha: 0.8)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label.toUpperCase(), style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+                Text(value, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w500)),
+              ]),
+            ),
+          ]),
+        );
+    // Même hauteur que l'avant de la carte (456), arrondie en bas aussi.
+    return Align(alignment: Alignment.topCenter, child: SizedBox(height: 432, child: GestureDetector(
+      onTap: _toggleFlip,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(fit: StackFit.expand, children: [
+          widget.style.buildBackground(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('INFOS', style: TextStyle(color: fg.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+              Text(businessName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: fg, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+              const SizedBox(height: 14),
+              if (address.isNotEmpty) info(CupertinoIcons.location_solid, 'Adresse', address),
+              if (phone.isNotEmpty) info(CupertinoIcons.phone_fill, 'Téléphone', phone),
+              Row(children: [
+                Icon(CupertinoIcons.clock_fill, size: 18, color: fg.withValues(alpha: 0.8)),
+                const SizedBox(width: 10),
+                Text('HORAIRES', style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+              ]),
+              const SizedBox(height: 6),
+              if (h.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 28),
+                  child: Text('Le commerçant ne les a pas encore indiqués.', style: TextStyle(color: fg.withValues(alpha: 0.8), fontSize: 15)),
+                )
+              else
+                for (var d = 1; d <= 7; d++)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28, bottom: 3),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(MerchantHours.names[d - 1],
+                            style: TextStyle(color: fg, fontSize: 15, fontWeight: d == today ? FontWeight.w700 : FontWeight.w400)),
+                      ),
+                      Text(h.openOn(d) ? h.range : 'Fermé',
+                          style: TextStyle(color: h.openOn(d) ? fg : fg.withValues(alpha: 0.6), fontSize: 15,
+                              fontWeight: d == today ? FontWeight.w700 : FontWeight.w400,
+                              fontFeatures: const [ui.FontFeature.tabularFigures()])),
+                    ]),
+                  ),
+              const Spacer(),
+              Center(child: Text('Touche pour revenir à la carte', style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 13))),
+            ]),
+          ),
+        ]),
+      ),
+    )));
+  }
+
+  // iOS : une seule carte d'une seule couleur, QR code à l'intérieur (comme Apple Wallet).
+  // Toucher le QR → agrandi ; toucher la carte → infos du commerce (au dos).
+  Widget _buildPassIos(Color color, bool capture) {
+    final qrBox = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: QrImageView(
+        data: widget.card['qr_token'] as String? ?? '',
+        version: QrVersions.auto,
+        size: 150,
+        foregroundColor: const Color(0xFF0B1220),
+      ),
+    );
+    // Pas de 2e animation dans la carte quand la carte entière vole déjà.
+    final qr = GestureDetector(
+      onTap: () => _showQRZoom(context, color),
+      child: widget.heroTag != null ? qrBox : Hero(tag: 'qr-${widget.card['id']}', child: qrBox),
+    );
+    Widget pass = SizedBox(height: 432, child: ClientPassFaceIos(card: widget.card, style: widget.style, qr: qr));
+    if (capture && widget.heroTag != null) {
+      final staticQr = Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        child: QrImageView(data: widget.card['qr_token'] as String? ?? '', version: QrVersions.auto, size: 150,
+            foregroundColor: const Color(0xFF0B1220)),
+      );
+      pass = Hero(
+        tag: widget.heroTag!,
+        createRectTween: (b, e) => RectTween(begin: b, end: e),
+        // Pendant le vol : la carte entière s'agrandit vers le bas et dévoile le QR.
+        flightShuttleBuilder: (_, __, ___, ____, _____) => Material(
+          type: MaterialType.transparency,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: 432, maxHeight: 432,
+              child: ClientPassFaceIos(card: widget.card, style: widget.style, qr: staticQr),
+            ),
+          ),
+        ),
+        child: Material(type: MaterialType.transparency, child: pass),
+      );
+    }
+    final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      GestureDetector(onTap: _toggleFlip, child: capture ? RepaintBoundary(key: _cardKey, child: pass) : pass),
+      const SizedBox(height: 14),
+    ]);
+  }
+
   // ── FACE ARRIÈRE : infos du commerce ─────────────────────────────────────────
   Widget _buildCardBack(Color color, String businessName) {
+    if (kIsIOS) return _buildBackIos(businessName);
     final address  = widget.card['merchants']?['address']       as String? ?? '';
     final phone    = widget.card['merchants']?['phone']         as String? ?? '';
     final rawHours = widget.card['merchants']?['opening_hours'] as String? ?? '';
@@ -1683,9 +2003,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       children: [
         // ── Fond sombre (style design) ────────────────────────────────
         Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF0B1220),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: kIsIOS ? context.cBg : const Color(0xFF0B1220),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1697,7 +2017,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                   child: Container(
                     width: 36, height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: kIsIOS ? context.cSub.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1709,29 +2029,82 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    if (kIsIOS)
+                      // Titre + confirmation du tampon juste dessous (toujours visible).
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(businessName,
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.4, color: context.cText)),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutBack,
+                          child: _stampedAt == null
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  key: ValueKey(_stampedAt),
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Container(
+                                      width: 20, height: 20,
+                                      decoration: const BoxDecoration(color: Color(0xFF27AE60), shape: BoxShape.circle),
+                                      child: const Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 13),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points'
+                                          ? 'Points ajoutés · à l\'instant'
+                                          : 'Tampon ajouté · à l\'instant',
+                                      style: const TextStyle(color: Color(0xFF27AE60), fontSize: 15, fontWeight: FontWeight.w600),
+                                    ),
+                                  ]),
+                                ),
+                        ),
+                      ])
+                    else
                     Text(
                       businessName,
-                      style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
                     ),
+                    if (kIsIOS) ...[
+                      const Spacer(),
+                      // Partager (déplacé ici : le QR est maintenant dans la carte)
+                      Builder(
+                        builder: (ctx) => GestureDetector(
+                          onTap: () {
+                            final box = ctx.findRenderObject() as RenderBox?;
+                            final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+                            final mId = widget.card['merchant_id'] as String? ?? '';
+                            final url = mId.isNotEmpty ? '\nhttps://qarta.be/join/$mId' : '';
+                            Share.share(
+                              "Rejoins le programme de fidélité de $businessName sur l'app Qarta !$url",
+                              subject: 'Carte fidélité $businessName',
+                              sharePositionOrigin: origin,
+                            );
+                          },
+                          child: Container(
+                            width: 30, height: 30,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF767680).withValues(alpha: 0.12)),
+                            child: Icon(CupertinoIcons.share, color: context.cSub, size: 15),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
                         width: 30, height: 30,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: kIsIOS ? const Color(0xFF767680).withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.1),
                         ),
-                        child: const Icon(Icons.close, color: Colors.white, size: 14),
+                        child: Icon(Icons.close, color: kIsIOS ? context.cSub : Colors.white, size: 15),
                       ),
                     ),
                   ],
                 ),
               ),
-              // Corps scrollable
-              SingleChildScrollView(
+              // Corps scrollable (iOS : se réduit si l'écran est petit)
+              Flexible(child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Column(
                   children: [
@@ -1770,8 +2143,78 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-              ),
+              )),
+              // iOS : adresse du commerce (touche → Plans), comme sur la maquette.
+              if (kIsIOS && (widget.card['merchants']?['address'] as String? ?? '').trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: GestureDetector(
+                    onTap: () => launchUrl(
+                      Uri.parse('https://maps.apple.com/?q=${Uri.encodeComponent(widget.card['merchants']['address'] as String)}'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+                      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14)),
+                      child: Row(children: [
+                        Container(
+                          width: 30, height: 30,
+                          decoration: BoxDecoration(color: const Color(0xFF2C7BE5), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(CupertinoIcons.location_solid, color: Colors.white, size: 17),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(widget.card['merchants']['address'] as String,
+                              maxLines: 2, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 17, color: context.cText, letterSpacing: -0.3)),
+                        ),
+                        Icon(CupertinoIcons.chevron_forward, size: 16, color: context.cSub.withValues(alpha: 0.7)),
+                      ]),
+                    ),
+                  ),
+                ),
+              // iOS : aujourd'hui (date + ouvert/fermé maintenant). Tous les horaires sont au dos.
+              if (kIsIOS && !MerchantHours.fromMerchant(widget.card['merchants'] as Map?).isEmpty)
+                Builder(builder: (_) {
+                  final h = MerchantHours.fromMerchant(widget.card['merchants'] as Map?);
+                  final (isOpen, txt) = h.statusNow();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: GestureDetector(
+                      onTap: _toggleFlip,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+                        decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14)),
+                        child: Row(children: [
+                          Container(
+                            width: 30, height: 30,
+                            decoration: BoxDecoration(
+                              color: isOpen ? const Color(0xFF27AE60) : const Color(0xFF9096A4),
+                              borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(CupertinoIcons.clock_fill, color: Colors.white, size: 17),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(txt, style: TextStyle(fontSize: 17, letterSpacing: -0.3,
+                                  color: isOpen ? const Color(0xFF27AE60) : context.cText)),
+                              Text('${MerchantHours.todayLabel()} · ${h.range}',
+                                  style: TextStyle(fontSize: 14, color: context.cSub)),
+                            ]),
+                          ),
+                          Icon(CupertinoIcons.chevron_forward, size: 16, color: context.cSub.withValues(alpha: 0.7)),
+                        ]),
+                      ),
+                    ),
+                  );
+                }),
               // ── Bouton Ajouter au Wallet ─────────────────────────────────────
+              if (kIsIOS)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).padding.bottom + 16),
+                  child: _AppleWalletButton(loading: _walletLoading, onTap: _addToWallet),
+                )
+              else
               Padding(
                 padding: EdgeInsets.fromLTRB(
                     20, 0, 20, MediaQuery.of(context).padding.bottom + 16),
@@ -1787,11 +2230,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                           )
                         : const Icon(Icons.account_balance_wallet_rounded, size: 18),
                     label: Text(
-                      Platform.isIOS ? 'Ajouter à Apple Wallet' : 'Ajouter à Google Wallet',
+                      kIsIOS ? 'Ajouter à Apple Wallet' : 'Ajouter à Google Wallet',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Platform.isIOS
+                      backgroundColor: kIsIOS
                           ? const Color(0xFF000000)
                           : const Color(0xFF2C7BE5),
                       foregroundColor: Colors.white,
@@ -1941,4 +2384,149 @@ class _SlideInCardState extends State<_SlideInCard> with SingleTickerProviderSta
     opacity: _fade,
     child: SlideTransition(position: _slide, child: widget.child),
   );
+}
+
+
+/// iOS : carte sortie de la pile, posée au milieu de l'écran.
+class _CardPopOut extends StatelessWidget {
+  final String heroTag;
+  final Animation<double> animation;
+  final Widget face;
+  final VoidCallback onOpen;
+  const _CardPopOut({required this.heroTag, required this.animation, required this.face, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final w = min(MediaQuery.of(context).size.width - 32, 568.0); // iPad : pas plus large que la pile
+    final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    void close() => Navigator.pop(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: close,
+        onVerticalDragEnd: (d) { if ((d.primaryVelocity ?? 0) > 150) close(); },
+        child: Stack(children: [
+          // Fond flouté fixe, qui apparaît/disparaît en fondu (léger pour rester fluide).
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: fade,
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: ColoredBox(color: const Color(0xFF0B1220).withValues(alpha: 0.30)),
+              ),
+            ),
+          ),
+          Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              GestureDetector(
+                onTap: onOpen,
+                child: Hero(
+                  tag: heroTag,
+                  createRectTween: (b, e) => RectTween(begin: b, end: e),
+                  child: SizedBox(width: w, height: 220, child: face),
+                ),
+              ),
+              const SizedBox(height: 18),
+              FadeTransition(
+                opacity: fade,
+                child: const Text('Touche la carte pour l\'ouvrir',
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// iOS : page « carte ouverte ». La carte arrive en volant depuis la pile ;
+/// le reste (titre, adresse, Wallet) apparaît en fondu. Toucher le fond
+/// ou glisser vers le bas ferme : la carte redescend à sa place.
+class _OpenCardPage extends StatelessWidget {
+  final Animation<double> animation;
+  final Widget child;
+  const _OpenCardPage({required this.animation, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () => Navigator.maybePop(context),
+            child: FadeTransition(opacity: fade, child: const ColoredBox(color: Color(0x660B1220))),
+          ),
+        ),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: GestureDetector(
+            onVerticalDragEnd: (d) { if ((d.primaryVelocity ?? 0) > 250) Navigator.maybePop(context); },
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 640, maxHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - 8),
+              child: FadeTransition(opacity: fade, alwaysIncludeSemantics: true, child: child),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+
+/// Bouton « Ajouter à Apple Wallet » dans le style du badge Apple :
+/// fond noir, icône Wallet en couleurs, « Ajouter à » en petit au-dessus.
+class _AppleWalletButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onTap;
+  const _AppleWalletButton({required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFA6A6A6), width: 0.5),
+        ),
+        alignment: Alignment.center,
+        child: loading
+            ? const CupertinoActivityIndicator(color: Colors.white)
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                const _WalletGlyph(),
+                const SizedBox(width: 10),
+                Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                  Text('Ajouter à', style: TextStyle(color: Colors.white, fontSize: 11, height: 1.1, fontWeight: FontWeight.w400)),
+                  Text('Apple Wallet', style: TextStyle(color: Colors.white, fontSize: 20, height: 1.1, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
+                ]),
+              ]),
+      ),
+    );
+  }
+}
+
+class _WalletGlyph extends StatelessWidget {
+  const _WalletGlyph();
+  @override
+  Widget build(BuildContext context) {
+    const stripes = [Color(0xFF3D9BE9), Color(0xFFF9B92D), Color(0xFF4CB848), Color(0xFFEE4136)];
+    return Container(
+      width: 32, height: 24,
+      padding: const EdgeInsets.fromLTRB(3, 3, 3, 0),
+      decoration: BoxDecoration(color: const Color(0xFFD9D9D9), borderRadius: BorderRadius.circular(5)),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+        child: Column(children: [
+          for (final c in stripes) Expanded(child: Container(color: c, margin: const EdgeInsets.only(bottom: 1))),
+        ]),
+      ),
+    );
+  }
 }
