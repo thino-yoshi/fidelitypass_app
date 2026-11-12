@@ -26,11 +26,15 @@ import 'manage_cards_screen.dart';
 import 'notifications_sheet.dart';
 import 'help_sheet.dart';
 import 'widgets/client_bottom_nav_ios.dart';
+import 'widgets/client_bottom_nav.dart';
 import 'widgets/client_header_ios.dart';
+import 'widgets/client_header.dart';
 import 'widgets/client_glow_background.dart';
 import 'widgets/client_rewards_ios.dart';
 import 'widgets/client_notifications_ios.dart';
 import 'widgets/client_profile_ios.dart';
+import 'widgets/client_profile_android.dart';
+import 'widgets/client_notifs_android.dart';
 import 'widgets/client_sheets_ios.dart';
 import 'widgets/client_settings_ios.dart';
 import '../../config/demo_mode.dart';
@@ -1570,13 +1574,34 @@ class _ClientHomeState extends State<ClientHome>
             if (_tab == 1)
               Positioned.fill(child: _buildTabContent())
             else
-              Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(child: _buildTabContent()),
-                ],
-              ),
-            if (_tab != 1) _buildBottomNav(),
+              Column(children: [
+                ClientHeader(
+                  tab: _tab,
+                  firstName: _firstName,
+                  initials: _initials,
+                  profileImageUrl: _profileImageUrl,
+                  profileImagePath: _profileImagePath,
+                  cardCount: _cardCount,
+                  rewardCount: _rewardCount,
+                  notifCount: _notifCount,
+                  rewardPillActive: _rewardPillActive,
+                  notifFilter: _notifFilter,
+                  onProfileTap: _openProfil,
+                  onNotifTap: _openNotifs,
+                  onBackFromProfil: () => _setTab(0),
+                  onCloseNotifs: _closeNotifs,
+                  onGoToCards: _goToCards,
+                  onGoToRewards: _goToRewards,
+                  onFilterChanged: (f) => setState(() => _notifFilter = f),
+                  onPhotoTap: _showPhotoOptions,
+                ),
+                Expanded(child: _buildTabContent()),
+              ]),
+            if (_tab != 1) ClientBottomNav(
+              currentTab: _tab,
+              onTabChanged: _setTab,
+              onScanTap: () => _setTab(1),
+            ),
             if (_stampBadge != null) _buildStampBadge(_stampBadge!),
           ],
         ),
@@ -1821,9 +1846,12 @@ class _ClientHomeState extends State<ClientHome>
     }
   }
 
-  // ── HEADER (inclut les pills) ──────────────────────────────────────────────
+  // ── HEADER Android : extrait dans ClientHeader ─────────────────────────────
+  // (voir lib/screens/client/widgets/client_header.dart)
 
-  Widget _buildHeader() {
+  // ── HEADER iOS (conservé pour la couleur d'indicateur) ─────────────────────
+
+  Widget _buildHeader_UNUSED() {
     return Container(
       color: context.qNavy,
       child: Stack(
@@ -2195,9 +2223,44 @@ class _ClientHomeState extends State<ClientHome>
       case 2:
         return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual, cards: _cards);
       case 3:
-        return _buildProfilTab();
+        return ClientProfileAndroid(
+          isOAuth: _isOAuth,
+          isGoogle: _isGoogle,
+          onPersonalInfo: _showPersonalInfo,
+          onPassword: _showChangePassword,
+          onCards: () => Navigator.push(context, platformRoute(
+            builder: (_) => ManageCardsScreen(
+              token: widget.token,
+              userName: _userName,
+              cards: _cards,
+              rewards: _rewards,
+              onRefresh: _refreshManual,
+            ),
+          )),
+          onNotifSettings: () => showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => const NotificationsSheet(),
+          ),
+          onHelp: () => showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => const HelpSheet(),
+          ),
+          onLogout: _logout,
+          onDelete: _showDeleteAccount,
+        );
       case 4:
-        return _buildNotifsTab();
+        return ClientNotifsAndroid(
+          notifs: _notifs,
+          filter: _notifFilter,
+          onTap: (n) => setState(() {
+            n['read'] = true;
+            _notifCount = _notifs.where((x) => !(x['read'] as bool)).length;
+          }),
+        );
       default:
         return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
