@@ -19,6 +19,7 @@ import 'carte_editor_screen.dart';
 import 'merchant_tokens.dart';
 import 'merchant_profil_sheet.dart';
 import 'widgets/merchant_bottom_nav.dart';
+import 'widgets/merchant_stat_list.dart';
 
 class MerchantHome extends StatefulWidget {
   final String token;
@@ -242,15 +243,13 @@ class _MerchantHomeState extends State<MerchantHome> {
     Navigator.pushReplacement(context, platformRoute(builder: (_) => const AuthScreen()));
   }
 
-  void _showProfilSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+  void _openProfilScreen() {
+    Navigator.push(context, platformRoute(
       builder: (_) => MerchantProfilSheet(
         token: widget.token,
         merchantInfo: _merchantInfo,
         onLogout: _logout,
+        isTab: true,
         onNavigateToNotifs: () => Navigator.push(context, platformRoute(
           builder: (_) => NotificationsScreen(
             token: widget.token,
@@ -287,13 +286,13 @@ class _MerchantHomeState extends State<MerchantHome> {
           ),
         )),
       ),
-    );
+    ));
   }
 
   // ── Blocs UI ──────────────────────────────────────────────────────────────
 
   Widget _headerBlock() => GestureDetector(
-        onTap: _showProfilSheet,
+        onTap: _openProfilScreen,
         child: Container(
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -329,7 +328,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       );
 
   Widget _statsBlock() => Container(
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 30),
         decoration: BoxDecoration(
           color: const Color(0xFF0B1220),
@@ -370,7 +369,7 @@ class _MerchantHomeState extends State<MerchantHome> {
   Widget _periodSelector() {
     const labels = ["Aujourd'hui", '7 jours', '30 jours'];
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color(0xFFE8DFD2),
@@ -440,44 +439,13 @@ class _MerchantHomeState extends State<MerchantHome> {
       retourStr  = scans > 0 ? '${(rewards * 100 / scans).round()} %' : '0 %';
     }
 
-    final rows = [
-      (Icons.people_outline,          'Clients venus',       '$scans'),
-      (Icons.card_giftcard_outlined,  'Récompenses données', '$rewards'),
-      (Icons.add_circle_outline,      'Nouveaux clients',    '$newClients'),
-      (Icons.replay_rounded,          'Taux de retour',      retourStr),
-    ];
-
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(children: [
-        for (int i = 0; i < rows.length; i++) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            child: Row(children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEBF3FF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(rows[i].$1, color: const Color(0xFF2C7BE5), size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text(rows[i].$2,
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500,
-                  color: const Color(0xFF111827)))),
-              Text(rows[i].$3,
-                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700,
-                  color: const Color(0xFF111827))),
-            ]),
-          ),
-          if (i < rows.length - 1)
-            const Divider(height: 1, indent: 64, endIndent: 16, color: Color(0xFFF3F4F6)),
-        ],
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+      child: MerchantStatList(rows: [
+        MerchantStatRow(icon: CupertinoIcons.person_2,                label: 'Clients venus',       value: '$scans'),
+        MerchantStatRow(icon: CupertinoIcons.gift,                    label: 'Récompenses données', value: '$rewards'),
+        MerchantStatRow(icon: CupertinoIcons.plus_circle,             label: 'Nouveaux clients',    value: '$newClients'),
+        MerchantStatRow(icon: CupertinoIcons.arrow_counterclockwise,  label: 'Taux de retour',      value: retourStr),
       ]),
     );
   }
@@ -491,11 +459,11 @@ class _MerchantHomeState extends State<MerchantHome> {
           onPageChanged: (i) => setState(() => _carouselPage = i),
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: _passagesContent(),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: GestureDetector(
                 onTap: _navigateToCarteEditor,
                 child: Container(
@@ -514,7 +482,7 @@ class _MerchantHomeState extends State<MerchantHome> {
       ),
       const SizedBox(height: 8),
       Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(children: [
           Expanded(child: AnimatedOpacity(
             opacity: _carouselPage == 1 ? 1.0 : 0.0,
@@ -641,7 +609,7 @@ class _MerchantHomeState extends State<MerchantHome> {
     return GestureDetector(
       onTap: () {},
       child: Container(
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,

@@ -9,6 +9,7 @@ class MerchantProfilSheet extends StatelessWidget {
   final String token;
   final Map? merchantInfo;
   final VoidCallback onLogout;
+  final bool isTab;
   final VoidCallback? onNavigateToProgram;
   final VoidCallback? onNavigateToNotifs;
   final VoidCallback? onNavigateToQR;
@@ -22,6 +23,7 @@ class MerchantProfilSheet extends StatelessWidget {
     required this.token,
     required this.merchantInfo,
     required this.onLogout,
+    this.isTab = false,
     this.onNavigateToProgram,
     this.onNavigateToNotifs,
     this.onNavigateToQR,
@@ -33,6 +35,38 @@ class MerchantProfilSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isTab) {
+      // Mode écran plein avec flèche retour
+      return Scaffold(
+        backgroundColor: kIsIOS
+            ? (context.isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7))
+            : context.cBg,
+        body: SafeArea(
+          child: Column(children: [
+            // En-tête avec flèche retour
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+              child: Row(children: [
+                IconButton(
+                  icon: kIsIOS
+                      ? const Icon(CupertinoIcons.chevron_left, size: 20)
+                      : const Icon(Icons.arrow_back_rounded, size: 22),
+                  color: context.cText,
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Text('Profil',
+                  style: TextStyle(
+                    fontSize: kIsIOS ? 17 : 18,
+                    fontWeight: FontWeight.w700,
+                    color: context.cText,
+                  )),
+              ]),
+            ),
+            Expanded(child: kIsIOS ? _buildIOS(context) : _buildMaterial(context)),
+          ]),
+        ),
+      );
+    }
     if (kIsIOS) return _buildIOS(context);
     return _buildMaterial(context);
   }
@@ -49,12 +83,9 @@ class MerchantProfilSheet extends StatelessWidget {
     final initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
 
     return Container(
-      decoration: BoxDecoration(
-        color: kBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(
+      color: kBg,
+      child: Column(mainAxisSize: isTab ? MainAxisSize.max : MainAxisSize.min, children: [
+        if (!isTab) Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Center(child: Container(
             width: 36, height: 4,
@@ -91,12 +122,12 @@ class MerchantProfilSheet extends StatelessWidget {
                 icon: Icons.description_outlined,
                 iconBg: kPrimary.withValues(alpha: 0.12), iconColor: kPrimary,
                 label: 'Informations', sub: 'Nom, adresse',
-                onTap: () { Navigator.pop(context); onNavigateToInfo?.call(); }),
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToInfo?.call(); }),
               _Row(kBorder: kBorder, kText: kText, kSub: kSub,
                 icon: Icons.credit_card_outlined,
                 iconBg: kSuccess.withValues(alpha: 0.12), iconColor: kSuccess,
                 label: 'Ma carte fidélité', sub: 'Tampons, récompense, couleur',
-                onTap: () { Navigator.pop(context); onNavigateToCarteEditor?.call(); },
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToCarteEditor?.call(); },
                 noBorder: true),
             ]),
             const SizedBox(height: 14),
@@ -108,17 +139,17 @@ class MerchantProfilSheet extends StatelessWidget {
                 icon: Icons.notifications_outlined,
                 iconBg: kGold.withValues(alpha: 0.12), iconColor: kGold,
                 label: 'Notifications push', sub: 'Promos, rappels',
-                onTap: () { Navigator.pop(context); onNavigateToNotifs?.call(); }),
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToNotifs?.call(); }),
               _Row(kBorder: kBorder, kText: kText, kSub: kSub,
                 icon: Icons.qr_code_2_rounded,
                 iconBg: kPrimary.withValues(alpha: 0.12), iconColor: kPrimary,
                 label: 'QR Code boutique', sub: 'Afficher en caisse',
-                onTap: () { Navigator.pop(context); onNavigateToQR?.call(); }),
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToQR?.call(); }),
               _Row(kBorder: kBorder, kText: kText, kSub: kSub,
                 icon: Icons.show_chart_rounded,
                 iconBg: kPurple.withValues(alpha: 0.12), iconColor: kPurple,
                 label: 'Statistiques', sub: "Analyse de l'activité",
-                onTap: () { Navigator.pop(context); onNavigateToStats?.call(); },
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToStats?.call(); },
                 noBorder: true),
             ]),
             const SizedBox(height: 14),
@@ -130,7 +161,7 @@ class MerchantProfilSheet extends StatelessWidget {
                 icon: Icons.help_outline_rounded,
                 iconBg: kBg, iconColor: kSub,
                 label: 'Aide & Support', sub: 'FAQ, nous contacter',
-                onTap: () => Navigator.pop(context)),
+                onTap: () { if (!isTab) Navigator.pop(context); }),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: themeNotifier,
                 builder: (_, mode, __) => Padding(
@@ -198,13 +229,10 @@ class MerchantProfilSheet extends StatelessWidget {
     final initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
 
     return Container(
-      decoration: BoxDecoration(
-        color: sheetBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // Handle iOS style
-        Padding(
+      color: sheetBg,
+      child: Column(mainAxisSize: isTab ? MainAxisSize.max : MainAxisSize.min, children: [
+        // Handle iOS style (seulement en mode sheet)
+        if (!isTab) Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Center(child: Container(
             width: 36, height: 5,
@@ -244,12 +272,12 @@ class MerchantProfilSheet extends StatelessWidget {
                   icon: CupertinoIcons.doc_text,
                   iconBg: kPrimary, label: 'Informations',
                   sub: 'Nom, adresse',
-                  onTap: () { Navigator.pop(context); onNavigateToInfo?.call(); }),
+                  onTap: () { if (!isTab) Navigator.pop(context); onNavigateToInfo?.call(); }),
                 _IosRow(
                   icon: CupertinoIcons.creditcard,
                   iconBg: kSuccess, label: 'Ma carte fidélité',
                   sub: 'Tampons, récompense, couleur',
-                  onTap: () { Navigator.pop(context); onNavigateToCarteEditor?.call(); },
+                  onTap: () { if (!isTab) Navigator.pop(context); onNavigateToCarteEditor?.call(); },
                   isLast: true),
               ],
             ),
@@ -261,17 +289,17 @@ class MerchantProfilSheet extends StatelessWidget {
                   icon: CupertinoIcons.bell,
                   iconBg: kGold, label: 'Notifications push',
                   sub: 'Promos, rappels',
-                  onTap: () { Navigator.pop(context); onNavigateToNotifs?.call(); }),
+                  onTap: () { if (!isTab) Navigator.pop(context); onNavigateToNotifs?.call(); }),
                 _IosRow(
                   icon: CupertinoIcons.qrcode,
                   iconBg: kPrimary, label: 'QR Code boutique',
                   sub: 'Afficher en caisse',
-                  onTap: () { Navigator.pop(context); onNavigateToQR?.call(); }),
+                  onTap: () { if (!isTab) Navigator.pop(context); onNavigateToQR?.call(); }),
                 _IosRow(
                   icon: CupertinoIcons.chart_bar,
                   iconBg: kPurple, label: 'Statistiques',
                   sub: "Analyse de l'activité",
-                  onTap: () { Navigator.pop(context); onNavigateToStats?.call(); },
+                  onTap: () { if (!isTab) Navigator.pop(context); onNavigateToStats?.call(); },
                   isLast: true),
               ],
             ),
@@ -283,7 +311,7 @@ class MerchantProfilSheet extends StatelessWidget {
                   icon: CupertinoIcons.question_circle,
                   iconBg: const Color(0xFF636366),
                   label: 'Aide & Support', sub: 'FAQ, nous contacter',
-                  onTap: () => Navigator.pop(context)),
+                  onTap: () { if (!isTab) Navigator.pop(context); }),
                 // Toggle mode sombre
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: themeNotifier,
