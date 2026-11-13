@@ -18,7 +18,9 @@ import 'info_commerce_screen.dart';
 import 'carte_editor_screen.dart';
 import 'merchant_tokens.dart';
 import 'merchant_profil_sheet.dart';
+import 'merchant_profil_sheet_ios.dart';
 import 'widgets/merchant_bottom_nav.dart';
+import 'widgets/merchant_bottom_nav_ios.dart';
 import 'widgets/merchant_stat_list.dart';
 
 class MerchantHome extends StatefulWidget {
@@ -244,48 +246,63 @@ class _MerchantHomeState extends State<MerchantHome> {
   }
 
   void _openProfilScreen() {
-    Navigator.push(context, platformRoute(
-      builder: (_) => MerchantProfilSheet(
+    void goNotifs() => Navigator.push(context, platformRoute(
+      builder: (_) => NotificationsScreen(
         token: widget.token,
         merchantInfo: _merchantInfo,
-        onLogout: _logout,
-        isTab: true,
-        onNavigateToNotifs: () => Navigator.push(context, platformRoute(
-          builder: (_) => NotificationsScreen(
-            token: widget.token,
-            merchantInfo: _merchantInfo,
-            initialClients: _recentClients,
-          ))),
-        onNavigateToQR: () => Navigator.push(context, platformRoute(
-          builder: (_) => StaticQRScreen(
-            token: widget.token,
-            businessName: _businessName,
-            accentColor: kPrimary,
-          ),
-        )),
-        onNavigateToAbonnement: () => Navigator.push(context, platformRoute(
-          builder: (_) => const AbonnementScreen(),
-        )),
-        onNavigateToInfo: () => Navigator.push(context, platformRoute(
-          builder: (_) => InfoCommerceScreen(
-            token: widget.token,
-            merchantInfo: _merchantInfo ?? {},
-          ),
-        )).then((updated) {
-          if (updated != null && mounted) setState(() => _merchantInfo = updated as Map);
-        }),
-        onNavigateToCarteEditor: _navigateToCarteEditor,
-        onNavigateToStats: () => Navigator.push(context, platformRoute(
-          builder: (_) => StatsScreen(
-            token: widget.token,
-            merchantInfo: _merchantInfo,
-            initialStats:   _stats,
-            initialDaily:   _daily,
-            initialHistory: _scanHistory,
-            initialClients: _recentClients,
-          ),
-        )),
-      ),
+        initialClients: _recentClients,
+      )));
+    void goQR() => Navigator.push(context, platformRoute(
+      builder: (_) => StaticQRScreen(
+        token: widget.token,
+        businessName: _businessName,
+        accentColor: kPrimary,
+      )));
+    void goAbonnement() => Navigator.push(context, platformRoute(
+      builder: (_) => const AbonnementScreen()));
+    void goInfo() => Navigator.push(context, platformRoute(
+      builder: (_) => InfoCommerceScreen(
+        token: widget.token,
+        merchantInfo: _merchantInfo ?? {},
+      ))).then((updated) {
+        if (updated != null && mounted) setState(() => _merchantInfo = updated as Map);
+      });
+    void goStats() => Navigator.push(context, platformRoute(
+      builder: (_) => StatsScreen(
+        token: widget.token,
+        merchantInfo: _merchantInfo,
+        initialStats:   _stats,
+        initialDaily:   _daily,
+        initialHistory: _scanHistory,
+        initialClients: _recentClients,
+      )));
+
+    Navigator.push(context, platformRoute(
+      builder: (_) => kIsIOS
+          ? MerchantProfilSheetIos(
+              token: widget.token,
+              merchantInfo: _merchantInfo,
+              onLogout: _logout,
+              isTab: true,
+              onNavigateToNotifs: goNotifs,
+              onNavigateToQR: goQR,
+              onNavigateToAbonnement: goAbonnement,
+              onNavigateToInfo: goInfo,
+              onNavigateToCarteEditor: _navigateToCarteEditor,
+              onNavigateToStats: goStats,
+            )
+          : MerchantProfilSheet(
+              token: widget.token,
+              merchantInfo: _merchantInfo,
+              onLogout: _logout,
+              isTab: true,
+              onNavigateToNotifs: goNotifs,
+              onNavigateToQR: goQR,
+              onNavigateToAbonnement: goAbonnement,
+              onNavigateToInfo: goInfo,
+              onNavigateToCarteEditor: _navigateToCarteEditor,
+              onNavigateToStats: goStats,
+            ),
     ));
   }
 
@@ -674,11 +691,18 @@ class _MerchantHomeState extends State<MerchantHome> {
                   initialCardDesign: _cardDesign,
                 )
               : _homeContent(),
-            MerchantBottomNav(
-              currentTab:   _tab,
-              onTabChanged: (i) => setState(() => _tab = i),
-              onScanTap:    _openScanner,
-            ),
+            if (kIsIOS)
+              MerchantBottomNavIos(
+                currentTab:   _tab,
+                onTabChanged: (i) => setState(() => _tab = i),
+                onScanTap:    _openScanner,
+              )
+            else
+              MerchantBottomNav(
+                currentTab:   _tab,
+                onTabChanged: (i) => setState(() => _tab = i),
+                onScanTap:    _openScanner,
+              ),
           ],
         ),
       ),

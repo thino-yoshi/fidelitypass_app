@@ -3,11 +3,17 @@ import '../merchant_tokens.dart';
 import '../logic/merchant_stats_logic.dart';
 import '../../../config/app_colors.dart';
 import 'merchant_google_bubble.dart';
+import 'merchant_google_bubble_ios.dart';
 import 'merchant_period_toggle.dart';
+import 'merchant_period_toggle_ios.dart';
 import 'merchant_kpi_grid.dart';
+import 'merchant_kpi_grid_ios.dart';
 import 'merchant_retention_card.dart';
+import 'merchant_retention_card_ios.dart';
 import 'merchant_graph_card.dart';
+import 'merchant_graph_card_ios.dart';
 import 'merchant_card_preview.dart';
+import 'merchant_card_preview_ios.dart';
 
 class MerchantDashboard extends StatelessWidget {
   final Map merchantInfo;
@@ -59,37 +65,72 @@ class MerchantDashboard extends StatelessWidget {
         child: ListView(
           padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + MediaQuery.of(context).padding.bottom),
           children: [
-            MerchantGoogleBubble(token: token, merchantInfo: merchantInfo),
+            if (kIsIOS)
+              MerchantGoogleBubbleIos(token: token, merchantInfo: merchantInfo)
+            else
+              MerchantGoogleBubble(token: token, merchantInfo: merchantInfo),
             const SizedBox(height: 12),
-            MerchantPeriodToggle(period: period, onChanged: onPeriodChanged),
+            if (kIsIOS)
+              MerchantPeriodToggleIos(period: period, onChanged: onPeriodChanged)
+            else
+              MerchantPeriodToggle(period: period, onChanged: onPeriodChanged),
             const SizedBox(height: 12),
-            MerchantKpiGrid(agg: agg, period: period, isPoints: isPoints),
+            if (kIsIOS)
+              MerchantKpiGridIos(agg: agg, period: period, isPoints: isPoints)
+            else
+              MerchantKpiGrid(agg: agg, period: period, isPoints: isPoints),
             const SizedBox(height: 12),
-            MerchantRetentionCard(
-              scanHistory: scanHistory,
-              retPeriod: retPeriod,
-              onPeriodChanged: onRetPeriodChanged,
-            ),
+            if (kIsIOS)
+              MerchantRetentionCardIos(
+                scanHistory: scanHistory,
+                retPeriod: retPeriod,
+                onPeriodChanged: onRetPeriodChanged,
+              )
+            else
+              MerchantRetentionCard(
+                scanHistory: scanHistory,
+                retPeriod: retPeriod,
+                onPeriodChanged: onRetPeriodChanged,
+              ),
             const SizedBox(height: 14),
             Center(child: Text('Statistiques générales',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: context.cText))),
             const SizedBox(height: 8),
-            MerchantGraphCard(
-              daily: daily,
-              graphRange: graphRange,
-              onRangeChanged: onGraphRangeChanged,
-              token: token,
-              merchantInfo: merchantInfo,
-              stats: stats,
-              scanHistory: scanHistory,
-              recentClients: recentClients,
-            ),
+            if (kIsIOS)
+              MerchantGraphCardIos(
+                daily: daily,
+                graphRange: graphRange,
+                onRangeChanged: onGraphRangeChanged,
+                token: token,
+                merchantInfo: merchantInfo,
+                stats: stats,
+                scanHistory: scanHistory,
+                recentClients: recentClients,
+              )
+            else
+              MerchantGraphCard(
+                daily: daily,
+                graphRange: graphRange,
+                onRangeChanged: onGraphRangeChanged,
+                token: token,
+                merchantInfo: merchantInfo,
+                stats: stats,
+                scanHistory: scanHistory,
+                recentClients: recentClients,
+              ),
             const SizedBox(height: 12),
-            MerchantCardPreview(
-              cardDesign: cardDesign,
-              merchantInfo: merchantInfo,
-              onEditTap: onNavigateToCarteEditor,
-            ),
+            if (kIsIOS)
+              MerchantCardPreviewIos(
+                cardDesign: cardDesign,
+                merchantInfo: merchantInfo,
+                onEditTap: onNavigateToCarteEditor,
+              )
+            else
+              MerchantCardPreview(
+                cardDesign: cardDesign,
+                merchantInfo: merchantInfo,
+                onEditTap: onNavigateToCarteEditor,
+              ),
           ],
         ),
       )),

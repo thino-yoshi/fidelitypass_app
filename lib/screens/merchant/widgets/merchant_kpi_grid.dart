@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../merchant_tokens.dart';
 import '../../../config/app_colors.dart';
 
 class MerchantKpiGrid extends StatelessWidget {
@@ -16,7 +15,6 @@ class MerchantKpiGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = kIsIOS;
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _KpiCard(
@@ -24,7 +22,6 @@ class MerchantKpiGrid extends StatelessWidget {
           label: "Clients ${period == 'today' ? "aujourd'hui" : 'actifs'}",
           delta: null,
           period: period,
-          isIOS: isIOS,
         ),
         const SizedBox(width: 8),
         _KpiCard(
@@ -32,7 +29,6 @@ class MerchantKpiGrid extends StatelessWidget {
           label: isPoints ? 'Points ajoutés' : 'Tampons ajoutés',
           delta: agg['scansDelta'],
           period: period,
-          isIOS: isIOS,
         ),
         const SizedBox(width: 8),
         _KpiCard(
@@ -40,7 +36,6 @@ class MerchantKpiGrid extends StatelessWidget {
           label: 'Nouveaux clients',
           delta: null,
           period: period,
-          isIOS: isIOS,
         ),
       ]),
     );
@@ -52,11 +47,10 @@ class _KpiCard extends StatelessWidget {
   final String label;
   final int? delta;
   final String period;
-  final bool isIOS;
 
   const _KpiCard({
     required this.value, required this.label, required this.delta,
-    required this.period, required this.isIOS,
+    required this.period,
   });
 
   @override
@@ -79,37 +73,6 @@ class _KpiCard extends StatelessWidget {
       );
     }
 
-    // ── iOS : fond gris clair, valeur en bleu brand ──
-    if (isIOS) {
-      final isDark  = context.isDark;
-      final cardBg  = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
-      final cardBorder = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE0E0E5);
-      final valColor = kPrimary;
-      final lblColor = isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
-
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: cardBorder, width: 0.5),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value,
-              style: TextStyle(
-                fontSize: 26, fontWeight: FontWeight.w700,
-                color: valColor, height: 1,
-                fontFamily: '.SF Pro Display')),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 9.5, color: lblColor)),
-            if (deltaChip != null) deltaChip,
-          ]),
-        ),
-      );
-    }
-
-    // ── Android : fond navy sombre ──
     return Expanded(
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),

@@ -37,6 +37,7 @@ final notifOpenNotifier = ValueNotifier<int>(0);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   // Pre-warm Railway dès que possible (fire-and-forget)
   // Railway cold start peut prendre 5-9s — on lance le ping pendant Supabase+Firebase init

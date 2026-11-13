@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../merchant_tokens.dart';
 import '../logic/merchant_stats_logic.dart';
@@ -48,13 +47,6 @@ class MerchantGraphCard extends StatelessWidget {
         1, (m, g) => (g['stamps'] as int) > m ? (g['stamps'] as int).toDouble() : m);
     final headroom = maxV * 1.28;
 
-    if (kIsIOS) return _buildIOS(context, groups, headroom);
-    return _buildMaterial(context, groups, headroom);
-  }
-
-  // ─── Android ────────────────────────────────────────────────────────────────
-  Widget _buildMaterial(BuildContext context,
-      List<Map<String, dynamic>> groups, double headroom) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -76,57 +68,6 @@ class MerchantGraphCard extends StatelessWidget {
           const SizedBox(width: 4),
           _RangeBtn(value: '30j', label: 'Mois', current: graphRange, onTap: onRangeChanged),
         ]),
-        const SizedBox(height: 14),
-        _buildBars(context, groups, headroom),
-        const SizedBox(height: 8),
-        Row(children: [
-          _Legend(color: kPrimary,  label: 'Clients'),
-          const SizedBox(width: 14),
-          _Legend(color: kSuccess, label: 'Récompenses'),
-        ]),
-      ]),
-    );
-  }
-
-  // ─── iOS : fond gris clair, boutons segmentés Cupertino ─────────────────────
-  Widget _buildIOS(BuildContext context,
-      List<Map<String, dynamic>> groups, double headroom) {
-    final isDark     = context.isDark;
-    final cardBg     = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
-    final cardBorder = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE0E0E5);
-    final titleColor = isDark ? Colors.white : const Color(0xFF000000);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 0.5),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text('Fréquence des clients',
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: titleColor))),
-          CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () => _openStats(context),
-            child: const Text('Voir stats',
-              style: TextStyle(fontSize: 12, color: kPrimary))),
-        ]),
-        const SizedBox(height: 8),
-        CupertinoSlidingSegmentedControl<String>(
-          groupValue: graphRange,
-          onValueChanged: (v) { if (v != null) onRangeChanged(v); },
-          thumbColor: isDark ? const Color(0xFF3A3A3C) : Colors.white,
-          backgroundColor: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFE9E9EE),
-          children: const {
-            '7j':  Padding(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    child: Text('7 jours',  style: TextStyle(fontSize: 12))),
-            '30j': Padding(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    child: Text('Mois',     style: TextStyle(fontSize: 12))),
-          },
-        ),
         const SizedBox(height: 14),
         _buildBars(context, groups, headroom),
         const SizedBox(height: 8),
