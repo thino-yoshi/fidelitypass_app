@@ -2206,10 +2206,7 @@ class _ClientHomeState extends State<ClientHome>
               CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v))
             else
               CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v)),
-            if (kIsIOS)
-              ClientRewardsIos(rewards: _rewards, cards: _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual)
-            else
-              RewardsTab(token: widget.token, userName: _userName, initialRewards: _rewards, onChanged: _refreshManual),
+            ClientRewardsIos(rewards: _rewards, cards: _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual),
           ],
         );
       case 1:

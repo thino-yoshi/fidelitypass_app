@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -6,8 +7,11 @@ import '../../config/api.dart';
 import '../../config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../utils/platform_route.dart';
-import 'cards_tab.dart' show CardStyle, LoyaltyCardFace;
+import 'cards_tab.dart' show CardStyle;
 import '../../config/app_text.dart';
+import 'widgets/client_notifications_ios.dart' show GlassBackButton;
+import 'widgets/client_header_ios.dart' show iosReadableWidth;
+import '../merchant/merchant_tokens.dart' show kPrimary, kError;
 
 enum _SortMode { recent, oldest, mostStamps, leastStamps }
 
@@ -36,6 +40,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
   String _search = '';
   final Set<String> _selected = {};
   bool _deleting = false;
+  bool _editing  = false;
   late List<dynamic> _cards;
 
   static const List<Color> _palette = [
@@ -132,16 +137,15 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
     const body = 'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.';
     final confirmLabel = countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer';
 
-    return AlertDialog(
-      backgroundColor: context.qSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text(title, style: TextStyle(color: context.qText, fontWeight: FontWeight.w800, fontSize: 17)),
-      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(body, style: TextStyle(color: context.qSub, fontSize: 13, height: 1.55)),
+    return CupertinoAlertDialog(
+      title: Text(title),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(height: 4),
+        const Text(body),
         if (lostRewards > 0) _rewardsWarning(lostRewards),
       ]),
       actions: [
-        CupertinoDialogAction(onPressed: onCancel, child: Text('Annuler', style: TextStyle(color: context.qSub))),
+        CupertinoDialogAction(onPressed: onCancel, child: const Text('Annuler')),
         CupertinoDialogAction(
           isDestructiveAction: true,
           onPressed: onConfirm,
@@ -154,7 +158,6 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
   Future<void> _deleteSelected() async {
     final n = _selected.length;
 
-    // Compter les récompenses perdues pour les marchands sélectionnés
     final selectedMerchantIds = _cards
         .where((c) => _selected.contains(c['id'] as String?))
         .map((c) => c['merchant_id'] as String?)
@@ -163,7 +166,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         .where((r) => selectedMerchantIds.contains(r['merchant_id'] as String?))
         .length;
 
-    final confirm = await showDialog<bool>(
+    final confirm = await showCupertinoDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -213,298 +216,163 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
     widget.onRefresh();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cards = _sorted;
-    final allSelected = cards.isNotEmpty && _selected.length == cards.length;
-
-    return Scaffold(
-      backgroundColor: context.qNavy,
-      body: Column(
-        children: [
-          SizedBox(height: MediaQuery.of(context).padding.top),
-          _buildHeader(allSelected, cards),
-          _buildSortRow(),
-          Expanded(
-            child: Container(
-              color: context.qBg,
-              child: cards.isEmpty
-                  ? _buildEmpty()
-                  : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(
-                          16, 16, 16, _selected.isNotEmpty ? 100 : 40),
-                      itemCount: cards.length,
-                      itemBuilder: (_, i) {
-                        final card = cards[i] as Map;
-                        final id = card['id'] as String? ?? '';
-                        final selected = _selected.contains(id);
-                        final style = _styleFromCard(card, i);
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: GestureDetector(
-                            onTap: () => _toggle(id),
-                            child: Stack(
-                              children: [
-                                SizedBox(
-                                  height: 220,
-                                  child: LoyaltyCardFace(
-                                    card: card,
-                                    style: style,
-                                    userName: widget.userName,
-                                  ),
-                                ),
-                                if (selected)
-                                  Positioned.fill(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Container(
-                                        color: const Color(0xFFE53E3E).withValues(alpha: 0.32),
-                                        child: const Center(
-                                          child: Icon(Icons.check_circle_rounded,
-                                              color: Colors.white, size: 40),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _selected.isNotEmpty ? _buildDeleteBar() : null,
-    );
+  String _initials(String name) {
+    final w = name.trim().split(RegExp(r'\s+')).where((e) => RegExp(r'^[A-Za-zÀ-ÿ0-9]').hasMatch(e)).toList();
+    if (w.isEmpty) return '';
+    return (w.length >= 2 ? '${w[0][0]}${w[1][0]}' : w[0].substring(0, w[0].length < 2 ? w[0].length : 2)).toUpperCase();
   }
 
-  Widget _buildHeader(bool allSelected, List<dynamic> cards) {
-    return Container(
-      color: context.qNavy,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.09),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white, size: 16),
+  Widget _seg(String t) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText)),
+      );
+
+  Widget _cardRow(Map card, int index) {
+    final id = card['id'] as String? ?? '';
+    final m = (card['merchants'] as Map?) ?? const {};
+    final name = m['business_name'] as String? ?? '';
+    final isPoints = (m['program_type'] as String? ?? 'stamps') == 'points';
+    final count = isPoints ? (card['points_count'] as int? ?? 0) : (card['stamps_count'] as int? ?? 0);
+    final goal = isPoints ? (m['points_required'] as int? ?? 100) : (m['stamps_required'] as int? ?? 10);
+    final style = _styleFromCard(card, index);
+    final selected = _selected.contains(id);
+    final row = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _editing ? () => _toggle(id) : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(children: [
+          if (_editing) ...[
+            Icon(selected ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle,
+                color: selected ? kPrimary : context.cSub.withValues(alpha: 0.6), size: 24),
+            const SizedBox(width: 8),
+          ],
+          SizedBox(
+            width: 42, height: 42,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Stack(fit: StackFit.expand, children: [
+                style.buildBackground(),
+                Center(child: Text(_initials(name), style: TextStyle(color: style.textColor, fontSize: 14, fontWeight: FontWeight.w700))),
+              ]),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Mes cartes',
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-                Text(
-                  '${_cards.length} carte${_cards.length > 1 ? 's' : ''}'
-                  '${_selected.isNotEmpty ? ' · ${_selected.length} sélectionnée${_selected.length > 1 ? 's' : ''}' : ''}',
-                  style: TextStyle(
-                    color: _selected.isNotEmpty
-                        ? const Color(0xFFE53E3E).withValues(alpha: 0.85)
-                        : Colors.white.withValues(alpha: 0.4),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: QText.body.copyWith(fontSize: 17, color: context.cText)),
+              Text(isPoints ? '$count/$goal pts' : '$count/$goal tampons', style: QText.caption.copyWith(fontSize: 14, color: context.cSub)),
+            ]),
           ),
-          if (cards.isNotEmpty)
-            GestureDetector(
-              onTap: () => setState(() {
-                if (allSelected) {
-                  _selected.clear();
-                } else {
-                  _selected.addAll(cards.map((c) => c['id'] as String));
-                }
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                decoration: BoxDecoration(
-                  color: allSelected
-                      ? const Color(0xFFE53E3E).withValues(alpha: 0.12)
-                      : Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                    color: allSelected
-                        ? const Color(0xFFE53E3E).withValues(alpha: 0.35)
-                        : Colors.white.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: Text(
-                  allSelected ? 'Désélect.' : 'Tout',
-                  style: TextStyle(
-                    color: allSelected
-                        ? const Color(0xFFE57373)
-                        : const Color(0xFF4A9EFF),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ]),
       ),
+    );
+    if (_editing) return row;
+    return Dismissible(
+      key: ValueKey('mc-$id'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        color: kError,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Text('Supprimer', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+      ),
+      confirmDismiss: (_) async {
+        setState(() { _selected..clear()..add(id); });
+        await _deleteSelected();
+        return false;
+      },
+      child: row,
     );
   }
 
-  Widget _buildSortRow() {
-    return Container(
-      color: context.qNavy,
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _chip('Récentes', _SortMode.recent, Icons.access_time_rounded),
-                const SizedBox(width: 7),
-                _chip('Anciennes', _SortMode.oldest, Icons.history_rounded),
-                const SizedBox(width: 7),
-                _chip('+ Tampons', _SortMode.mostStamps, Icons.trending_up_rounded),
-                const SizedBox(width: 7),
-                _chip('- Tampons', _SortMode.leastStamps, Icons.trending_down_rounded),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            onChanged: (v) => setState(() => _search = v),
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'Rechercher un commerce…',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 14),
-              prefixIcon: Icon(Icons.search_rounded,
-                  color: Colors.white.withValues(alpha: 0.4), size: 20),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.07),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                    color: const Color(0xFF4A9EFF).withValues(alpha: 0.6), width: 1.5),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(String label, _SortMode mode, IconData icon) {
-    final active = _sort == mode;
-    return GestureDetector(
-      onTap: () => setState(() => _sort = mode),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 170),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-        decoration: BoxDecoration(
-          color: active
-              ? const Color(0xFF2C7BE5).withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active
-                ? const Color(0xFF4A9EFF).withValues(alpha: 0.55)
-                : Colors.white.withValues(alpha: 0.1),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+  @override
+  Widget build(BuildContext context) {
+    final cards = _sorted;
+    final top = MediaQuery.of(context).padding.top;
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Scaffold(
+      backgroundColor: context.cBg,
+      body: iosReadableWidth(Stack(children: [
+        ListView(
+          physics: const BouncingScrollPhysics(),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(16, top + 8, 16, bottom + (_editing ? 100 : 30)),
           children: [
-            Icon(icon, size: 12,
-                color: active ? const Color(0xFF4A9EFF) : Colors.white38),
-            const SizedBox(width: 5),
-            Text(label,
-                style: TextStyle(
-                  color: active ? const Color(0xFF4A9EFF) : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                )),
+            Row(children: [
+              GlassBackButton(onTap: () => Navigator.maybePop(context)),
+              const Spacer(),
+              if (_cards.isNotEmpty)
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  onPressed: () => setState(() { _editing = !_editing; _selected.clear(); }),
+                  child: Text(_editing ? 'OK' : 'Modifier',
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kPrimary)),
+                ),
+            ]),
+            const SizedBox(height: 14),
+            Text('Mes cartes', style: QText.largeTitle(context).copyWith(color: context.cText)),
+            Text('${_cards.length} carte${_cards.length > 1 ? 's' : ''}', style: QText.body.copyWith(fontSize: 17, color: context.cSub)),
+            const SizedBox(height: 14),
+            CupertinoSearchTextField(
+              placeholder: 'Rechercher une carte',
+              onChanged: (v) => setState(() => _search = v),
+              style: QText.body.copyWith(fontSize: 17, color: context.cText),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoSlidingSegmentedControl<_SortMode>(
+                groupValue: _sort == _SortMode.leastStamps ? _SortMode.mostStamps : _sort,
+                padding: const EdgeInsets.all(2),
+                children: {
+                  _SortMode.recent:  _seg('Récentes'),
+                  _SortMode.oldest:  _seg('Anciennes'),
+                  _SortMode.mostStamps: _seg('Tampons'),
+                },
+                onValueChanged: (v) { if (v != null) setState(() => _sort = v); },
+              ),
+            ),
+            const SizedBox(height: 18),
+            if (cards.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 30),
+                child: Center(child: Text('Aucune carte trouvée', style: QText.body.copyWith(color: context.cSub))),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14)),
+                clipBehavior: Clip.antiAlias,
+                child: Column(children: [
+                  for (var i = 0; i < cards.length; i++) ...[
+                    if (i > 0) Padding(padding: EdgeInsets.only(left: _editing ? 102 : 70), child: Container(height: 0.5, color: context.cBorder)),
+                    _cardRow(cards[i] as Map, i),
+                  ],
+                ]),
+              ),
+            if (!_editing && cards.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text('Glisse une carte vers la gauche pour la supprimer.', style: QText.label.copyWith(color: context.cSub)),
+              ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(
-              color: context.qSurface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.qBorder),
+        if (_editing)
+          Positioned(
+            left: 16, right: 16, bottom: bottom + 12,
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              borderRadius: BorderRadius.circular(14),
+              color: kError,
+              disabledColor: context.cSub.withValues(alpha: 0.25),
+              onPressed: _selected.isEmpty || _deleting ? null : _deleteSelected,
+              child: _deleting
+                  ? const CupertinoActivityIndicator(color: Colors.white)
+                  : Text(_selected.isEmpty ? 'Choisis des cartes' : 'Supprimer (${_selected.length})',
+                      style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
             ),
-            child: Icon(Icons.credit_card_off_outlined, size: 34, color: context.qSub),
           ),
-          const SizedBox(height: 16),
-          Text('Aucune carte',
-              style: TextStyle(
-                  color: context.qText, fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text('Scanne un QR pour rejoindre un programme',
-              style: TextStyle(color: context.qSub, fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDeleteBar() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-        child: ElevatedButton.icon(
-          onPressed: _deleting ? null : _deleteSelected,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE53E3E),
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 52),
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          icon: _deleting
-              ? const SizedBox(
-                  width: 18, height: 18,
-                  child: CircularProgressIndicator.adaptive())
-              : const Icon(Icons.delete_rounded, size: 20),
-          label: Text(
-            _deleting
-                ? 'Suppression en cours...'
-                : 'Supprimer ${_selected.length} carte${_selected.length > 1 ? 's' : ''}',
-            style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.2),
-          ),
-        ),
-      ),
+      ])),
     );
   }
 }
