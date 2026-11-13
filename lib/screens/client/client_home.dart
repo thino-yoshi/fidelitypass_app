@@ -20,9 +20,12 @@ import '../../config/api.dart';
 import '../../main.dart';
 import '../auth_screen.dart';
 import 'cards_tab.dart';
+import 'cards_tab_ios.dart';
 import 'history_tab.dart';
+import 'history_tab_ios.dart';
 import 'rewards_wallet_screen.dart';
 import 'manage_cards_screen.dart';
+import 'manage_cards_screen_ios.dart';
 import 'notifications_sheet.dart';
 import 'help_sheet.dart';
 import 'widgets/client_bottom_nav_ios.dart';
@@ -39,6 +42,7 @@ import 'widgets/client_sheets_ios.dart';
 import 'widgets/client_settings_ios.dart';
 import '../../config/demo_mode.dart';
 import 'scan_tab.dart';
+import 'scan_tab_ios.dart';
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
 import '../../utils/platform_route.dart';
@@ -1719,13 +1723,21 @@ class _ClientHomeState extends State<ClientHome>
             onCards: () => Navigator.push(
               context,
               platformRoute(
-                builder: (_) => ManageCardsScreen(
-                  token: widget.token,
-                  userName: _userName,
-                  cards: _cards,
-                  rewards: _rewards,
-                  onRefresh: _refreshManual,
-                ),
+                builder: (_) => kIsIOS
+                    ? ManageCardsScreenIos(
+                        token: widget.token,
+                        userName: _userName,
+                        cards: _cards,
+                        rewards: _rewards,
+                        onRefresh: _refreshManual,
+                      )
+                    : ManageCardsScreen(
+                        token: widget.token,
+                        userName: _userName,
+                        cards: _cards,
+                        rewards: _rewards,
+                        onRefresh: _refreshManual,
+                      ),
               ),
             ),
             onNotifSettings: _openNotifSettingsIos,
@@ -2190,7 +2202,10 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v)),
+            if (kIsIOS)
+              CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v))
+            else
+              CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v)),
             if (kIsIOS)
               ClientRewardsIos(rewards: _rewards, cards: _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual)
             else
@@ -2213,15 +2228,25 @@ class _ClientHomeState extends State<ClientHome>
           final cardId = card['id'] as String?;
           if (cardId != null && !QartaDemo.enabled) _refreshCard(cardId);
         }
-        return ScanTab(
-          token: widget.token,
-          userName: _userName,
-          onCardAdded: (card, merchant) => addCard(card, merchant, goHome: true),
-          onCardAddedStay: (card, merchant) => addCard(card, merchant, goHome: false),
-          onBack: () => _setTab(0),
-        );
+        return kIsIOS
+            ? ScanTabIos(
+                token: widget.token,
+                userName: _userName,
+                onCardAdded: (card, merchant) => addCard(card, merchant, goHome: true),
+                onCardAddedStay: (card, merchant) => addCard(card, merchant, goHome: false),
+                onBack: () => _setTab(0),
+              )
+            : ScanTab(
+                token: widget.token,
+                userName: _userName,
+                onCardAdded: (card, merchant) => addCard(card, merchant, goHome: true),
+                onCardAddedStay: (card, merchant) => addCard(card, merchant, goHome: false),
+                onBack: () => _setTab(0),
+              );
       case 2:
-        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual, cards: _cards);
+        return kIsIOS
+            ? HistoryTabIos(token: widget.token, history: _history, onRefresh: _refreshManual, cards: _cards)
+            : HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual, cards: _cards);
       case 3:
         return ClientProfileAndroid(
           isOAuth: _isOAuth,
@@ -2229,13 +2254,21 @@ class _ClientHomeState extends State<ClientHome>
           onPersonalInfo: _showPersonalInfo,
           onPassword: _showChangePassword,
           onCards: () => Navigator.push(context, platformRoute(
-            builder: (_) => ManageCardsScreen(
-              token: widget.token,
-              userName: _userName,
-              cards: _cards,
-              rewards: _rewards,
-              onRefresh: _refreshManual,
-            ),
+            builder: (_) => kIsIOS
+                ? ManageCardsScreenIos(
+                    token: widget.token,
+                    userName: _userName,
+                    cards: _cards,
+                    rewards: _rewards,
+                    onRefresh: _refreshManual,
+                  )
+                : ManageCardsScreen(
+                    token: widget.token,
+                    userName: _userName,
+                    cards: _cards,
+                    rewards: _rewards,
+                    onRefresh: _refreshManual,
+                  ),
           )),
           onNotifSettings: () => showModalBottomSheet(
             context: context,
@@ -2262,7 +2295,9 @@ class _ClientHomeState extends State<ClientHome>
           }),
         );
       default:
-        return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
+        return kIsIOS
+            ? CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent)
+            : CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
   }
 
@@ -2345,13 +2380,21 @@ class _ClientHomeState extends State<ClientHome>
               onTap: () => Navigator.push(
                 context,
                 platformRoute(
-                  builder: (_) => ManageCardsScreen(
-                    token: widget.token,
-                    userName: _userName,
-                    cards: _cards,
-                    rewards: _rewards,
-                    onRefresh: _refreshManual,
-                  ),
+                  builder: (_) => kIsIOS
+                      ? ManageCardsScreenIos(
+                          token: widget.token,
+                          userName: _userName,
+                          cards: _cards,
+                          rewards: _rewards,
+                          onRefresh: _refreshManual,
+                        )
+                      : ManageCardsScreen(
+                          token: widget.token,
+                          userName: _userName,
+                          cards: _cards,
+                          rewards: _rewards,
+                          onRefresh: _refreshManual,
+                        ),
                 ),
               ),
             ),

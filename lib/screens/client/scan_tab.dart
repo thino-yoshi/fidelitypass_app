@@ -1,6 +1,3 @@
-import '../merchant/merchant_tokens.dart' show kIsIOS;
-import 'dart:ui' show ImageFilter;
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -8,13 +5,11 @@ import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
 import '../../config/demo_mode.dart';
-import 'widgets/client_sheets_ios.dart' show showCardAddedIos;
 
 class ScanTab extends StatefulWidget {
   final String token;
   final void Function(Map<String, dynamic> card, Map<String, dynamic> merchant) onCardAdded;
   final VoidCallback? onBack;
-  /// iOS : carte ajoutée mais le client veut « Scanner une autre carte ».
   final void Function(Map<String, dynamic> card, Map<String, dynamic> merchant)? onCardAddedStay;
   final String userName;
 
@@ -122,23 +117,6 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
     Map<String, dynamic> merchant = const {},
   }) {
     if (!mounted) return;
-    if (kIsIOS) {
-      showCardAddedIos(context,
-              merchant: merchant, design: card['card_design'] ?? merchant['card_design'],
-              userName: widget.userName, alreadyMember: alreadyMember)
-          .then((seeCard) {
-        if (!mounted) return;
-        if (seeCard == false) {
-          if (!alreadyMember) widget.onCardAddedStay?.call(card, merchant);
-          _resetScan();
-        } else if (!alreadyMember) {
-          widget.onCardAdded(card, merchant);
-        } else {
-          widget.onBack?.call();
-        }
-      });
-      return;
-    }
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -185,8 +163,6 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final rect = _scanRect(size);
-    if (kIsIOS) return _buildIos(rect);
-
     return Stack(
       children: [
         // ── Caméra ──────────────────────────────────────────────────────
@@ -286,87 +262,6 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
     );
   }
 
-  // ── iOS : caméra plein écran, titre, cadre à coins arrondis, boutons verre ──
-  Widget _buildIos(Rect rect) {
-    return Stack(children: [
-      const Positioned.fill(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(center: Alignment(0, -0.2), radius: 1.1,
-                colors: [Color(0xFF2A3140), Color(0xFF0B1220)]),
-          ),
-        ),
-      ),
-      if (_controller != null && !QartaDemo.enabled)
-        MobileScanner(controller: _controller!, onDetect: _onDetect, scanWindow: rect),
-      _ScanOverlay(scanRect: rect, lineAnim: _lineAnim, corners: false),
-      IgnorePointer(child: CustomPaint(size: MediaQuery.of(context).size, painter: _IosCornersPainter(rect.inflate(16)))),
-      Positioned.fromRect(
-        rect: rect,
-        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: QartaDemo.enabled ? _demoDetect : null),
-      ),
-      SafeArea(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Row(children: [
-              _glass(CupertinoIcons.xmark, widget.onBack ?? () {}),
-              const Spacer(),
-              _glass(_torch ? CupertinoIcons.bolt_fill : CupertinoIcons.bolt, () {
-                _controller?.toggleTorch();
-                setState(() => _torch = !_torch);
-              }),
-            ]),
-          ),
-          SizedBox(height: (rect.top - MediaQuery.of(context).padding.top - 190).clamp(12, 200)),
-          const Text('Ajouter une carte',
-              style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.6)),
-          const SizedBox(height: 6),
-          Text('Scanne le QR code affiché en caisse',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 17)),
-          const Spacer(),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(color: const Color(0xFFE24B4A), borderRadius: BorderRadius.circular(14)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(CupertinoIcons.exclamationmark_circle, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Flexible(child: Text(_error!, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600))),
-                ]),
-              ),
-            ),
-          if (_loading) const Padding(padding: EdgeInsets.only(bottom: 30), child: CupertinoActivityIndicator(color: Colors.white, radius: 14)),
-          if (QartaDemo.enabled && _scanning)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 30),
-              child: Text('Aperçu : touche le cadre pour simuler un scan',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13)),
-            ),
-        ]),
-      ),
-    ]);
-  }
-
-  Widget _glass(IconData icon, VoidCallback onTap) => GestureDetector(
-        onTap: onTap,
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF1E2D45).withValues(alpha: 0.55),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-              ),
-              child: Icon(icon, color: Colors.white, size: 21),
-            ),
-          ),
-        ),
-      );
 }
 
 // ── Overlay de scan (fond sombre + fenêtre + ligne animée) ───────────────────
@@ -554,33 +449,3 @@ class _ResultSheet extends StatelessWidget {
   }
 }
 
-/// iOS : grands coins arrondis blancs autour du cadre (comme l'appareil photo).
-class _IosCornersPainter extends CustomPainter {
-  final Rect r;
-  const _IosCornersPainter(this.r);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    const len = 50.0, rad = 26.0;
-    void corner(Offset o, double sx, double sy) {
-      final path = Path()
-        ..moveTo(o.dx, o.dy + sy * len)
-        ..lineTo(o.dx, o.dy + sy * rad)
-        ..quadraticBezierTo(o.dx, o.dy, o.dx + sx * rad, o.dy)
-        ..lineTo(o.dx + sx * len, o.dy);
-      canvas.drawPath(path, p);
-    }
-    corner(r.topLeft, 1, 1);
-    corner(r.topRight, -1, 1);
-    corner(r.bottomLeft, 1, -1);
-    corner(r.bottomRight, -1, -1);
-  }
-
-  @override
-  bool shouldRepaint(_IosCornersPainter old) => old.r != r;
-}

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import '../merchant/merchant_tokens.dart' show kIsIOS;
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
-import 'widgets/client_history_ios.dart';
 import 'cards_tab.dart' show CardStyle;
 
 const _kPrimary = Color(0xFF2C7BE5);
@@ -12,7 +10,7 @@ class HistoryTab extends StatefulWidget {
   final String token;
   final List<dynamic> history;
   final Future<void> Function() onRefresh;
-  final List<dynamic> cards; // pour reprendre la couleur de la carte de chaque commerce (iOS)
+  final List<dynamic> cards;
   const HistoryTab({super.key, required this.token, required this.history, required this.onRefresh, this.cards = const []});
 
   @override
@@ -66,7 +64,6 @@ class _HistoryTabState extends State<HistoryTab> {
         if (diff == 0) {
           day = "Aujourd'hui";
         } else if (diff == 1) day = 'Hier';
-        else if (kIsIOS) day = '${_jours[dt.weekday - 1]} ${dt.day} ${_mois[dt.month - 1]}';
         else                day = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
       }
 
@@ -75,11 +72,8 @@ class _HistoryTabState extends State<HistoryTab> {
         'name':  name,
         'time':  time,
         'info':     isReward
-            ? (kIsIOS ? 'Carte complète' : 'Récompense débloquée')
-            : kIsIOS
-                ? (isPoints ? '$stamps/${scan['merchant']?['points_required'] ?? 100} pts'
-                            : '$stamps/${scan['merchant']?['stamps_required'] ?? 10} tampons')
-                : (isPoints ? '$stamps pts' : '$stamps tampons'),
+            ? 'Récompense débloquée'
+            : (isPoints ? '$stamps pts' : '$stamps tampons'),
         'cardColor': _cardColor(scan['merchant']?['id'] as String?),
         'isPoints': isPoints,
         'delta':    delta,
@@ -113,19 +107,6 @@ class _HistoryTabState extends State<HistoryTab> {
     final allItems      = _flatItems();
     final filteredItems = _filtered(allItems);
     final grouped       = _byDay(filteredItems);
-
-    if (kIsIOS) {
-      final now = DateTime.now();
-      bool thisMonth(Map i) { final d = i['dt'] as DateTime?; return d != null && d.year == now.year && d.month == now.month; }
-      return ClientHistoryIos(
-        grouped: grouped,
-        monthVisits: allItems.where((i) => i['type'] == 'stamp' && thisMonth(i)).length,
-        monthRewards: allItems.where((i) => i['type'] == 'reward' && thisMonth(i)).length,
-        filter: _filter,
-        onFilter: (k) { AppLogger.client('HistoryTab → filtre: $k'); setState(() => _filter = k); },
-        onRefresh: widget.onRefresh,
-      );
-    }
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,

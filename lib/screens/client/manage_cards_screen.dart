@@ -1,6 +1,4 @@
 import 'dart:async';
-import '../merchant/merchant_tokens.dart' show kIsIOS;
-import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -10,8 +8,6 @@ import '../../services/auth_service.dart';
 import '../../utils/platform_route.dart';
 import 'cards_tab.dart' show CardStyle, LoyaltyCardFace;
 import '../../config/app_text.dart';
-import 'widgets/client_notifications_ios.dart' show GlassBackButton;
-import 'widgets/client_header_ios.dart' show iosReadableWidth;
 
 enum _SortMode { recent, oldest, mostStamps, leastStamps }
 
@@ -136,24 +132,6 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
     const body = 'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.';
     final confirmLabel = countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer';
 
-    if (kIsIOS) {
-      return CupertinoAlertDialog(
-        title: Text(title),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 4),
-          const Text(body),
-          if (lostRewards > 0) _rewardsWarning(lostRewards),
-        ]),
-        actions: [
-          CupertinoDialogAction(onPressed: onCancel, child: const Text('Annuler')),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: onConfirm,
-            child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      );
-    }
     return AlertDialog(
       backgroundColor: context.qSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -185,7 +163,7 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
         .where((r) => selectedMerchantIds.contains(r['merchant_id'] as String?))
         .length;
 
-    final confirm = await (kIsIOS ? showCupertinoDialog<bool> : showDialog<bool>)(
+    final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -235,173 +213,9 @@ class _ManageCardsScreenState extends State<ManageCardsScreen> {
     widget.onRefresh();
   }
 
-  // ── iOS : liste façon Réglages, « Modifier » pour choisir, glisser pour supprimer ──
-  bool _editing = false;
-
-  String _initials(String name) {
-    final w = name.trim().split(RegExp(r'\s+')).where((e) => RegExp(r'^[A-Za-zÀ-ÿ0-9]').hasMatch(e)).toList();
-    if (w.isEmpty) return '';
-    return (w.length >= 2 ? '${w[0][0]}${w[1][0]}' : w[0].substring(0, w[0].length < 2 ? w[0].length : 2)).toUpperCase();
-  }
-
-  Widget _buildIos(List<dynamic> cards) {
-    final top = MediaQuery.of(context).padding.top;
-    final bottom = MediaQuery.of(context).padding.bottom;
-    return Scaffold(
-      backgroundColor: context.cBg,
-      body: iosReadableWidth(Stack(children: [
-        ListView(
-          physics: const BouncingScrollPhysics(),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: EdgeInsets.fromLTRB(16, top + 8, 16, bottom + (_editing ? 100 : 30)),
-          children: [
-            Row(children: [
-              GlassBackButton(onTap: () => Navigator.maybePop(context)),
-              const Spacer(),
-              if (_cards.isNotEmpty)
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  onPressed: () => setState(() { _editing = !_editing; _selected.clear(); }),
-                  child: Text(_editing ? 'OK' : 'Modifier',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kPrimary)),
-                ),
-            ]),
-            const SizedBox(height: 14),
-            Text('Mes cartes', style: QText.largeTitle(context).copyWith(color: context.cText)),
-            Text('${_cards.length} carte${_cards.length > 1 ? 's' : ''}', style: QText.body.copyWith(fontSize: 17, color: context.cSub)),
-            const SizedBox(height: 14),
-            CupertinoSearchTextField(
-              placeholder: 'Rechercher une carte',
-              onChanged: (v) => setState(() => _search = v),
-              style: QText.body.copyWith(fontSize: 17, color: context.cText),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoSlidingSegmentedControl<_SortMode>(
-                groupValue: _sort == _SortMode.leastStamps ? _SortMode.mostStamps : _sort,
-                padding: const EdgeInsets.all(2),
-                children: {
-                  _SortMode.recent: _seg('Récentes'),
-                  _SortMode.oldest: _seg('Anciennes'),
-                  _SortMode.mostStamps: _seg('Tampons'),
-                },
-                onValueChanged: (v) { if (v != null) setState(() => _sort = v); },
-              ),
-            ),
-            const SizedBox(height: 18),
-            if (cards.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 30),
-                child: Center(child: Text('Aucune carte trouvée', style: QText.body.copyWith(color: context.cSub))),
-              )
-            else
-              Container(
-                decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14)),
-                clipBehavior: Clip.antiAlias,
-                child: Column(children: [
-                  for (var i = 0; i < cards.length; i++) ...[
-                    if (i > 0) Padding(padding: EdgeInsets.only(left: _editing ? 102 : 70), child: Container(height: 0.5, color: context.cBorder)),
-                    _iosRow(cards[i] as Map, i),
-                  ],
-                ]),
-              ),
-            if (!_editing && cards.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Text('Glisse une carte vers la gauche pour la supprimer.', style: QText.label.copyWith(color: context.cSub)),
-              ),
-          ],
-        ),
-        if (_editing)
-          Positioned(
-            left: 16, right: 16, bottom: bottom + 12,
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              borderRadius: BorderRadius.circular(14),
-              color: kError,
-              disabledColor: context.cSub.withValues(alpha: 0.25),
-              onPressed: _selected.isEmpty || _deleting ? null : _deleteSelected,
-              child: _deleting
-                  ? const CupertinoActivityIndicator(color: Colors.white)
-                  : Text(_selected.isEmpty ? 'Choisis des cartes' : 'Supprimer (${_selected.length})',
-                      style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
-            ),
-          ),
-      ])),
-    );
-  }
-
-  Widget _seg(String t) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText)),
-      );
-
-  Widget _iosRow(Map card, int index) {
-    final id = card['id'] as String? ?? '';
-    final m = (card['merchants'] as Map?) ?? const {};
-    final name = m['business_name'] as String? ?? '';
-    final isPoints = (m['program_type'] as String? ?? 'stamps') == 'points';
-    final count = isPoints ? (card['points_count'] as int? ?? 0) : (card['stamps_count'] as int? ?? 0);
-    final goal = isPoints ? (m['points_required'] as int? ?? 100) : (m['stamps_required'] as int? ?? 10);
-    final style = _styleFromCard(card, index);
-    final selected = _selected.contains(id);
-    final row = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _editing ? () => _toggle(id) : null,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(children: [
-          if (_editing) ...[
-            Icon(selected ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle,
-                color: selected ? kPrimary : context.cSub.withValues(alpha: 0.6), size: 24),
-            const SizedBox(width: 8),
-          ],
-          // Petite carte aux couleurs du commerce
-          SizedBox(
-            width: 42, height: 42,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Stack(fit: StackFit.expand, children: [
-                style.buildBackground(),
-                Center(child: Text(_initials(name), style: TextStyle(color: style.textColor, fontSize: 14, fontWeight: FontWeight.w700))),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: QText.body.copyWith(fontSize: 17, color: context.cText)),
-              Text(isPoints ? '$count/$goal pts' : '$count/$goal tampons', style: QText.caption.copyWith(fontSize: 14, color: context.cSub)),
-            ]),
-          ),
-        ]),
-      ),
-    );
-    if (_editing) return row;
-    // Glisser vers la gauche → supprimer (avec la même confirmation).
-    return Dismissible(
-      key: ValueKey('mc-$id'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        color: kError,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Text('Supprimer', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
-      ),
-      confirmDismiss: (_) async {
-        setState(() { _selected..clear()..add(id); });
-        await _deleteSelected();
-        return false; // la liste se met à jour elle-même
-      },
-      child: row,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cards = _sorted;
-    if (kIsIOS) return _buildIos(cards);
     final allSelected = cards.isNotEmpty && _selected.length == cards.length;
 
     return Scaffold(

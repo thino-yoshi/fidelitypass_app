@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../merchant/merchant_tokens.dart' show kIsIOS;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoActivityIndicator;
@@ -15,7 +14,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
-import 'widgets/client_cards_stack_ios.dart';
 import 'widgets/client_pass_face_ios.dart';
 import 'widgets/client_hours.dart';
 import 'widgets/client_sheets_ios.dart' show showIosAlert;
@@ -121,69 +119,6 @@ class _CardsTabState extends State<CardsTab> {
     return val >= req;
   }).toList();
 
-  // iOS : la carte sort de la pile et vient au milieu (fond flouté).
-  // Toucher à côté ou glisser vers le bas → elle redescend tout de suite à sa
-  // place, par le même chemin. Toucher la carte → elle s'ouvre en grand.
-  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
-
-  /// Pendant le vol : fondu entre la carte rangée (nom + barre) et la carte entière.
-  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim, {required bool collapsedAtRest}) {
-    final full = ClientPassFaceIos(card: card, style: style);
-    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
-    // Le contenu change vite (au début de la sortie / à la fin du retour),
-    // la carte elle-même glisse sur tout le trajet.
-    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
-    return Material(
-      type: MaterialType.transparency,
-      child: AnimatedBuilder(
-        animation: t,
-        builder: (_, __) => t.value >= 1
-            ? full
-            : Stack(fit: StackFit.expand, children: [
-                ClientPassFaceIos(card: card, style: style, collapsed: true),
-                Opacity(opacity: t.value, child: full),
-              ]),
-      ),
-    );
-  }
-
-  void _popOutCard(Map card, CardStyle style) {
-    Navigator.of(context).push(PageRouteBuilder(
-      opaque: false,
-      transitionDuration: const Duration(milliseconds: 380),
-      reverseTransitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (ctx, anim, _) => _CardPopOut(
-        heroTag: 'card-${card['id']}',
-        animation: anim,
-        face: ClientPassFaceIos(card: card, style: style),
-        onOpen: () {
-          // La carte s'agrandit d'un seul mouvement vers la carte ouverte
-          // (même carte qui glisse, pas de coupure). En fermant, elle
-          // redescend directement à sa place dans la pile.
-          Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
-        },
-      ),
-    ));
-  }
-
-  Route<void> _openCardRoute(Map card, CardStyle style) => PageRouteBuilder(
-        opaque: false,
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 340),
-        pageBuilder: (ctx, anim, _) => _OpenCardPage(
-          animation: anim,
-          child: QRModal(
-            token: widget.token,
-            card: card,
-            style: style,
-            userName: widget.userName,
-            onStampAdded: widget.onRefresh,
-            onStampEvent: widget.onStampEvent,
-            heroTag: 'card-${card['id']}',
-          ),
-        ),
-      );
-
   Future<void> _showQRModal(Map card, CardStyle style) {
     final name = card['merchants']?['business_name'] as String? ?? '?';
     final id   = card['id'] as String? ?? '?';
@@ -213,39 +148,6 @@ class _CardsTabState extends State<CardsTab> {
             final cardName = ((c['card_design'] as Map?)?['cardName'] as String? ?? '').toLowerCase();
             return name.contains(q) || cardName.contains(q);
           }).toList();
-
-    // iOS : cartes empilées + recherche (design Apple). Android : inchangé.
-    if (kIsIOS) {
-      return ClientCardsStackIos(
-        hasAnyCard: widget.cards.isNotEmpty,
-        onSearchActive: widget.onSearchActive,
-        onSearch: (v) => setState(() => _search = v),
-        onRefresh: () async => widget.onRefresh(),
-        onScanTap: widget.onScanTap ?? () {},
-        cards: List.generate(cards.length, (i) {
-          final card  = cards[i];
-          final style = _styleFromCard(card, i);
-          final isAnimating = card['id'] == widget.cardIdToAnimate;
-          final isSliding   = card['id'] == widget.cardIdToSlideIn;
-          final face = Hero(
-            tag: 'card-${card['id']}',
-            createRectTween: _straightRect,
-            flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
-            child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
-          );
-          if (isAnimating) {
-            return _FlyingCard(key: ValueKey('flying_${card['id']}'), onDone: widget.onAnimationDone ?? () {}, child: face);
-          }
-          if (isSliding) return _SlideInCard(key: ValueKey('slidein_${card['id']}'), child: face);
-          return face;
-        }),
-        onOpen: (i) {
-          final card = cards[i];
-          if (card['id'] == widget.cardIdToAnimate) return;
-          _popOutCard(card, _styleFromCard(card, i));
-        },
-      );
-    }
 
     if (widget.cards.isEmpty) {
       return RefreshIndicator(
@@ -337,19 +239,19 @@ class _CardsTabState extends State<CardsTab> {
                 ),
               ),
             );
-            if (isAnimating) {
-              return _FlyingCard(
-                key: ValueKey('flying_${card['id']}'),
-                onDone: widget.onAnimationDone ?? () {},
-                child: cardWidget,
-              );
-            }
-            if (isSliding) {
-              return _SlideInCard(
-                key: ValueKey('slidein_${card['id']}'),
-                child: cardWidget,
-              );
-            }
+            // if (isAnimating) {
+            //   return _FlyingCard(
+            //     key: ValueKey('flying_${card['id']}'),
+            //     onDone: widget.onAnimationDone ?? () {},
+            //     child: cardWidget,
+            //   );
+            // }
+            // if (isSliding) {
+            //   return _SlideInCard(
+            //     key: ValueKey('slidein_${card['id']}'),
+            //     child: cardWidget,
+            //   );
+            // }
             return cardWidget;
           }),
         ],
@@ -2388,7 +2290,7 @@ class _SlideInCardState extends State<_SlideInCard> with SingleTickerProviderSta
 
 
 /// iOS : carte sortie de la pile, posée au milieu de l'écran.
-class _CardPopOut extends StatelessWidget {
+class CardPopOut extends StatelessWidget {
   final String heroTag;
   final Animation<double> animation;
   final Widget face;
@@ -2445,7 +2347,7 @@ class _CardPopOut extends StatelessWidget {
 /// iOS : page « carte ouverte ». La carte arrive en volant depuis la pile ;
 /// le reste (titre, adresse, Wallet) apparaît en fondu. Toucher le fond
 /// ou glisser vers le bas ferme : la carte redescend à sa place.
-class _OpenCardPage extends StatelessWidget {
+class OpenCardPage extends StatelessWidget {
   final Animation<double> animation;
   final Widget child;
   const _OpenCardPage({required this.animation, required this.child});
