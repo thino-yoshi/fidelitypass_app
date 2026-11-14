@@ -452,12 +452,15 @@ class _WalletStack extends StatefulWidget {
 }
 
 class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixin {
-  int _selected = 0;
+  int _selectedIdx = 0;
+  late final ScrollController _scrollCtrl;
 
-  static const double _cardH   = 190.0;
-  static const double _peek    = 48.0;
-  static const _dur            = Duration(milliseconds: 380);
-  static const _curve          = Curves.easeOutCubic;
+  // ── Dimensions ──────────────────────────────────────────────────────────────
+  static const double _slotH    = 210.0; // hauteur FIXE de chaque slot dans la liste
+  static const double _cardFull = 195.0; // carte expanded (centrée)
+  static const double _cardMin  = 72.0;  // carte collapsed (les autres)
+  static const _dur   = Duration(milliseconds: 320);
+  static const _curve = Curves.easeOutCubic;
 
   static const _fallbackColors = [
     Color(0xFF2C7BE5), Color(0xFF10B981),
@@ -469,12 +472,41 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
   AnimationController? _overlayCtrl;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollCtrl = ScrollController();
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
     _closeCard(animate: false);
     _overlayCtrl?.dispose();
     super.dispose();
   }
 
+  // ── Mise à jour de l'index centré pendant le scroll ──────────────────────
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final idx = (_scrollCtrl.offset / _slotH).round()
+        .clamp(0, (widget.cards.length - 1).clamp(0, 999));
+    if (idx != _selectedIdx) setState(() => _selectedIdx = idx);
+  }
+
+  // ── Snap vers un index ────────────────────────────────────────────────────
+  Future<void> _snapTo(int idx) {
+    setState(() => _selectedIdx = idx);
+    if (!_scrollCtrl.hasClients) return Future.value();
+    return _scrollCtrl.animateTo(
+      (idx * _slotH).toDouble(),
+      duration: _dur,
+      curve: _curve,
+    );
+  }
+
+  // ── Parsing des cartes depuis widget.cards ────────────────────────────────
   List<Map<String, dynamic>> get _parsed {
     return widget.cards.asMap().entries.map((e) {
       final i     = e.key;
@@ -500,17 +532,11 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
     }).toList();
   }
 
-  double _topFor(int i, int sel) {
-    if (i <= sel) return i * _peek;
-    return sel * _peek + _cardH + (i - sel - 1) * _peek;
-  }
-
-  double _totalH(int n) => n > 0 ? _cardH + (n - 1) * _peek : _cardH;
-
+  // ── Overlay animé (grand format + QR) ────────────────────────────────────
   void _openCard(Map card, CardStyle style, Rect fromRect) {
     if (_overlayEntry != null) return;
 
-    final screen = MediaQuery.of(context).size;
+    final screen  = MediaQuery.of(context).size;
     final padding = MediaQuery.of(context).padding;
     final targetW = screen.width - 48;
     const targetH = 220.0;
@@ -521,11 +547,7 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
       targetH,
     );
 
-    _overlayCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-
+    _overlayCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
     final anim = CurvedAnimation(parent: _overlayCtrl!, curve: Curves.easeOutCubic);
 
     _overlayEntry = OverlayEntry(builder: (ctx) {
@@ -541,19 +563,13 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
               child: Container(color: Colors.black.withValues(alpha: bg)),
             ),
             Positioned(
-              left: rect.left,
-              top:  rect.top,
-              width:  rect.width,
-              height: rect.height,
+              left: rect.left, top: rect.top,
+              width: rect.width, height: rect.height,
               child: GestureDetector(
                 onTap: () {},
                 child: Transform.scale(
                   scale: 1.0 + t * 0.04,
-                  child: LoyaltyCardFace(
-                    card: card,
-                    style: style,
-                    userName: widget.userName,
-                  ),
+                  child: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
                 ),
               ),
             ),
@@ -579,105 +595,82 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
     });
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final data = _parsed;
     if (data.isEmpty) return const SizedBox.shrink();
-    final sel = _selected.clamp(0, data.length - 1);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        height: _totalH(data.length),
-        child: Stack(
-          children: List.generate(data.length, (i) {
-            final c = data[i];
 
-            return AnimatedPositioned(
-              duration: _dur,
-              curve: _curve,
-              top: _topFor(i, sel),
-              left: 0, right: 0,
-              child: Builder(builder: (cardCtx) => GestureDetector(
-                onTap: () {
-                  setState(() => _selected = i);
+    return LayoutBuilder(builder: (_, constraints) {
+      // Padding vertical pour que la première/dernière carte soient centrables
+      final vertPad = ((constraints.maxHeight / 2) - (_slotH / 2)).clamp(0.0, double.infinity);
+
+      return NotificationListener<ScrollEndNotification>(
+        onNotification: (_) {
+          // Snap après relâchement
+          if (_scrollCtrl.hasClients) {
+            final idx = (_scrollCtrl.offset / _slotH)
+                .round()
+                .clamp(0, data.length - 1);
+            _snapTo(idx);
+          }
+          return false;
+        },
+        child: ListView.builder(
+          controller: _scrollCtrl,
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.symmetric(vertical: vertPad, horizontal: 16),
+          itemCount: data.length,
+          itemBuilder: (cardCtx, i) {
+            final c         = data[i];
+            final isFocused = i == _selectedIdx;
+
+            return GestureDetector(
+              onTap: () {
+                if (isFocused) {
+                  // Carte déjà au centre → ouvre l'overlay grand format
                   final box = cardCtx.findRenderObject() as RenderBox?;
-                  if (box == null) return;
-                  final fromRect = box.localToGlobal(Offset.zero) & box.size;
+                  Rect fromRect = Rect.zero;
+                  if (box != null) {
+                    final origin = box.localToGlobal(Offset.zero);
+                    // La carte est centrée dans le slot → décaler vers le centre du slot
+                    fromRect = Rect.fromLTWH(
+                      origin.dx,
+                      origin.dy + (_slotH - _cardFull) / 2,
+                      box.size.width,
+                      _cardFull,
+                    );
+                  }
                   _openCard(c['card'] as Map, c['style'] as CardStyle, fromRect);
-                },
-                child: SizedBox(
-                  height: _cardH,
-                  child: LoyaltyCardFace(
-                    card: c['card'] as Map,
-                    style: c['style'] as CardStyle,
-                    userName: widget.userName,
-                    decorPattern: i % 6,
+                } else {
+                  // Carte hors-centre → scroll vers elle
+                  _snapTo(i);
+                }
+              },
+              // Slot de hauteur FIXE — le ListView garde des offsets uniformes pour le snap
+              child: SizedBox(
+                height: _slotH,
+                child: Align(
+                  alignment: Alignment.center,
+                  child: AnimatedContainer(
+                    duration: _dur,
+                    curve: _curve,
+                    height: isFocused ? _cardFull : _cardMin,
+                    child: LoyaltyCardFace(
+                      card:         c['card']  as Map,
+                      style:        c['style'] as CardStyle,
+                      userName:     widget.userName,
+                      decorPattern: i % 6,
+                    ),
                   ),
                 ),
-              )),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  // Vue déployée — toutes les infos
-  Widget _expanded(Map c, int count, int max) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(c['name'] as String,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-        const Icon(Icons.credit_card, color: Colors.white38, size: 20),
-      ]),
-      const Spacer(),
-      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text('$count', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -1)),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4, left: 2),
-          child: Text('/$max ${c['label']}', style: const TextStyle(fontSize: 13, color: Colors.white60)),
-        ),
-      ]),
-      const SizedBox(height: 8),
-      max <= 15
-        ? Wrap(spacing: 5, runSpacing: 5, children: List.generate(max, (j) => Container(
-            width: 18, height: 18,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: j < count ? Colors.white : Colors.white.withValues(alpha: 0.22),
-            ),
-          )))
-        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: max > 0 ? count / max : 0,
-                backgroundColor: Colors.white.withValues(alpha: 0.22),
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                minHeight: 8,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text('$count / $max', style: const TextStyle(fontSize: 11, color: Colors.white70)),
-          ]),
-    ],
-  );
-
-  // Vue réduite — alignée en haut pour être visible dans le bandeau (peek)
-  Widget _collapsed(Map c, int count, int max) => Align(
-    alignment: Alignment.topCenter,
-    child: Row(
-      children: [
-        Text(c['name'] as String,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-        const Spacer(),
-        Text('$count/$max', style: const TextStyle(fontSize: 12, color: Colors.white70)),
-        const SizedBox(width: 4),
-        const Icon(Icons.expand_less, color: Colors.white38, size: 14),
-      ],
-    ),
-  );
+            );
+          },
+        ),
+      );
+    });
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
