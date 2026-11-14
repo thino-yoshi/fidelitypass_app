@@ -1203,13 +1203,16 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   // iOS : une seule carte d'une seule couleur, QR code à l'intérieur (comme Apple Wallet).
   // Toucher le QR → agrandi ; toucher la carte → infos du commerce (au dos).
   Widget _buildPassIos(Color color, bool capture) {
+    // Petit iPhone (SE) : QR un peu plus petit pour que la carte garde sa taille.
+    final small = MediaQuery.of(context).size.height < 700;
+    final qrSize = small ? 110.0 : 150.0;
     final qrBox = Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: QrImageView(
         data: widget.card['qr_token'] as String? ?? '',
         version: QrVersions.auto,
-        size: 150,
+        size: qrSize,
         foregroundColor: const Color(0xFF0B1220),
       ),
     );
@@ -1218,12 +1221,12 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       onTap: () => _showQRZoom(context, color),
       child: widget.heroTag != null ? qrBox : Hero(tag: 'qr-${widget.card['id']}', child: qrBox),
     );
-    Widget pass = SizedBox(height: 432, child: ClientPassFaceIos(card: widget.card, style: widget.style, qr: qr));
+    Widget pass = SizedBox(height: small ? 392 : 432, child: ClientPassFaceIos(card: widget.card, style: widget.style, qr: qr));
     if (capture && widget.heroTag != null) {
       final staticQr = Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-        child: QrImageView(data: widget.card['qr_token'] as String? ?? '', version: QrVersions.auto, size: 150,
+        child: QrImageView(data: widget.card['qr_token'] as String? ?? '', version: QrVersions.auto, size: qrSize,
             foregroundColor: const Color(0xFF0B1220)),
       );
       pass = Hero(
@@ -1252,6 +1255,22 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   }
 
   // ── FACE ARRIÈRE : infos du commerce ─────────────────────────────────────────
+  /// Zone de la carte dans la fiche. Android : défile si besoin.
+  /// iPhone : ne défile jamais ; si l'écran est trop petit, la carte se réduit un peu.
+  Widget _cardBody({required EdgeInsets padding, required Widget child}) {
+    if (!kIsIOS) return SingleChildScrollView(padding: padding, child: child);
+    return Padding(
+      padding: padding,
+      child: LayoutBuilder(
+        builder: (_, c) => FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.topCenter,
+          child: SizedBox(width: c.maxWidth, child: child),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCardBack(Color color, String businessName) {
     if (kIsIOS) return _buildBackIos(businessName);
     final address  = widget.card['merchants']?['address']       as String? ?? '';
@@ -1483,7 +1502,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                 ),
               ),
               // Corps scrollable (iOS : se réduit si l'écran est petit)
-              Flexible(child: SingleChildScrollView(
+              Flexible(child: _cardBody(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Column(
                   children: [
@@ -1878,13 +1897,11 @@ class _AppleWalletButton extends StatelessWidget {
         alignment: Alignment.center,
         child: loading
             ? const CupertinoActivityIndicator(color: Colors.white)
-            : Row(mainAxisSize: MainAxisSize.min, children: [
-                const _WalletGlyph(),
-                const SizedBox(width: 10),
-                Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: const [
-                  Text('Ajouter à', style: TextStyle(color: Colors.white, fontSize: 11, height: 1.1, fontWeight: FontWeight.w400)),
-                  Text('Apple Wallet', style: TextStyle(color: Colors.white, fontSize: 20, height: 1.1, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
-                ]),
+            : const Row(mainAxisSize: MainAxisSize.min, children: [
+                _WalletGlyph(),
+                SizedBox(width: 10),
+                Text('Ajouter à Apple Wallet',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.4)),
               ]),
       ),
     );

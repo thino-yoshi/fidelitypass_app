@@ -20,6 +20,7 @@ import 'screens/merchant/merchant_tokens.dart' show kIsIOS;
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'screens/splash_screen.dart';
+import 'screens/auth_screen_ios.dart' show SplashIos;
 import 'utils/logger.dart';
 import 'utils/platform_route.dart';
 import 'firebase_options.dart';
@@ -469,8 +470,13 @@ class _SplashRouterState extends State<SplashRouter> {
     final session = data.session;
     if (session == null) {
       AppLogger.nav('Aucune session → AuthScreen');
-      Navigator.pushReplacement(
-          context, platformRoute(builder: (_) => const AuthScreen()));
+      // iPhone : fondu doux du chargement vers l'accueil (même fond bleu nuit).
+      Navigator.pushReplacement(context, kIsIOS
+          ? PageRouteBuilder(
+              transitionDuration: const Duration(milliseconds: 400),
+              pageBuilder: (_, __, ___) => const AuthScreen(),
+              transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child))
+          : platformRoute(builder: (_) => const AuthScreen()));
       return;
     }
 
@@ -505,6 +511,6 @@ class _SplashRouterState extends State<SplashRouter> {
 
   @override
   Widget build(BuildContext context) {
-    return const SplashScreen();
+    return kIsIOS ? const SplashIos() : const SplashScreen();
   }
 }

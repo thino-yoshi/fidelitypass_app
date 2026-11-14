@@ -5,7 +5,7 @@ import '../../../config/app_colors.dart';
 import '../../../config/app_text.dart';
 
 /// Écran Notifications iOS : retour + « Tout lire », grand titre,
-/// sélecteur Tout / Tampons / Cadeaux / Offres, listes groupées par jour.
+/// sélecteur Tout / Tampons / Cadeaux / Messages (envoyés par les commerçants), listes groupées par jour.
 class ClientNotificationsIos extends StatelessWidget {
   final List<Map> notifs;          // {commerce, title, body, time, read, type, dt}
   final String filter;             // 'tout' | 'tampon' | 'recompense' | 'offre'
@@ -83,7 +83,7 @@ class ClientNotificationsIos extends StatelessWidget {
               'tout': _seg('Tout', context),
               'tampon': _seg('Tampons', context),
               'recompense': _seg('Cadeaux', context),
-              'offre': _seg('Offres', context),
+              'offre': _seg('Messages', context),
             },
             onValueChanged: (v) { if (v != null) onFilter(v); },
           ),
@@ -96,7 +96,7 @@ class ClientNotificationsIos extends StatelessWidget {
               const SizedBox(height: 12),
               Text('Aucune notification', style: QText.blockTitle.copyWith(color: context.cText)),
               const SizedBox(height: 4),
-              Text('Tes tampons et les offres de tes commerces apparaîtront ici.',
+              Text('Tes tampons et les messages de tes commerces apparaîtront ici.',
                   textAlign: TextAlign.center, style: QText.caption.copyWith(color: context.cSub)),
             ]),
           ),
