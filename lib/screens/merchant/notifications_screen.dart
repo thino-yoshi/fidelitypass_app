@@ -19,7 +19,10 @@ class NotificationsScreen extends StatefulWidget {
   final String token;
   final Map? merchantInfo;
   final List<dynamic> initialClients;
-  const NotificationsScreen({super.key, required this.token, this.merchantInfo, this.initialClients = const []});
+  final String? initialTemplate;
+  final String? initialAudience;
+  const NotificationsScreen({super.key, required this.token, this.merchantInfo, this.initialClients = const [],
+      this.initialTemplate, this.initialAudience});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -32,13 +35,13 @@ class _Tpl {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   static const _templates = [
-    _Tpl('promo', 'Offre spéciale', "Annonce une promo flash pour aujourd'hui",
-        'Offre spéciale ce soir !', '-20% sur tout ce soir de 18h à 22h. Venez nous voir !'),
-    _Tpl('rappel', 'Rappel tampon', 'Rappelle aux clients proches de la récompense',
-        'Plus que quelques tampons !', 'Vous êtes tout proche de votre récompense. Passez la chercher !'),
-    _Tpl('merci', 'Merci & fidélité', 'Remercie tes clients fidèles',
-        'Merci de votre fidélité', 'Un grand merci ! Une petite surprise vous attend à votre prochaine visite.'),
-    _Tpl('libre', 'Message libre', 'Écris ton propre message', '', ''),
+    _Tpl('promo', '🔥 Offre spéciale', "Annonce une promo flash pour aujourd'hui",
+        '🔥 Offre spéciale ce soir !', '-20% sur tout ce soir de 18h à 22h. Venez nous voir !'),
+    _Tpl('rappel', '🎁 Rappel tampon', 'Rappelle aux clients proches de la récompense',
+        '🎁 Plus que quelques tampons !', 'Vous êtes tout proche de votre récompense. Passez la chercher !'),
+    _Tpl('merci', '🙏 Merci & fidélité', 'Remercie tes clients fidèles',
+        '🙏 Merci de votre fidélité !', 'Un grand merci ! Une petite surprise vous attend à votre prochaine visite.'),
+    _Tpl('libre', '✏️ Message libre', 'Écris ton propre message', '', ''),
   ];
 
   String _tpl = 'promo';
@@ -58,7 +61,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     _required = widget.merchantInfo?['stamps_required'] as int? ?? 10;
-    _applyTemplate('promo');
+    _applyTemplate(widget.initialTemplate ?? 'promo');
+    if (widget.initialAudience != null) _audience = widget.initialAudience!;
     _load();
   }
 
@@ -112,11 +116,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _titleCtrl.text = t.msgTitle;
         _bodyCtrl.text = t.msgBody;
       }
+      // N1 : audience automatique selon le modèle
+      if (key == 'rappel') {
+        _audience = 'proches';
+      } else if (key == 'promo' || key == 'merci' || key == 'libre') {
+        _audience = 'tous';
+      }
     });
   }
 
   // ── Compteurs d'audience ────────────────────────────────────────────────────
   int get _countTous => _clients.length;
+
+  int get _notifsCetteS {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    return _history.where((h) {
+      final t = DateTime.tryParse(h['sent_at'] as String? ?? h['created_at'] as String? ?? '');
+      return t != null && t.isAfter(cutoff);
+    }).length;
+  }
   int get _countProches => _clients.where((c) {
     final s = (c['stamps_count'] as int?) ?? 0;
     return (_required - s) <= 2 && s < _required;
@@ -213,6 +231,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return n.length >= 2 ? n.substring(0, 2).toUpperCase() : n.toUpperCase();
   }
 
+  Widget _logoFallback() => Container(
+        width: 32, height: 32,
+        decoration: BoxDecoration(color: _kPrimary, borderRadius: BorderRadius.circular(9)),
+        child: Center(child: Text(_initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white))),
+      );
+
   // ──────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -225,11 +249,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 14, 16, 24 + MediaQuery.of(context).padding.bottom),
             children: [
+              if (_notifsCetteS >= 2) _spamBanner(),
+              if (_notifsCetteS >= 2) const SizedBox(height: 10),
               _preview(),
               const SizedBox(height: 16),
               _sectionTitle('Choisir un modèle'),
               const SizedBox(height: 8),
-              ..._templates.map(_templateCard),
+              _templatesGrid(),
               const SizedBox(height: 14),
               _sectionTitle('Message'),
               const SizedBox(height: 8),
@@ -283,6 +309,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     )),
   );
 
+  Widget _spamBanner() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(color: _kGold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: _kGold.withValues(alpha: 0.5))),
+    child: Row(children: [
+      const Icon(Icons.warning_amber_rounded, color: _kGold, size: 18),
+      const SizedBox(width: 10),
+      Expanded(child: Text(
+        'Tu as déjà envoyé $_notifsCetteS notifications cette semaine. '
+        'Trop de messages peuvent pousser les clients à se désabonner.',
+        style: TextStyle(fontSize: 11, color: context.cText, height: 1.4))),
+    ]),
+  );
+
   Widget _sectionTitle(String t) => Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.cText));
 
   // Aperçu live
@@ -299,8 +338,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(width: 32, height: 32, decoration: BoxDecoration(color: _kPrimary, borderRadius: BorderRadius.circular(9)),
-                child: Center(child: Text(_initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)))),
+            Builder(builder: (_) {
+              final logoUrl = widget.merchantInfo?['logo_url'] as String?;
+              if (logoUrl != null && logoUrl.isNotEmpty) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image.network(logoUrl, width: 32, height: 32, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _logoFallback()),
+                );
+              }
+              return _logoFallback();
+            }),
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
@@ -315,12 +363,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Widget _templatesGrid() {
+    final cols = [_templates.sublist(0, 2), _templates.sublist(2)];
+    return Column(children: cols.map((row) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: row.map((t) => Expanded(child: Padding(
+        padding: const EdgeInsets.only(right: 6, bottom: 6),
+        child: _templateCard(t),
+      ))).toList(),
+    )).toList());
+  }
+
   Widget _templateCard(_Tpl t) {
     final sel = _tpl == t.key;
     return GestureDetector(
       onTap: () => _applyTemplate(t.key),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           color: sel ? _kPrimary.withValues(alpha: 0.08) : context.cSurface,
@@ -360,27 +418,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _audienceRow() {
-    Widget pill(String key, String label) {
+    Widget pill(String key, String label, int count) {
       final sel = _audience == key;
+      final empty = count == 0 && key != 'tous';
       return Expanded(child: GestureDetector(
-        onTap: () => setState(() => _audience = key),
+        onTap: empty ? null : () => setState(() => _audience = key),
         child: Container(
           height: 48,
           margin: const EdgeInsets.symmetric(horizontal: 3),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: sel ? _kPrimary : context.cSurface,
+            color: empty ? context.cSurface.withValues(alpha: 0.5) : sel ? _kPrimary : context.cSurface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: sel ? _kPrimary : context.cBorder),
+            border: Border.all(color: empty ? context.cBorder.withValues(alpha: 0.4) : sel ? _kPrimary : context.cBorder),
           ),
-          child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, height: 1.2, color: sel ? Colors.white : context.cSub)),
+          child: Text(label, textAlign: TextAlign.center, style: TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w600, height: 1.2,
+            color: empty ? context.cSub.withValues(alpha: 0.4) : sel ? Colors.white : context.cSub)),
         ),
       ));
     }
     return Row(children: [
-      pill('tous', 'Tous\n($_countTous)'),
-      pill('proches', 'Proches\nrécompense ($_countProches)'),
-      pill('inactifs', 'Inactifs\n+7j'),
+      pill('tous', 'Tous\n($_countTous)', _countTous),
+      pill('proches', 'Proches\nrécompense ($_countProches)', _countProches),
+      pill('inactifs', 'Inactifs\n+7j', 1),
     ]);
   }
 

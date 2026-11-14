@@ -1,9 +1,64 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
 
 const _days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+const _categories = [
+  'Restauration', 'Café / Bar', 'Boulangerie', 'Épicerie', 'Coiffure / Beauté',
+  'Sport / Bien-être', 'Mode / Vêtements', 'Librairie', 'Pharmacie', 'Autre',
+];
+
+// Horaires par jour : Ouvre - Pause début - Pause fin - Ferme
+class _DaySchedule {
+  TimeOfDay? open, pauseStart, pauseEnd, close;
+  _DaySchedule({this.open, this.pauseStart, this.pauseEnd, this.close});
+
+  String toJson() {
+    String fmt(TimeOfDay? t) => t != null
+        ? '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}'
+        : '';
+    final o = fmt(open); final ps = fmt(pauseStart); final pe = fmt(pauseEnd); final c = fmt(close);
+    if (o.isEmpty && c.isEmpty) return '';
+    if (ps.isEmpty) return '$o-$c';
+    return '$o-$ps/$pe-$c';
+  }
+
+  static _DaySchedule fromJson(String s) {
+    if (s.isEmpty) return _DaySchedule();
+    // Format : "09:00-12:00/14:00-18:00" (avec pause) ou "09:00-18:00" (sans pause)
+    final slashIdx = s.indexOf('/');
+    if (slashIdx > 0) {
+      final parts1 = s.substring(0, slashIdx).split('-');
+      final parts2 = s.substring(slashIdx + 1).split('-');
+      return _DaySchedule(
+        open: _pt(parts1.isNotEmpty ? parts1[0] : ''),
+        pauseStart: _pt(parts1.length > 1 ? parts1[1] : ''),
+        pauseEnd: _pt(parts2.isNotEmpty ? parts2[0] : ''),
+        close: _pt(parts2.length > 1 ? parts2[1] : ''),
+      );
+    } else {
+      final parts = s.split('-');
+      return _DaySchedule(
+        open: _pt(parts.isNotEmpty ? parts[0] : ''),
+        close: _pt(parts.length > 1 ? parts[1] : ''),
+      );
+    }
+  }
+
+  static TimeOfDay? _pt(String s) {
+    final p = s.trim().split(':');
+    if (p.length != 2) return null;
+    final h = int.tryParse(p[0]); final m = int.tryParse(p[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  bool get isEmpty => open == null && close == null;
+}
 
 /// Écran "Info commerce" (v24) — édite les infos publiques de la boutique.
 /// Préremplit depuis le profil marchand et sauvegarde via /merchants/me/info.
@@ -26,6 +81,17 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
   TimeOfDay? _open;
   TimeOfDay? _close;
   bool _saving = false;
+
+  // I1 : catégorie
+  String? _category;
+
+  // I3 : horaires par jour
+  final Map<String, _DaySchedule> _schedules = {};
+
+  // I4 : logo
+  File? _logoFile;
+  String? _currentLogoUrl;
+  bool _uploadingLogo = false;
 
   @override
   void initState() {
@@ -52,16 +118,33 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
         _close = _parseTime(oh.substring(1));
       }
     }
+    // I1 : catégorie
+    final cat = (m['category'] as String?) ?? '';
+    _category = _categories.contains(cat) ? cat : null;
+    // I3 : horaires par jour
+    final dayHoursRaw = m['day_hours'] as Map?;
+    if (dayHoursRaw != null) {
+      for (final d in _days) {
+        final val = (dayHoursRaw[d] as String?) ?? '';
+        if (val.isNotEmpty) _schedules[d] = _DaySchedule.fromJson(val);
+      }
+    }
+    // I4 : logo
+    _currentLogoUrl = m['logo_url'] as String?;
   }
 
   @override
   void dispose() {
-    _name.dispose();
-    _address.dispose();
-    _phone.dispose();
-    _website.dispose();
-    _desc.dispose();
+    _name.dispose(); _address.dispose(); _phone.dispose();
+    _website.dispose(); _desc.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickLogo() async {
+    final picker = ImagePicker();
+    final img = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512, imageQuality: 85);
+    if (img == null) return;
+    setState(() => _logoFile = File(img.path));
   }
 
   TimeOfDay? _parseTime(String s) {
@@ -93,6 +176,21 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
     } else {
       hours = '';
     }
+    // I4 : upload logo si nouveau fichier
+    if (_logoFile != null) {
+      setState(() => _uploadingLogo = true);
+      final upRes = await ApiService.instance.uploadMerchantLogo(_logoFile!);
+      setState(() => _uploadingLogo = false);
+      if (mounted && upRes.isOk) _currentLogoUrl = upRes.value;
+    }
+
+    // I3 : sérialiser les horaires par jour
+    final dayHours = <String, String>{};
+    for (final d in _days) {
+      final s = _schedules[d];
+      if (s != null && !s.isEmpty) dayHours[d] = s.toJson();
+    }
+
     final r = await ApiService.instance.saveMerchantInfo({
       'business_name': _name.text.trim(),
       'address': _address.text.trim(),
@@ -101,6 +199,9 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
       'opening_days': _openDays.toList().join(','),
       'opening_hours': hours,
       'description': _desc.text.trim(),
+      if (_category != null) 'category': _category,
+      if (dayHours.isNotEmpty) 'day_hours': dayHours,
+      if (_currentLogoUrl != null) 'logo_url': _currentLogoUrl,
     });
     if (!mounted) return;
     setState(() => _saving = false);
@@ -138,18 +239,25 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
             children: [
+              // I4 : logo en haut
+              _logoSection(),
               _label('Nom du commerce'),
               _input(_name, hint: 'Ex : Black & White'),
+              // I1 : catégorie
+              _label('Catégorie'),
+              _categorySelector(),
               _label('Adresse'),
-              _input(_address, hint: '14 rue de la Paix, Charleroi'),
+              // I2 : champ adresse avec hint géoloc (sans API externe)
+              _addressField(),
               _label('Téléphone'),
               _input(_phone, hint: '+32 71 00 00 00', keyboard: TextInputType.phone),
               _label('Site web'),
               _input(_website, hint: 'https://moncommerce.be', keyboard: TextInputType.url),
               _label("Jours d'ouverture"),
               _daysRow(),
-              _label('Horaires'),
-              _hoursRow(),
+              // I3 : horaires par jour avec pause
+              _label('Horaires par jour'),
+              _dayScheduleSection(),
               _label('Description courte'),
               _input(_desc, hint: 'Quelques mots sur ton commerce…', lines: 3),
               const SizedBox(height: 22),
@@ -208,36 +316,165 @@ class _InfoCommerceScreenState extends State<InfoCommerceScreen> {
         );
       }).toList());
 
-  Widget _hoursRow() => Row(children: [
-        Expanded(child: _timeField(_open, 'Ouverture', (t) => setState(() => _open = t))),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text('–', style: TextStyle(color: context.cSub))),
-        Expanded(child: _timeField(_close, 'Fermeture', (t) => setState(() => _close = t))),
-      ]);
+  // ── I4 : Logo ────────────────────────────────────────────────────────────────
+  Widget _logoSection() {
+    Widget avatar;
+    if (_logoFile != null) {
+      avatar = ClipRRect(borderRadius: BorderRadius.circular(14),
+          child: Image.file(_logoFile!, width: 72, height: 72, fit: BoxFit.cover));
+    } else if (_currentLogoUrl != null && _currentLogoUrl!.isNotEmpty) {
+      avatar = ClipRRect(borderRadius: BorderRadius.circular(14),
+          child: Image.network(_currentLogoUrl!, width: 72, height: 72, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _logoFallback()));
+    } else {
+      avatar = _logoFallback();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Row(children: [
+        avatar,
+        const SizedBox(width: 14),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          GestureDetector(
+            onTap: _uploadingLogo ? null : _pickLogo,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(color: kPrimary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kPrimary.withValues(alpha: 0.3))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _uploadingLogo
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: kPrimary))
+                    : const Icon(Icons.upload_rounded, size: 14, color: kPrimary),
+                const SizedBox(width: 6),
+                Text(_logoFile != null ? 'Changer' : 'Choisir un logo',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kPrimary)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text('PNG/JPG · max 512×512px', style: TextStyle(fontSize: 10, color: context.cSub)),
+        ]),
+      ]),
+    );
+  }
 
-  Widget _timeField(TimeOfDay? value, String hint, ValueChanged<TimeOfDay> onPick) => GestureDetector(
-        onTap: () async {
-          final t = await showTimePicker(
-            context: context,
-            initialTime: value ?? const TimeOfDay(hour: 9, minute: 0),
-            builder: (ctx, child) => MediaQuery(
-                data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true), child: child!),
-          );
-          if (t != null) onPick(t);
-        },
+  Widget _logoFallback() {
+    final initials = (_name.text.trim().isNotEmpty ? _name.text.trim() : 'Q').substring(0, 1).toUpperCase();
+    return Container(width: 72, height: 72, alignment: Alignment.center,
+        decoration: BoxDecoration(color: kPrimary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: kPrimary.withValues(alpha: 0.2))),
+        child: Text(initials, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: kPrimary)));
+  }
+
+  // ── I1 : Catégorie ────────────────────────────────────────────────────────────
+  Widget _categorySelector() => Wrap(
+    spacing: 7, runSpacing: 7,
+    children: _categories.map((cat) {
+      final sel = _category == cat;
+      return GestureDetector(
+        onTap: () => setState(() => _category = sel ? null : cat),
         child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
           decoration: BoxDecoration(
-            color: context.cSurface, borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.cBorder)),
-          child: Row(children: [
-            Icon(Icons.access_time_rounded, size: 16, color: context.cSub),
-            const SizedBox(width: 8),
-            Text(value != null ? _fmt(value) : hint,
-                style: TextStyle(fontSize: 14, color: value != null ? context.cText : context.cSub)),
-          ]),
+            color: sel ? kPrimary : context.cSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: sel ? kPrimary : context.cBorder),
+          ),
+          child: Text(cat, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600,
+              color: sel ? Colors.white : context.cSub)),
         ),
       );
+    }).toList(),
+  );
+
+  // ── I2 : Adresse (champ amélioré) ─────────────────────────────────────────────
+  Widget _addressField() => Container(
+    decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.cBorder)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: TextField(
+          controller: _address,
+          keyboardType: TextInputType.streetAddress,
+          style: TextStyle(fontSize: 14, color: context.cText),
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            hintText: '14 rue de la Paix, Charleroi',
+            hintStyle: TextStyle(fontSize: 13.5, color: context.cSub),
+            suffixIcon: Icon(Icons.location_on_outlined, size: 18, color: context.cSub),
+          ),
+        ),
+      ),
+    ]),
+  );
+
+  // ── I3 : Horaires par jour ──────────────────────────────────────────────────────
+  Widget _dayScheduleSection() {
+    final activeDays = _openDays.isEmpty ? _days : _days.where((d) => _openDays.contains(d)).toList();
+    if (activeDays.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text("Sélectionne d'abord tes jours d'ouverture ci-dessus",
+            style: TextStyle(fontSize: 11, color: context.cSub)),
+      );
+    }
+    return Column(
+      children: activeDays.map((day) {
+        final sch = _schedules[day] ?? _DaySchedule();
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.cBorder)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text(day, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText)),
+              const Spacer(),
+              if (!sch.isEmpty)
+                GestureDetector(
+                  onTap: () => setState(() => _schedules.remove(day)),
+                  child: Text('Effacer', style: TextStyle(fontSize: 10, color: context.cSub)),
+                ),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: _miniTime(sch.open, 'Ouverture', (t) => setState(() { (_schedules[day] ??= _DaySchedule()).open = t; }))),
+              const SizedBox(width: 6),
+              Expanded(child: _miniTime(sch.pauseStart, 'Pause début', (t) => setState(() { (_schedules[day] ??= _DaySchedule()).pauseStart = t; }))),
+              const SizedBox(width: 6),
+              Expanded(child: _miniTime(sch.pauseEnd, 'Pause fin', (t) => setState(() { (_schedules[day] ??= _DaySchedule()).pauseEnd = t; }))),
+              const SizedBox(width: 6),
+              Expanded(child: _miniTime(sch.close, 'Fermeture', (t) => setState(() { (_schedules[day] ??= _DaySchedule()).close = t; }))),
+            ]),
+          ]),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _miniTime(TimeOfDay? value, String hint, ValueChanged<TimeOfDay> onPick) => GestureDetector(
+    onTap: () async {
+      final t = await showTimePicker(
+        context: context,
+        initialTime: value ?? const TimeOfDay(hour: 9, minute: 0),
+        builder: (ctx, child) => MediaQuery(
+            data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true), child: child!),
+      );
+      if (t != null) onPick(t);
+    },
+    child: Container(
+      height: 42, alignment: Alignment.center,
+      decoration: BoxDecoration(color: context.cBg, borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: value != null ? kPrimary.withValues(alpha: 0.5) : context.cBorder)),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        if (value != null)
+          Text(_fmt(value), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kPrimary))
+        else
+          Icon(Icons.access_time_rounded, size: 14, color: context.cSub),
+        Text(hint, style: TextStyle(fontSize: 7.5, color: context.cSub), maxLines: 1, overflow: TextOverflow.ellipsis),
+      ]),
+    ),
+  );
+
 }

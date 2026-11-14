@@ -228,12 +228,20 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(16, 20, 16, 24 + MediaQuery.of(context).padding.bottom),
               children: [
+                Text('APERÇU', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4))),
+                const SizedBox(height: 8),
                 _buildPreview(),
                 const SizedBox(height: 24),
 
                 // ── Thèmes rapides ──────────────────────────────────────────
                 _label('Thème'),
                 _buildThemeGrid(),
+                const SizedBox(height: 8),
+
+                // ── Nombre de tampons ────────────────────────────────────────
+                _label('Nombre de tampons requis'),
+                _stampsSelector(),
                 const SizedBox(height: 8),
 
                 // ── Récompense ──────────────────────────────────────────────
@@ -298,8 +306,12 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
     ),
   );
 
+  static bool _isLight(Color c) => c.computeLuminance() > 0.6;
+
   Widget _themeSwatch(int idx, _Theme t) {
     final selected = _selectedTheme == idx;
+    final mainColor = t.bgColors.first;
+    final lightTheme = _isLight(mainColor);
     return Tooltip(
       message: t.name,
       child: GestureDetector(
@@ -318,10 +330,12 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
             gradient: t.bgType == 'gradient' && t.bgColors.length >= 2
                 ? LinearGradient(colors: t.bgColors, begin: Alignment.topLeft, end: Alignment.bottomRight)
                 : null,
-            color: t.bgType == 'color' ? t.bgColors.first : null,
+            color: t.bgType == 'color' ? mainColor : null,
             border: selected
                 ? Border.all(color: Colors.white, width: 2.5)
-                : Border.all(color: Colors.transparent),
+                : lightTheme
+                    ? Border.all(color: context.cBorder)
+                    : Border.all(color: Colors.transparent),
             boxShadow: selected
                 ? [BoxShadow(color: t.bgColors.first.withValues(alpha: 0.5), blurRadius: 8, spreadRadius: 1)]
                 : null,
@@ -364,6 +378,41 @@ class _CarteEditorScreenState extends State<CarteEditorScreen> {
       ),
     ]),
   );
+
+  Widget _stampsSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(12), border: Border.all(color: context.cBorder)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        GestureDetector(
+          onTap: _stampsRequired > 5 ? () => setState(() { _stampsRequired--; }) : null,
+          child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: _stampsRequired > 5 ? context.cBg : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _stampsRequired > 5 ? context.cBorder : Colors.transparent)),
+            child: Icon(Icons.remove_rounded, size: 20, color: _stampsRequired > 5 ? context.cText : context.cSub),
+          ),
+        ),
+        Column(children: [
+          Text('$_stampsRequired', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: context.cText, height: 1)),
+          Text('tampons', style: TextStyle(fontSize: 10, color: context.cSub)),
+        ]),
+        GestureDetector(
+          onTap: _stampsRequired < 12 ? () => setState(() { _stampsRequired++; }) : null,
+          child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: _stampsRequired < 12 ? context.cBg : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _stampsRequired < 12 ? context.cBorder : Colors.transparent)),
+            child: Icon(Icons.add_rounded, size: 20, color: _stampsRequired < 12 ? context.cText : context.cSub),
+          ),
+        ),
+      ]),
+    );
+  }
 
   Widget _label(String t) => Padding(
     padding: const EdgeInsets.fromLTRB(2, 16, 0, 7),

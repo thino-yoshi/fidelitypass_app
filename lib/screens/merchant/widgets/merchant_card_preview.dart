@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../merchant_tokens.dart';
 import '../../../config/app_colors.dart';
@@ -29,12 +28,6 @@ class MerchantCardPreview extends StatelessWidget {
       fallbackColor: kPrimary,
     );
 
-    if (kIsIOS) return _buildIOS(context, card, style);
-    return _buildMaterial(context, card, style);
-  }
-
-  // ─── Android ────────────────────────────────────────────────────────────────
-  Widget _buildMaterial(BuildContext context, Map card, CardStyle style) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('Ma carte fidélité',
@@ -58,41 +51,6 @@ class MerchantCardPreview extends StatelessWidget {
         const SizedBox(width: 5),
         Text('Appuyer pour modifier la carte',
           style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: context.cSub)),
-      ])),
-    ]);
-  }
-
-  // ─── iOS : section avec bordure légère, bouton Cupertino ────────────────────
-  Widget _buildIOS(BuildContext context, Map card, CardStyle style) {
-    final isDark     = context.isDark;
-    final titleColor = isDark ? Colors.white : const Color(0xFF000000);
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('Ma carte fidélité',
-          style: TextStyle(
-            fontSize: 15, fontWeight: FontWeight.w600,
-            color: titleColor, letterSpacing: -0.3)),
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: onEditTap,
-          child: const Text('Modifier',
-            style: TextStyle(fontSize: 14, color: kPrimary))),
-      ]),
-      const SizedBox(height: 10),
-      GestureDetector(
-        onTap: onEditTap,
-        child: SizedBox(
-          height: 220,
-          child: LoyaltyCardFace(card: card, style: style, userName: 'Client'),
-        ),
-      ),
-      const SizedBox(height: 8),
-      Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(CupertinoIcons.pencil, size: 11, color: Color(0xFF8E8E93)),
-        const SizedBox(width: 5),
-        const Text('Appuyer pour modifier la carte',
-          style: TextStyle(fontSize: 11, color: Color(0xFF8E8E93))),
       ])),
     ]);
   }

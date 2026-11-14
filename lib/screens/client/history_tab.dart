@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
+import 'widgets/client_history_ios.dart';
+import 'cards_tab.dart' show CardStyle;
 
 const _kPrimary = Color(0xFF2C7BE5);
 const _kGold    = Color(0xFFF59E0B);
@@ -9,58 +11,70 @@ class HistoryTab extends StatefulWidget {
   final String token;
   final List<dynamic> history;
   final Future<void> Function() onRefresh;
-  const HistoryTab({super.key, required this.token, required this.history, required this.onRefresh});
+  final List<dynamic> cards;
+  const HistoryTab({super.key, required this.token, required this.history, required this.onRefresh, this.cards = const []});
 
   @override
   State<HistoryTab> createState() => _HistoryTabState();
 }
 
 class _HistoryTabState extends State<HistoryTab> {
-  Color get _kBorder => context.cBorder;
-  Color get _kText   => context.cText;
-  Color get _kSub    => context.cSub;
-  Color get _kWhite  => context.cSurface;
+  String _filter = 'all';
 
-  String _filter = 'all'; // 'all' | 'stamp' | 'reward'
+  static const _jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  static const _mois  = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                          'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
-  // Convert API data to flat list of items sorted by date
+  Color? _cardColor(String? merchantId) {
+    if (merchantId == null) return null;
+    for (final c in widget.cards) {
+      if (c['merchant_id'] == merchantId || c['merchants']?['id'] == merchantId) {
+        return CardStyle.fromDesign(c['card_design'], fallbackColor: _kPrimary).primary;
+      }
+    }
+    return null;
+  }
+
   List<Map<String, dynamic>> _flatItems() {
     final items = <Map<String, dynamic>>[];
     for (final scan in widget.history) {
-      final isReward   = scan['reward_reached'] == true;
-      final type       = isReward ? 'reward' : 'stamp';
-      final name       = scan['merchant']?['business_name'] as String? ?? 'Commerce';
-      final isPoints   = (scan['merchant']?['program_type'] as String?) == 'points';
-      final stamps     = scan['stamps_count'] as int? ?? 0;
-      final delta      = (scan['delta'] as int?) ?? (isPoints ? stamps : 1);
-      final dt         = DateTime.tryParse(scan['scanned_at'] as String? ?? '')?.toLocal();
-      final time      = dt != null
+      final isReward = scan['reward_reached'] == true;
+      final type     = isReward ? 'reward' : 'stamp';
+      final name     = scan['merchant']?['business_name'] as String? ?? 'Commerce';
+      final isPoints = (scan['merchant']?['program_type'] as String?) == 'points';
+      final stamps   = scan['stamps_count'] as int? ?? 0;
+      final delta    = (scan['delta'] as int?) ?? (isPoints ? stamps : 1);
+      final dt       = DateTime.tryParse(scan['scanned_at'] as String? ?? '')?.toLocal();
+      final time     = dt != null
           ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
           : '';
 
-      // Day label
       final now   = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       String day  = 'Autre';
       if (dt != null) {
         final itemDay = DateTime(dt.year, dt.month, dt.day);
         final diff    = today.difference(itemDay).inDays;
-        if (diff == 0) {
-          day = "Aujourd'hui";
-        } else if (diff == 1) day = 'Hier';
-        else                day = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
+        if (diff == 0)      day = "Aujourd'hui";
+        else if (diff == 1) day = 'Hier';
+        else                day = '${_jours[dt.weekday - 1]} ${dt.day} ${_mois[dt.month - 1]}';
       }
 
       items.add({
-        'type':  type,
-        'name':  name,
-        'time':  time,
-        'info':     isReward ? 'Récompense débloquée' : (isPoints ? '$stamps pts' : '$stamps tampons'),
-        'isPoints': isPoints,
-        'delta':    delta,
-        'color':    isReward ? _kGold : _kPrimary,
-        'day':      day,
-        'dt':       dt,
+        'type':      type,
+        'name':      name,
+        'time':      time,
+        'info':      isReward
+            ? 'Carte complète'
+            : (isPoints
+                ? '$stamps/${scan['merchant']?['points_required'] ?? 100} pts'
+                : '$stamps/${scan['merchant']?['stamps_required'] ?? 10} tampons'),
+        'cardColor': _cardColor(scan['merchant']?['id'] as String?),
+        'isPoints':  isPoints,
+        'delta':     delta,
+        'color':     isReward ? _kGold : _kPrimary,
+        'day':       day,
+        'dt':        dt,
       });
     }
     return items;
@@ -73,12 +87,10 @@ class _HistoryTabState extends State<HistoryTab> {
     return all;
   }
 
-  // Group items by day label (preserving order)
   Map<String, List<Map<String, dynamic>>> _byDay(List<Map<String, dynamic>> items) {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final item in items) {
-      final day = item['day'] as String;
-      map.putIfAbsent(day, () => []).add(item);
+      map.putIfAbsent(item['day'] as String, () => []).add(item);
     }
     return map;
   }
@@ -88,139 +100,18 @@ class _HistoryTabState extends State<HistoryTab> {
     final allItems      = _flatItems();
     final filteredItems = _filtered(allItems);
     final grouped       = _byDay(filteredItems);
-
-    return RefreshIndicator(
-      onRefresh: widget.onRefresh,
-      color: _kPrimary,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 14, 16, 96 + MediaQuery.of(context).padding.bottom),
-        children: [
-
-          // ── Filter chips (Figma: Tout | Tampons | Récompenses) ─────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _chip('all',    'Tout'),
-              const SizedBox(width: 6),
-              _chip('stamp',  'Tampons'),
-              const SizedBox(width: 6),
-              _chip('reward', 'Récompenses'),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── Empty state ────────────────────────────────────────────────────
-          if (filteredItems.isEmpty) ...[
-            const SizedBox(height: 60),
-            Center(child: Column(children: [
-              Container(
-                width: 72, height: 72,
-                decoration: BoxDecoration(
-                  color: context.cSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: context.cBorder),
-                ),
-                child: Icon(Icons.history_rounded, size: 34, color: context.cSub),
-              ),
-              const SizedBox(height: 16),
-              Text('Aucune activité', style: TextStyle(
-                color: _kText, fontSize: 15, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
-              const SizedBox(height: 4),
-              Text('Tes visites apparaîtront ici après ton premier scan.',
-                style: TextStyle(color: _kSub, fontSize: 13), textAlign: TextAlign.center),
-            ])),
-          ],
-
-          // ── Grouped by day ─────────────────────────────────────────────────
-          for (final entry in grouped.entries) ...[
-            // Day label
-            Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 5),
-              child: Text(entry.key.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w700,
-                  color: _kSub, letterSpacing: 0.06,
-                )),
-            ),
-            // Items
-            ...entry.value.map((item) => _historyItem(item)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(String key, String label) {
-    final active = _filter == key;
-    return GestureDetector(
-      onTap: () {
-        AppLogger.client('HistoryTab → filtre: $key');
-        setState(() => _filter = key);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: active ? _kPrimary : _kWhite,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? _kPrimary : _kBorder),
-        ),
-        child: Text(label, style: TextStyle(
-          fontSize: 11, fontWeight: FontWeight.w600,
-          color: active ? Colors.white : _kSub,
-        )),
-      ),
-    );
-  }
-
-  Widget _historyItem(Map<String, dynamic> item) {
-    final color    = item['color'] as Color;
-    final isReward = item['type'] == 'reward';
-    final isPoints = item['isPoints'] as bool? ?? false;
-    final delta    = item['delta'] as int? ?? 1;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 7),
-      padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-      decoration: BoxDecoration(
-        color: _kWhite,
-        border: Border.all(color: _kBorder),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(children: [
-        // Colored dot
-        Container(
-          width: 8, height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 10),
-        // Name + info
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item['name'] as String,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kText)),
-          const SizedBox(height: 1),
-          Text('${item['time']} · ${item['info']}',
-            style: TextStyle(fontSize: 11, color: _kSub)),
-        ])),
-        // Badge
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: isReward
-                ? const Color(0xFFFEF3C7) // gold bg
-                : const Color(0xFFE8F1FD), // blue bg
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: Text(
-            isReward ? 'Récompense' : (isPoints ? '+$delta pts' : '+1 tampon'),
-            style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700,
-              color: isReward ? const Color(0xFF92400E) : _kPrimary,
-            ),
-          ),
-        ),
-      ]),
+    final now = DateTime.now();
+    bool thisMonth(Map i) {
+      final d = i['dt'] as DateTime?;
+      return d != null && d.year == now.year && d.month == now.month;
+    }
+    return ClientHistoryIos(
+      grouped:      grouped,
+      monthVisits:  allItems.where((i) => i['type'] == 'stamp'  && thisMonth(i)).length,
+      monthRewards: allItems.where((i) => i['type'] == 'reward' && thisMonth(i)).length,
+      filter:       _filter,
+      onFilter:     (k) { AppLogger.client('HistoryTab → filtre: $k'); setState(() => _filter = k); },
+      onRefresh:    widget.onRefresh,
     );
   }
 }

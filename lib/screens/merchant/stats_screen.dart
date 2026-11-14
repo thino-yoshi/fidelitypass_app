@@ -41,7 +41,6 @@ class _StatsScreenState extends State<StatsScreen> {
   List<dynamic> _history = [];
   List<dynamic> _clients = [];
   bool _loading = true;
-  String _fidPeriod = '7j'; // '7j' | '30j'
 
   int get _required => widget.merchantInfo?['stamps_required'] as int? ?? 10;
 
@@ -150,28 +149,22 @@ class _StatsScreenState extends State<StatsScreen> {
     return all.take(3).toList();
   }
 
-  /// Indice de fidélisation par jour (0-100) = activité normalisée.
-  List<int> _fidSeries(int days) {
-    final src = _daily.length >= days ? _daily.sublist(_daily.length - days) : _daily;
-    return src.map<int>((d) {
-      final scans = (d['scans'] as int?) ?? 0;
-      final rew   = (d['rewards'] as int?) ?? 0;
-      return (scans * 6 + rew * 20).clamp(0, 100);
-    }).toList();
-  }
-
-  int get _fidScore {
-    final s = _fidSeries(int.parse(_fidPeriod.replaceAll('j', '')));
-    if (s.isEmpty) return 0;
-    // moyenne des 3 derniers points (lissage)
-    final tail = s.length >= 3 ? s.sublist(s.length - 3) : s;
-    return (tail.reduce((a, b) => a + b) / tail.length).round();
-  }
-
-  int get _fidTrend {
-    final s = _fidSeries(int.parse(_fidPeriod.replaceAll('j', '')));
-    if (s.length < 2) return 0;
-    return s.last - s.first;
+  // S5 : delta scans vs période précédente (mêmes calculs que l'accueil)
+  int _scansDelta() {
+    if (_history.isEmpty) return 0;
+    final now = DateTime.now();
+    final from30 = now.subtract(const Duration(days: 30));
+    final from60 = now.subtract(const Duration(days: 60));
+    final cur  = _history.where((s) {
+      final t = DateTime.tryParse(s['scanned_at'] as String? ?? '');
+      return t != null && t.isAfter(from30);
+    }).length;
+    final prev = _history.where((s) {
+      final t = DateTime.tryParse(s['scanned_at'] as String? ?? '');
+      return t != null && t.isAfter(from60) && !t.isAfter(from30);
+    }).length;
+    if (prev == 0) return 0;
+    return ((cur - prev) / prev * 100).round();
   }
 
   int get _prochesRecompense {
@@ -215,9 +208,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       const SizedBox(height: 10),
                       _activityCard(),
                       const SizedBox(height: 10),
-                      _heuresCreusesCard(),
+                      _scansParJourCard(),
                       const SizedBox(height: 10),
-                      _fidelityCard(),
+                      _nouveauxClientsCard(),
+                      const SizedBox(height: 10),
+                      _heuresCreusesCard(),
                       const SizedBox(height: 10),
                       _prochesCard(),
                       const SizedBox(height: 10),
@@ -299,6 +294,21 @@ class _StatsScreenState extends State<StatsScreen> {
               backgroundColor: Colors.white.withValues(alpha: 0.1),
               valueColor: const AlwaysStoppedAnimation(_kBlueLight)),
         ),
+        Builder(builder: (_) {
+          final delta = _scansDelta();
+          if (delta == 0) return const SizedBox.shrink();
+          final sign   = delta > 0 ? '+' : '';
+          final color  = delta > 0 ? _kSuccess : const Color(0xFFE24B4A);
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(children: [
+              Icon(delta > 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: color, size: 13),
+              const SizedBox(width: 4),
+              Text('$sign$delta% de visites vs mois précédent',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+            ]),
+          );
+        }),
       ]),
     );
   }
@@ -340,6 +350,139 @@ class _StatsScreenState extends State<StatsScreen> {
             left: BorderSide(color: context.cBorder), right: BorderSide(color: context.cBorder))),
           m('$recompenses', 'récompenses gagnées'),
         ]),
+      ]),
+    );
+  }
+
+  // ── S2 : Graphique barres scans par jour (7 derniers jours) ─────────────────
+  Widget _scansParJourCard() {
+    const dayShort = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final days = List.generate(7, (i) {
+      final day  = today.subtract(Duration(days: 6 - i));
+      final cnt  = _history.where((s) {
+        final t = DateTime.tryParse(s['scanned_at'] as String? ?? '')?.toLocal();
+        return t != null && DateTime(t.year, t.month, t.day) == day;
+      }).length;
+      return {'label': dayShort[day.weekday % 7], 'count': cnt, 'today': i == 6};
+    });
+
+    final maxCnt = days.fold<int>(1, (m, d) => ((d['count'] as int) > m ? d['count'] as int : m));
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.cBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.bar_chart_rounded, color: _kPrimary, size: 15),
+          const SizedBox(width: 6),
+          Text('Visites par jour – 7 jours', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: context.cText)),
+        ]),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 76,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: days.map((d) {
+              final cnt    = d['count'] as int;
+              final ratio  = cnt / maxCnt;
+              final isToday = d['today'] as bool;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    if (cnt > 0)
+                      Text('$cnt', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700,
+                          color: isToday ? _kPrimary : context.cSub)),
+                    const SizedBox(height: 2),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 400),
+                      height: (56 * ratio).clamp(4.0, 56.0),
+                      decoration: BoxDecoration(
+                        color: isToday ? _kPrimary : _kPrimary.withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(d['label'] as String, style: TextStyle(fontSize: 8.5, color: isToday ? _kPrimary : context.cSub,
+                        fontWeight: isToday ? FontWeight.w700 : FontWeight.w500)),
+                  ]),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ── S3 : Nouveaux clients par semaine (4 semaines) ───────────────────────────
+  Widget _nouveauxClientsCard() {
+    final now = DateTime.now();
+    // Semaine courante commence lundi
+    final weekStart0 = now.subtract(Duration(days: now.weekday - 1));
+    final startOfToday = DateTime(weekStart0.year, weekStart0.month, weekStart0.day);
+
+    final weeks = List.generate(4, (i) {
+      final wStart = startOfToday.subtract(Duration(days: 7 * (3 - i)));
+      final wEnd   = wStart.add(const Duration(days: 7));
+      final cnt    = _clients.where((c) {
+        final t = DateTime.tryParse(c['created_at'] as String? ?? '');
+        return t != null && !t.isBefore(wStart) && t.isBefore(wEnd);
+      }).length;
+      final label = i == 3 ? 'Cette sem.' : 'S-${3 - i}';
+      return {'label': label, 'count': cnt, 'current': i == 3};
+    });
+
+    final maxCnt = weeks.fold<int>(1, (m, w) => ((w['count'] as int) > m ? w['count'] as int : m));
+    final totalNewClients = weeks.fold<int>(0, (s, w) => s + (w['count'] as int));
+    if (totalNewClients == 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.cBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.person_add_rounded, color: _kSuccess, size: 15),
+          const SizedBox(width: 6),
+          Text('Nouveaux clients – 4 semaines', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: context.cText)),
+        ]),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 76,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: weeks.map((w) {
+              final cnt     = w['count'] as int;
+              final ratio   = cnt / maxCnt;
+              final isCur   = w['current'] as bool;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    if (cnt > 0)
+                      Text('$cnt', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700,
+                          color: isCur ? _kSuccess : context.cSub)),
+                    const SizedBox(height: 2),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 400),
+                      height: (56 * ratio).clamp(4.0, 56.0),
+                      decoration: BoxDecoration(
+                        color: isCur ? _kSuccess : _kSuccess.withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(w['label'] as String, style: TextStyle(fontSize: 8, color: isCur ? _kSuccess : context.cSub,
+                        fontWeight: isCur ? FontWeight.w700 : FontWeight.w500)),
+                  ]),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ]),
     );
   }
@@ -405,7 +548,8 @@ class _StatsScreenState extends State<StatsScreen> {
         // ── Bouton ────────────────────────────────────────────────────────────
         SizedBox(width: double.infinity, child: GestureDetector(
           onTap: () => Navigator.push(context, platformRoute(
-              builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
+              builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo,
+                  initialTemplate: 'promo', initialAudience: 'inactifs'))),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 11),
             decoration: BoxDecoration(color: _kGold, borderRadius: BorderRadius.circular(10)),
@@ -414,98 +558,6 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         )),
       ]),
-    );
-  }
-
-  // ── Indice de fidélisation ──────────────────────────────────────────────────
-  Widget _fidelityCard() {
-    final n = int.parse(_fidPeriod.replaceAll('j', ''));
-    final series = _fidSeries(n);
-    final score = _fidScore;
-    final trend = _fidTrend;
-
-    Widget pBtn(String key, String label) {
-      final active = _fidPeriod == key;
-      return GestureDetector(
-        onTap: () => setState(() => _fidPeriod = key),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: active ? _kPrimary : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: active ? _kPrimary : context.cBorder)),
-          child: Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: active ? Colors.white : context.cSub)),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.cBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Expanded(child: Text('Évolution de la fidélisation', maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.cText))),
-          Row(children: [pBtn('7j', '7j'), const SizedBox(width: 4), pBtn('30j', 'Mois')]),
-        ]),
-        const SizedBox(height: 4),
-        Text('Score combinant tampons, récompenses et activité', style: TextStyle(fontSize: 9, color: context.cSub)),
-        const SizedBox(height: 8),
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('$score', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: context.cText, height: 1)),
-          Text('/100', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.cSub)),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: (trend >= 0 ? _kSuccess : _kError).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-            child: Text('${trend >= 0 ? "↑ +" : "↓ "}$trend sur la période',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: trend >= 0 ? _kSuccess : _kError)),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        // Courbe (sparkline)
-        SizedBox(height: 70, width: double.infinity, child: CustomPaint(painter: _LinePainter(series))),
-        const SizedBox(height: 10),
-        SizedBox(width: double.infinity, child: OutlinedButton.icon(
-          onPressed: _showExplain,
-          icon: const Icon(Icons.help_outline_rounded, size: 14, color: _kPrimary),
-          label: const Text('Comprendre ce graphique', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kPrimary)),
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: context.cBorder), backgroundColor: context.cBg,
-            padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-        )),
-      ]),
-    );
-  }
-
-  void _showExplain() {
-    showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(color: context.cSurface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-        padding: EdgeInsets.fromLTRB(22, 14, 22, 24 + MediaQuery.of(ctx).padding.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: context.cBorder, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 18),
-          Text("L'indice de fidélisation", style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.cText)),
-          const SizedBox(height: 10),
-          Text(
-            "C'est un score de 0 à 100 qui résume la santé de votre programme jour par jour. "
-            "Il combine le nombre de tampons distribués, les récompenses débloquées et l'activité.\n\n"
-            "• Score qui monte → vos clients sont de plus en plus engagés.\n"
-            "• Score qui baisse → moins de passages, c'est le moment de relancer (push, offre).\n\n"
-            "Utilisez la tendance pour voir si vos actions portent leurs fruits.",
-            style: TextStyle(fontSize: 13, color: context.cSub, height: 1.5),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white, elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 13), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
-            child: const Text("J'ai compris", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          )),
-        ]),
-      ),
     );
   }
 
@@ -543,6 +595,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _prochesCard() {
     final n = _prochesRecompense;
+    if (n == 0) return const SizedBox.shrink();
     return _summaryRow(
       icon: Icons.star_rounded, iconColor: _kGold, iconBg: const Color(0xFFFEF3C7),
       countText: '$n client${n > 1 ? "s" : ""}', countColor: _kGold,
@@ -550,7 +603,8 @@ class _StatsScreenState extends State<StatsScreen> {
       sub: '≥ ${(_required - 2).clamp(1, _required)}/$_required tampons · prêts à être relancés',
       btn: 'Notifier', btnBg: _kGold, btnText: Colors.white,
       onTap: () => Navigator.push(context, platformRoute(
-          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
+          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo,
+              initialTemplate: 'rappel', initialAudience: 'proches'))),
     );
   }
 
@@ -563,47 +617,8 @@ class _StatsScreenState extends State<StatsScreen> {
       sub: 'aucune visite récente · à reconquérir',
       btn: 'Relancer', btnBg: context.cBg, btnText: context.cText,
       onTap: () => Navigator.push(context, platformRoute(
-          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo))),
+          builder: (_) => NotificationsScreen(token: widget.token, merchantInfo: widget.merchantInfo,
+              initialTemplate: 'promo', initialAudience: 'inactifs'))),
     );
   }
-}
-
-// ─── Sparkline (courbe lissée de l'indice) ──────────────────────────────────
-class _LinePainter extends CustomPainter {
-  final List<int> data;
-  _LinePainter(this.data);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.length < 2) return;
-    const maxV = 100.0;
-    final dx = size.width / (data.length - 1);
-    Offset pt(int i) => Offset(i * dx, size.height - (data[i] / maxV) * size.height);
-
-    // Aire sous la courbe
-    final fill = Path()..moveTo(0, size.height);
-    for (int i = 0; i < data.length; i++) { fill.lineTo(pt(i).dx, pt(i).dy); }
-    fill..lineTo(size.width, size.height)..close();
-    canvas.drawPath(fill, Paint()..shader = const LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [Color(0x332C7BE5), Color(0x002C7BE5)]).createShader(Offset.zero & size));
-
-    // Ligne
-    final line = Path()..moveTo(pt(0).dx, pt(0).dy);
-    for (int i = 1; i < data.length; i++) {
-      final p0 = pt(i - 1), p1 = pt(i);
-      final mid = Offset((p0.dx + p1.dx) / 2, (p0.dy + p1.dy) / 2);
-      line.quadraticBezierTo(p0.dx, p0.dy, mid.dx, mid.dy);
-      line.quadraticBezierTo(p1.dx, p1.dy, p1.dx, p1.dy);
-    }
-    canvas.drawPath(line, Paint()
-      ..color = _kPrimary ..style = PaintingStyle.stroke ..strokeWidth = 2.5 ..strokeCap = StrokeCap.round);
-
-    // Point final
-    canvas.drawCircle(pt(data.length - 1), 3.5, Paint()..color = _kPrimary);
-    canvas.drawCircle(pt(data.length - 1), 3.5, Paint()..color = Colors.white ..style = PaintingStyle.stroke ..strokeWidth = 1.5);
-  }
-
-  @override
-  bool shouldRepaint(_LinePainter old) => old.data != data;
 }

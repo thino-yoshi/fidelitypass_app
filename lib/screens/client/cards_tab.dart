@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoActivityIndicator;
+import '../../config/demo_mode.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -11,6 +14,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
+import 'widgets/client_pass_face_ios.dart';
+import 'widgets/client_cards_stack_ios.dart';
+import 'widgets/client_hours.dart';
+import 'widgets/client_sheets_ios.dart' show showIosAlert;
 
 /// Événement émis quand le commerçant ajoute des tampons/points à une carte
 /// pendant que le client a son QR ouvert (détecté par polling).
@@ -42,6 +49,8 @@ class CardsTab extends StatefulWidget {
   final String? cardIdToAnimate;
   final String? cardIdToSlideIn;
   final VoidCallback? onAnimationDone;
+  final VoidCallback? onScanTap;
+  final ValueChanged<bool>? onSearchActive;
 
   const CardsTab({
     super.key,
@@ -53,6 +62,8 @@ class CardsTab extends StatefulWidget {
     this.cardIdToAnimate,
     this.cardIdToSlideIn,
     this.onAnimationDone,
+    this.onScanTap,
+    this.onSearchActive,
   });
 
   @override
@@ -62,7 +73,6 @@ class CardsTab extends StatefulWidget {
 class _CardsTabState extends State<CardsTab> {
   String _search = '';
 
-  // Palette de secours si le commerçant n'a pas de design personnalisé
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
     Color(0xFFC0392B),
@@ -72,24 +82,6 @@ class _CardsTabState extends State<CardsTab> {
     Color(0xFFE67E22),
   ];
 
-  /// Prénom seul du titulaire (premier mot), avec 1ère lettre en majuscule.
-  String get _firstName {
-    final parts = widget.userName.trim().split(RegExp(r'\s+'));
-    final first = parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : widget.userName;
-    if (first.isEmpty) return first;
-    return first[0].toUpperCase() + first.substring(1);
-  }
-
-  /// Taille du nom de commerce — réduite si le nom est long (émule le clamp du site).
-  double _titleFontSize(String name) {
-    if (name.length >= 22) return 14;
-    if (name.length >= 16) return 16;
-    return 18;
-  }
-
-  /// Parse le card_design du site qarta.be (table merchant_card_designs.card_design).
-  /// Champs réels : bgType, bgColors, accentColors, textColor, fontFamily,
-  /// bgImageUrl, bgGradientAngle, bgImageOpacity, accentAngle, cardName, stampLabel.
   CardStyle _styleFromCard(Map card, int fallbackIndex) {
     return CardStyle.fromDesign(
       card['card_design'],
@@ -98,36 +90,59 @@ class _CardsTabState extends State<CardsTab> {
     );
   }
 
-  // Les cartes arrivent déjà enrichies depuis client_home._loadStats()
-  List<dynamic> get _rewardCards => widget.cards.where((c) {
-    final type = c['merchants']?['program_type'] as String? ?? 'stamps';
-    final val  = type == 'points'
-        ? (c['points_count'] as int? ?? 0)
-        : (c['stamps_count'] as int? ?? 0);
-    final req  = type == 'points'
-        ? (c['merchants']?['points_required'] as int? ?? 100)
-        : (c['merchants']?['stamps_required'] as int? ?? 10);
-    return val >= req;
-  }).toList();
+  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
 
-  void _showQRModal(Map card, CardStyle style) {
-    final name = card['merchants']?['business_name'] as String? ?? '?';
-    final id   = card['id'] as String? ?? '?';
-    AppLogger.client('CardsTab → carte sélectionnée: $name (id: $id)');
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => QRModal(
-        token: widget.token,
-        card: card,
-        style: style,
-        userName: widget.userName,
-        onStampAdded: widget.onRefresh, // rafraîchit les cartes après tampon
-        onStampEvent: widget.onStampEvent, // popup + remontée carte (géré par client_home)
+  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim, {required bool collapsedAtRest}) {
+    final full = ClientPassFaceIos(card: card, style: style);
+    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
+    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
+    return Material(
+      type: MaterialType.transparency,
+      child: AnimatedBuilder(
+        animation: t,
+        builder: (_, __) => t.value >= 1
+            ? full
+            : Stack(fit: StackFit.expand, children: [
+                ClientPassFaceIos(card: card, style: style, collapsed: true),
+                Opacity(opacity: t.value, child: full),
+              ]),
       ),
     );
   }
+
+  void _popOutCard(Map card, CardStyle style) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      transitionDuration: const Duration(milliseconds: 380),
+      reverseTransitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (ctx, anim, _) => CardPopOut(
+        heroTag: 'card-${card['id']}',
+        animation: anim,
+        face: ClientPassFaceIos(card: card, style: style),
+        onOpen: () {
+          Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
+        },
+      ),
+    ));
+  }
+
+  Route<void> _openCardRoute(Map card, CardStyle style) => PageRouteBuilder(
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 420),
+        reverseTransitionDuration: const Duration(milliseconds: 340),
+        pageBuilder: (ctx, anim, _) => OpenCardPage(
+          animation: anim,
+          child: QRModal(
+            token: widget.token,
+            card: card,
+            style: style,
+            userName: widget.userName,
+            onStampAdded: widget.onRefresh,
+            onStampEvent: widget.onStampEvent,
+            heroTag: 'card-${card['id']}',
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -140,558 +155,28 @@ class _CardsTabState extends State<CardsTab> {
             return name.contains(q) || cardName.contains(q);
           }).toList();
 
-    if (widget.cards.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () async => widget.onRefresh(),
-        color: const Color(0xFF2C7BE5),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const SizedBox(height: 104),
-            Center(
-              child: Column(
-                children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(
-                      color: context.qSurface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: context.qBorder),
-                    ),
-                    child: Icon(Icons.credit_card_off_outlined, size: 34, color: context.qSub),
-                  ),
-                  const SizedBox(height: 16),
-                  Text("Tu n'as pas encore de carte.", style: TextStyle(color: context.qText, fontSize: 15, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
-                  const SizedBox(height: 4),
-                  Text("Va dans un de tes commerces préférés pour en ajouter une !", style: TextStyle(color: Colors.grey[400], fontSize: 13), textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
+    return ClientCardsStackIos(
+      hasAnyCard: widget.cards.isNotEmpty,
+      onSearchActive: widget.onSearchActive,
+      onSearch: (v) => setState(() => _search = v),
       onRefresh: () async => widget.onRefresh(),
-      color: const Color(0xFF2C7BE5),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10, top: 4),
-            child: Row(
-              children: [
-                Text('Tes cartes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.qText)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: context.qSurface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: context.qBorder),
-                    ),
-                    child: TextField(
-                      onChanged: (v) => setState(() => _search = v),
-                      style: TextStyle(fontSize: 12, color: context.qText),
-                      decoration: InputDecoration(
-                        hintText: 'Rechercher un commerce…',
-                        hintStyle: TextStyle(fontSize: 12, color: context.qSub),
-                        prefixIcon: Icon(Icons.search_rounded, size: 16, color: context.qSub),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 9),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Liste des cartes
-          ...List.generate(cards.length, (i) {
-            final card  = cards[i];
-            final style = _styleFromCard(card, i);
-            final isAnimating = card['id'] == widget.cardIdToAnimate;
-            final isSliding   = card['id'] == widget.cardIdToSlideIn;
-            final cardWidget = Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: GestureDetector(
-                onTap: isAnimating ? null : () => _showQRModal(card, style),
-                child: SizedBox(
-                  height: 220,
-                  child: LoyaltyCardFace(
-                    card: card,
-                    style: style,
-                    userName: widget.userName,
-                  ),
-                ),
-              ),
-            );
-            if (isAnimating) {
-              return _FlyingCard(
-                key: ValueKey('flying_${card['id']}'),
-                onDone: widget.onAnimationDone ?? () {},
-                child: cardWidget,
-              );
-            }
-            if (isSliding) {
-              return _SlideInCard(
-                key: ValueKey('slidein_${card['id']}'),
-                child: cardWidget,
-              );
-            }
-            return cardWidget;
-          }),
-        ],
-      ),
-    );
-  }
-
-  // ── Carte Tampons (layout aligné sur qarta.be) ───────────────────────────────
-
-  Widget _buildStampsCard(Map card, CardStyle style) {
-    final stamps       = card['stamps_count'] as int? ?? 0;
-    // Le site lit stampsRequired depuis card_design → on fait pareil (fallback merchants).
-    final required     = style.stampsRequired
-        ?? card['merchants']?['stamps_required'] as int? ?? 10;
-    final businessName = card['merchants']?['business_name'] as String? ?? '';
-    // Reward : prioriser card_design.rewardDescription (édité sur qarta.be),
-    // fallback sur merchants.reward_description.
-    final reward       = (style.rewardDescription ??
-                          card['merchants']?['reward_description'] as String? ??
-                          '').trim();
-    final pct          = (stamps / required).clamp(0.0, 1.0);
-    final full         = stamps >= required;
-    // Le site privilégie cardName (le "nom du commerce" édité par le marchand),
-    // et l'affiche en MAJUSCULES via CSS text-transform.
-    final rawTitle     = (style.cardName ?? '').trim().isNotEmpty
-        ? style.cardName!.trim()
-        : businessName;
-    final title        = rawTitle.toUpperCase();
-    // ⚠️ Le site applique textColor BRUT (aucun auto-contraste, aucune opacité).
-    final textColor    = style.textColor;
-    final stampLabel   = style.stampLabel ?? 'POINTS COLLECTÉS';
-    final stampFill    = style.accentColor ?? const Color(0xFFFF2D78);
-
-    // 2 rangées de N/2 (alignement avec le site)
-    final perRow       = (required / 2).ceil();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          children: [
-            // Background (color / gradient / image)
-            Positioned.fill(child: style.buildBackground()),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Header : "CARTE DE FIDÉLITÉ" + titre  |  "TITULAIRE" + nom client
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('CARTE DE FIDÉLITÉ',
-                                style: TextStyle(
-                                    fontFamily: style.fontFamily,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w600,
-                                    color: textColor,
-                                    letterSpacing: 1.3)),
-                            const SizedBox(height: 2),
-                            Text(title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontFamily: style.fontFamily,
-                                    fontSize: _titleFontSize(title),
-                                    fontWeight: FontWeight.w900,
-                                    color: textColor,
-                                    height: 1.05)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('TITULAIRE',
-                              style: TextStyle(
-                                  fontFamily: style.fontFamily,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                  color: textColor,
-                                  letterSpacing: 1.3)),
-                          const SizedBox(height: 2),
-                          Text(_firstName,
-                              style: TextStyle(
-                                  fontFamily: style.fontFamily,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: textColor)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // ── Label "POINTS COLLECTÉS"
-                  Text(stampLabel,
-                      style: TextStyle(
-                          fontFamily: style.fontFamily,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                          letterSpacing: 1.1)),
-                  const SizedBox(height: 6),
-                  // ── Tampons : 2 rangées réparties sur TOUTE la largeur (spaceBetween)
-                  LayoutBuilder(builder: (ctx, c) {
-                    const vSpacing = 5.0; // espacement vertical entre les 2 rangées
-                    // Taille du cercle : ~68% de la cellule → laisse un gap homogène,
-                    // les 1er et dernier cercles touchent les bords (comme le site).
-                    final size = (c.maxWidth / perRow * 0.68).clamp(22.0, 42.0);
-
-                    Widget buildCell(int idx) {
-                      if (idx >= required) {
-                        return SizedBox(width: size, height: size);
-                      }
-                      final filled = idx < stamps;
-                      return Container(
-                        width: size, height: size,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: filled ? stampFill : Colors.transparent,
-                          border: Border.all(
-                              color: stampFill.withValues(alpha: 0.27), width: 1.5),
-                        ),
-                        child: filled
-                            ? Center(
-                                child: Icon(Icons.check,
-                                    size: size * 0.5,
-                                    color: _contrastOn(stampFill)),
-                              )
-                            : null,
-                      );
-                    }
-
-                    Widget buildRow(int row) => Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(
-                              perRow, (col) => buildCell(row * perRow + col)),
-                        );
-
-                    return Column(
-                      children: [
-                        buildRow(0),
-                        const SizedBox(height: vSpacing),
-                        buildRow(1),
-                      ],
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                  _progressBar(pct, full, stampFill),
-                  const SizedBox(height: 6),
-                  // ── Footer : "Encore X pour [reward]"  |  "stamps / required"
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: _footerLine(
-                          remaining: required - stamps,
-                          reward: reward,
-                          full: full,
-                          style: style,
-                          textColor: textColor,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text('$stamps / $required',
-                          style: TextStyle(
-                              fontFamily: style.fontFamily,
-                              color: textColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Phrase "Encore X pour votre Y" avec le "X" en bold (comme sur le site).
-  Widget _footerLine({
-    required int remaining,
-    required String reward,
-    required bool full,
-    required CardStyle style,
-    required Color textColor,
-  }) {
-    final baseStyle = TextStyle(
-      fontFamily: style.fontFamily,
-      color: textColor,
-      fontSize: 10,
-      fontWeight: full ? FontWeight.w700 : FontWeight.w400,
-    );
-    if (full) {
-      final suffix = reward.isEmpty ? 'récompense disponible !' : '$reward disponible !';
-      return Text(suffix, maxLines: 2, overflow: TextOverflow.ellipsis, style: baseStyle);
-    }
-    return RichText(
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        style: baseStyle,
-        children: [
-          const TextSpan(text: 'Encore '),
-          TextSpan(
-              text: '$remaining',
-              style: const TextStyle(fontWeight: FontWeight.w800)),
-          TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
-        ],
-      ),
-    );
-  }
-
-  /// Retourne noir ou blanc — celui qui a le MEILLEUR contraste WCAG sur [bg].
-  /// (Sur l'orange #ff6251, le noir gagne 7:1 vs 3:1 pour le blanc — comme sur le site.)
-  Color _contrastOn(Color bg) {
-    final lum = bg.computeLuminance();
-    const dark = Color(0xFF0B1220);
-    // Ratio de contraste = (L_clair + 0.05) / (L_sombre + 0.05)
-    final contrastWithBlack = (lum + 0.05) / 0.05;          // noir : L≈0
-    final contrastWithWhite = 1.05 / (lum + 0.05);          // blanc : L≈1
-    return contrastWithBlack >= contrastWithWhite ? dark : Colors.white;
-  }
-
-  // ── Carte Points (layout aligné sur qarta.be) ────────────────────────────────
-
-  Widget _buildPointsCard(Map card, CardStyle style) {
-    final required     = style.pointsGoal
-        ?? card['merchants']?['points_required'] as int?
-        ?? card['merchants']?['stamps_required'] as int? ?? 100;
-    final points       = (card['points_count'] as int? ?? 0).clamp(0, required);
-    final businessName = card['merchants']?['business_name'] as String? ?? '';
-    final reward       = (style.rewardDescription ??
-                          card['merchants']?['reward_description'] as String? ??
-                          '').trim();
-    final pct          = (points / required).clamp(0.0, 1.0);
-    final full         = points >= required;
-    final remaining    = required - points;
-    final rawTitle     = (style.cardName ?? '').trim().isNotEmpty
-        ? style.cardName!.trim()
-        : businessName;
-    final title        = rawTitle.toUpperCase();
-    final textColor    = style.textColor;  // brut, comme le site
-    final accent       = style.accentColor ?? const Color(0xFFFF2D78);
-    final pointsLabel  = style.pointsLabel ?? style.stampLabel ?? 'POINTS COLLECTÉS';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          children: [
-            Positioned.fill(child: style.buildBackground()),
-            Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Header : titre  |  TITULAIRE
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('CARTE DE FIDÉLITÉ',
-                                style: TextStyle(
-                                    fontFamily: style.fontFamily,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w600,
-                                    color: textColor,
-                                    letterSpacing: 1.3)),
-                            const SizedBox(height: 2),
-                            Text(title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontFamily: style.fontFamily,
-                                    fontSize: _titleFontSize(title),
-                                    fontWeight: FontWeight.w900,
-                                    color: textColor,
-                                    height: 1.05)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('TITULAIRE',
-                              style: TextStyle(
-                                  fontFamily: style.fontFamily,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                  color: textColor,
-                                  letterSpacing: 1.3)),
-                          const SizedBox(height: 2),
-                          Text(_firstName,
-                              style: TextStyle(
-                                  fontFamily: style.fontFamily,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: textColor)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(pointsLabel,
-                      style: TextStyle(
-                          fontFamily: style.fontFamily,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                          letterSpacing: 1.1)),
-                  const SizedBox(height: 10),
-                  // ── Gros compteur de points
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('$points',
-                          style: TextStyle(
-                              fontFamily: style.fontFamily,
-                              color: accent,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w900,
-                              height: 1)),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6, left: 4),
-                        child: Text('/ $required pts',
-                            style: TextStyle(
-                                fontFamily: style.fontFamily,
-                                color: accent,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _progressBar(pct, full, accent),
-                  const SizedBox(height: 7),
-                  Text(
-                    full
-                        ? '$reward disponible !'
-                        : (reward.isEmpty
-                            ? 'Encore $remaining pts pour votre récompense'
-                            : 'Encore $remaining pts pour votre $reward'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontFamily: style.fontFamily,
-                        color: textColor,
-                        fontSize: 10,
-                        fontWeight: full ? FontWeight.w700 : FontWeight.w400),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Widgets partagés cartes ───────────────────────────────────────────────────
-
-  Widget _cardTopRow(String name, String initials, bool full, CardStyle style, {Widget? badge}) {
-    final logoUrl = style.logoUrl;
-    final textColor = style.textColor;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (badge != null) ...[badge, const SizedBox(height: 3)],
-              Text(name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontFamily: style.fontFamily,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: textColor)),
-            ],
-          ),
-        ),
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-            color: full ? textColor.withValues(alpha: 0.25) : textColor.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: logoUrl != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
-                  child: Image.network(
-                    logoUrl,
-                    width: 38, height: 38,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Text(initials, style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                )
-              : Center(child: Text(initials, style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w800))),
-        ),
-      ],
-    );
-  }
-
-  Widget _orb(double size, Color tint, double opacity) {
-    return Container(
-      width: size, height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: tint.withValues(alpha: opacity)),
-    );
-  }
-
-  /// Barre de progression — track = blanc 10% (comme le site : rgba(255,255,255,0.1)),
-  /// remplissage = couleur d'accent.
-  Widget _progressBar(double pct, bool full, Color accent) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(99),
-      child: LinearProgressIndicator(
-        value: pct,
-        minHeight: 2,
-        backgroundColor: Colors.white.withValues(alpha: 0.1),
-        valueColor: AlwaysStoppedAnimation(accent),
-      ),
+      onScanTap: widget.onScanTap ?? () {},
+      cards: List.generate(cards.length, (i) {
+        final card  = cards[i];
+        final style = _styleFromCard(card, i);
+        final face = Hero(
+          tag: 'card-${card['id']}',
+          createRectTween: _straightRect,
+          flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
+          child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
+        );
+        return face;
+      }),
+      onOpen: (i) {
+        final card = cards[i];
+        if (card['id'] == widget.cardIdToAnimate) return;
+        _popOutCard(card, _styleFromCard(card, i));
+      },
     );
   }
 }
@@ -929,9 +414,9 @@ class LoyaltyCardFace extends StatelessWidget {
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(style: base, children: [
-        const TextSpan(text: 'Encore '),
+        const TextSpan(text: 'Plus que '),
         TextSpan(text: '$remaining pts', style: const TextStyle(fontWeight: FontWeight.w700)),
-        TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+        TextSpan(text: ' avant : ${reward.isEmpty ? "récompense" : reward}'),
       ]),
     );
   }
@@ -946,9 +431,9 @@ class LoyaltyCardFace extends StatelessWidget {
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(style: base, children: [
-        const TextSpan(text: 'Encore '),
-        TextSpan(text: '$remaining', style: const TextStyle(fontWeight: FontWeight.w800)),
-        TextSpan(text: ' pour votre ${reward.isEmpty ? "récompense" : reward}'),
+        const TextSpan(text: 'Plus que '),
+        TextSpan(text: '$remaining tampon${remaining > 1 ? "s" : ""}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        TextSpan(text: ' avant : ${reward.isEmpty ? "récompense" : reward}'),
       ]),
     );
   }
@@ -1253,7 +738,9 @@ class QRModal extends StatefulWidget {
   final String userName;
   final VoidCallback? onStampAdded;
   final void Function(StampEvent)? onStampEvent;
-  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded, this.onStampEvent});
+  /// iOS : si fourni, la carte vole depuis la pile (même Hero) au lieu d'apparaître.
+  final String? heroTag;
+  const QRModal({super.key, required this.token, required this.card, required this.style, this.userName = '', this.onStampAdded, this.onStampEvent, this.heroTag});
 
   // Compat : raccourcis pour l'ancien code interne
   Color get color => style.primary;
@@ -1269,6 +756,8 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   String? _initialScanAt;      // ← horodatage du dernier scan à l'ouverture (base de comparaison)
   late AnimationController _confettiCtrl;
   final bool _showConfetti = false;
+  DateTime? _stampedAt;        // iOS : « Tampon ajouté · à l'instant » sous la carte
+  Timer? _demoTimer;           // aperçu design uniquement (QartaDemo)
 
   // ── Wallet ────────────────────────────────────────────────────────────────
   final GlobalKey _cardKey = GlobalKey();
@@ -1292,13 +781,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
         final saveUrl = result.value['save_url'] as String;
         await launchUrl(Uri.parse(saveUrl), mode: LaunchMode.externalApplication);
 
-      } else if (Platform.isIOS) {
+      } else if (kIsIOS) {
         final result = await ApiService.instance.getAppleWalletUrl(cardId);
         if (!mounted) return;
         if (result.isErr) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result.error ?? 'Erreur Apple Wallet')),
-          );
+          showIosAlert(context, 'Apple Wallet', result.error ?? 'La carte n\'a pas pu être ajoutée à Wallet. Réessaie dans un instant.');
           return;
         }
         final passUrl = result.value['url'] as String;
@@ -1340,6 +827,16 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOut),
     );
     _initialStamps = stamps0; // ← mémoriser pour le calcul du delta
+    if (QartaDemo.enabled) {
+      // Aperçu : le commerçant « ajoute un tampon » 4 s après l'ouverture.
+      _demoTimer = Timer(const Duration(seconds: 4), () {
+        final total = required0;
+        final next = isPoints0 ? stamps0 + 10 : stamps0 + 1;
+        _onNewStamp(newVal: next >= total ? next - total : next, total: total, reward: next >= total,
+            isPoints: isPoints0, merchantName: merchantName);
+      });
+      return;
+    }
     // Récupérer le dernier scan_at pour détecter un nouveau scan (comparaison timestamp)
     ApiService.instance.pollCard(widget.card['id'] as String).then((r) {
       if (r.isOk && mounted) {
@@ -1354,6 +851,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   void dispose() {
     AppLogger.client('QRModal → fermé, polling arrêté');
     _pollTimer?.cancel();
+    _demoTimer?.cancel();
     _confettiCtrl.dispose();
     _flipCtrl.dispose();
     super.dispose();
@@ -1393,6 +891,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     final merchantName = (widget.card['merchants']?['business_name'] as String?) ?? 'Le magasin';
 
     AppLogger.client('QRModal → tampon détecté! +$delta chez $merchantName → $newVal/$total${reward ? " 🎉 RÉCOMPENSE" : ""}');
+    if (kIsIOS) {
+      _initialScanAt = latestScanAt; // base pour détecter le tampon suivant
+      _onNewStamp(newVal: newVal, total: total, reward: reward, isPoints: isPoints, merchantName: merchantName, delta: delta);
+      return;
+    }
     _pollTimer?.cancel();
     if (!mounted) return;
 
@@ -1414,6 +917,37 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
     } else if (cbOld != null) {
       Future.microtask(cbOld);
     }
+  }
+
+  // iOS : tampon ajouté → la carte se met à jour dans la fenêtre ouverte,
+  // petite ligne verte + vibration. Carte pleine → on ferme et client_home
+  // affiche « Carte complète ! ».
+  void _onNewStamp({required int newVal, required int total, required bool reward,
+      required bool isPoints, required String merchantName, int? delta}) {
+    if (!mounted) return;
+    final event = StampEvent(
+      cardId: widget.card['id'] as String,
+      merchantName: merchantName,
+      delta: delta ?? (newVal - _initialStamps).clamp(1, total),
+      newCount: newVal,
+      total: total,
+      reward: reward,
+      isPoints: isPoints,
+    );
+    final cb = widget.onStampEvent;
+    if (reward) {
+      _pollTimer?.cancel();
+      Navigator.pop(context);
+      if (cb != null) Future.microtask(() => cb(event));
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {
+      widget.card[isPoints ? 'points_count' : 'stamps_count'] = newVal;
+      _initialStamps = newVal;
+      _stampedAt = DateTime.now();
+    });
+    if (cb != null) cb(event);
   }
 
   // ── ZOOM QR ──────────────────────────────────────────────────────────────────
@@ -1461,11 +995,14 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
   // ── FACE AVANT : carte fidélité (réplique du site) + panneau QR ──────────────
   Widget _buildCardFront(Color color, String businessName, int stamps, int required, String reward, bool full, double pct, [bool isPoints = false, bool capture = false]) {
     final merchantId = widget.card['merchant_id'] as String? ?? '';
-    final cardFace = LoyaltyCardFace(
-      card: widget.card,
-      style: widget.style,
-      userName: widget.userName,
-    );
+    if (kIsIOS) return _buildPassIos(color, capture);
+    final cardFace = kIsIOS
+        ? SizedBox(height: 220, child: ClientPassFaceIos(card: widget.card, style: widget.style))
+        : LoyaltyCardFace(
+            card: widget.card,
+            style: widget.style,
+            userName: widget.userName,
+          );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1476,15 +1013,42 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
               ? RepaintBoundary(key: _cardKey, child: cardFace)
               : cardFace,
         ),
+        // iOS : confirmation intégrée juste sous la carte après un tampon.
+        if (kIsIOS && _stampedAt != null)
+          TweenAnimationBuilder<double>(
+            key: ValueKey(_stampedAt),
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 380),
+            curve: Curves.easeOutBack,
+            builder: (_, v, child) => Opacity(opacity: v.clamp(0, 1), child: Transform.scale(scale: 0.85 + 0.15 * v, child: child)),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14, bottom: 2),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Container(
+                  width: 24, height: 24,
+                  decoration: const BoxDecoration(color: Color(0xFF27AE60), shape: BoxShape.circle),
+                  child: const Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Text(isPoints ? 'Points ajoutés · à l\'instant' : 'Tampon ajouté · à l\'instant',
+                    style: const TextStyle(color: Color(0xFF27AE60), fontSize: 17, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
         const SizedBox(height: 12),
-        // 2. Panneau QR (fond sombre, indépendant de la carte)
-        Container(
+        // 2. Panneau QR : sur iOS il reprend le fond de la carte (couleur du
+        //    commerçant) ; sur Android, fond sombre comme avant.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(kIsIOS ? 18 : 16),
+          child: Stack(children: [
+          if (kIsIOS) Positioned.fill(child: widget.style.buildBackground()),
+          Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF111726),
+            color: kIsIOS ? null : const Color(0xFF111726),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            border: kIsIOS ? null : Border.all(color: Colors.white.withValues(alpha: 0.06)),
           ),
           child: Column(
             children: [
@@ -1537,24 +1101,158 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     child: QrImageView(
                       data: widget.card['qr_token'] as String? ?? '',
                       version: QrVersions.auto,
-                      size: 150,
+                      size: kIsIOS ? 176 : 150,
                       foregroundColor: const Color(0xFF0B1220),
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 10),
-              Text('Tapez la carte pour voir les infos',
-                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
+              Text(kIsIOS ? 'Montre ce code en caisse' : 'Touche la carte pour voir les infos',
+                  style: kIsIOS
+                      ? TextStyle(fontSize: 15, color: widget.style.textColor, fontWeight: FontWeight.w600, letterSpacing: -0.2)
+                      : TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4), fontWeight: FontWeight.w600)),
+              if (kIsIOS) ...[
+                const SizedBox(height: 2),
+                Text('Touche la carte pour voir les infos',
+                    style: TextStyle(fontSize: 13, color: widget.style.textColor.withValues(alpha: 0.7))),
+              ],
             ],
           ),
+        ),
+          ]),
         ),
       ],
     );
   }
 
+  // iOS : dos de la carte, même style que l'avant : adresse, téléphone, et
+  // les horaires de toute la semaine (aujourd'hui en gras).
+  Widget _buildBackIos(String businessName) {
+    final m = (widget.card['merchants'] as Map?) ?? const {};
+    final fg = widget.style.textColor;
+    final address = (m['address'] as String? ?? '').trim();
+    final phone = (m['phone'] as String? ?? '').trim();
+    final h = MerchantHours.fromMerchant(m);
+    final today = DateTime.now().weekday;
+    Widget info(IconData icon, String label, String value) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 18, color: fg.withValues(alpha: 0.8)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label.toUpperCase(), style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+                Text(value, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w500)),
+              ]),
+            ),
+          ]),
+        );
+    // Même hauteur que l'avant de la carte (456), arrondie en bas aussi.
+    return Align(alignment: Alignment.topCenter, child: SizedBox(height: 432, child: GestureDetector(
+      onTap: _toggleFlip,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(fit: StackFit.expand, children: [
+          widget.style.buildBackground(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('INFOS', style: TextStyle(color: fg.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+              Text(businessName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: fg, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+              const SizedBox(height: 14),
+              if (address.isNotEmpty) info(CupertinoIcons.location_solid, 'Adresse', address),
+              if (phone.isNotEmpty) info(CupertinoIcons.phone_fill, 'Téléphone', phone),
+              Row(children: [
+                Icon(CupertinoIcons.clock_fill, size: 18, color: fg.withValues(alpha: 0.8)),
+                const SizedBox(width: 10),
+                Text('HORAIRES', style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+              ]),
+              const SizedBox(height: 6),
+              if (h.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 28),
+                  child: Text('Le commerçant ne les a pas encore indiqués.', style: TextStyle(color: fg.withValues(alpha: 0.8), fontSize: 15)),
+                )
+              else
+                for (var d = 1; d <= 7; d++)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28, bottom: 3),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(MerchantHours.names[d - 1],
+                            style: TextStyle(color: fg, fontSize: 15, fontWeight: d == today ? FontWeight.w700 : FontWeight.w400)),
+                      ),
+                      Text(h.openOn(d) ? h.range : 'Fermé',
+                          style: TextStyle(color: h.openOn(d) ? fg : fg.withValues(alpha: 0.6), fontSize: 15,
+                              fontWeight: d == today ? FontWeight.w700 : FontWeight.w400,
+                              fontFeatures: const [ui.FontFeature.tabularFigures()])),
+                    ]),
+                  ),
+              const Spacer(),
+              Center(child: Text('Touche pour revenir à la carte', style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 13))),
+            ]),
+          ),
+        ]),
+      ),
+    )));
+  }
+
+  // iOS : une seule carte d'une seule couleur, QR code à l'intérieur (comme Apple Wallet).
+  // Toucher le QR → agrandi ; toucher la carte → infos du commerce (au dos).
+  Widget _buildPassIos(Color color, bool capture) {
+    final qrBox = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: QrImageView(
+        data: widget.card['qr_token'] as String? ?? '',
+        version: QrVersions.auto,
+        size: 150,
+        foregroundColor: const Color(0xFF0B1220),
+      ),
+    );
+    // Pas de 2e animation dans la carte quand la carte entière vole déjà.
+    final qr = GestureDetector(
+      onTap: () => _showQRZoom(context, color),
+      child: widget.heroTag != null ? qrBox : Hero(tag: 'qr-${widget.card['id']}', child: qrBox),
+    );
+    Widget pass = SizedBox(height: 432, child: ClientPassFaceIos(card: widget.card, style: widget.style, qr: qr));
+    if (capture && widget.heroTag != null) {
+      final staticQr = Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        child: QrImageView(data: widget.card['qr_token'] as String? ?? '', version: QrVersions.auto, size: 150,
+            foregroundColor: const Color(0xFF0B1220)),
+      );
+      pass = Hero(
+        tag: widget.heroTag!,
+        createRectTween: (b, e) => RectTween(begin: b, end: e),
+        // Pendant le vol : la carte entière s'agrandit vers le bas et dévoile le QR.
+        flightShuttleBuilder: (_, __, ___, ____, _____) => Material(
+          type: MaterialType.transparency,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: 432, maxHeight: 432,
+              child: ClientPassFaceIos(card: widget.card, style: widget.style, qr: staticQr),
+            ),
+          ),
+        ),
+        child: Material(type: MaterialType.transparency, child: pass),
+      );
+    }
+    final isPoints = (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points';
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      GestureDetector(onTap: _toggleFlip, child: capture ? RepaintBoundary(key: _cardKey, child: pass) : pass),
+      const SizedBox(height: 14),
+    ]);
+  }
+
   // ── FACE ARRIÈRE : infos du commerce ─────────────────────────────────────────
   Widget _buildCardBack(Color color, String businessName) {
+    if (kIsIOS) return _buildBackIos(businessName);
     final address  = widget.card['merchants']?['address']       as String? ?? '';
     final phone    = widget.card['merchants']?['phone']         as String? ?? '';
     final rawHours = widget.card['merchants']?['opening_hours'] as String? ?? '';
@@ -1683,9 +1381,9 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
       children: [
         // ── Fond sombre (style design) ────────────────────────────────
         Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF0B1220),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: kIsIOS ? context.cBg : const Color(0xFF0B1220),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1697,7 +1395,7 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                   child: Container(
                     width: 36, height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: kIsIOS ? context.cSub.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1709,29 +1407,82 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    if (kIsIOS)
+                      // Titre + confirmation du tampon juste dessous (toujours visible).
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(businessName,
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.4, color: context.cText)),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutBack,
+                          child: _stampedAt == null
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  key: ValueKey(_stampedAt),
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Container(
+                                      width: 20, height: 20,
+                                      decoration: const BoxDecoration(color: Color(0xFF27AE60), shape: BoxShape.circle),
+                                      child: const Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 13),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      (widget.card['merchants']?['program_type'] as String? ?? 'stamps') == 'points'
+                                          ? 'Points ajoutés · à l\'instant'
+                                          : 'Tampon ajouté · à l\'instant',
+                                      style: const TextStyle(color: Color(0xFF27AE60), fontSize: 15, fontWeight: FontWeight.w600),
+                                    ),
+                                  ]),
+                                ),
+                        ),
+                      ])
+                    else
                     Text(
                       businessName,
-                      style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
                     ),
+                    if (kIsIOS) ...[
+                      const Spacer(),
+                      // Partager (déplacé ici : le QR est maintenant dans la carte)
+                      Builder(
+                        builder: (ctx) => GestureDetector(
+                          onTap: () {
+                            final box = ctx.findRenderObject() as RenderBox?;
+                            final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+                            final mId = widget.card['merchant_id'] as String? ?? '';
+                            final url = mId.isNotEmpty ? '\nhttps://qarta.be/join/$mId' : '';
+                            Share.share(
+                              "Rejoins le programme de fidélité de $businessName sur l'app Qarta !$url",
+                              subject: 'Carte fidélité $businessName',
+                              sharePositionOrigin: origin,
+                            );
+                          },
+                          child: Container(
+                            width: 30, height: 30,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF767680).withValues(alpha: 0.12)),
+                            child: Icon(CupertinoIcons.share, color: context.cSub, size: 15),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
                         width: 30, height: 30,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: kIsIOS ? const Color(0xFF767680).withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.1),
                         ),
-                        child: const Icon(Icons.close, color: Colors.white, size: 14),
+                        child: Icon(Icons.close, color: kIsIOS ? context.cSub : Colors.white, size: 15),
                       ),
                     ),
                   ],
                 ),
               ),
-              // Corps scrollable
-              SingleChildScrollView(
+              // Corps scrollable (iOS : se réduit si l'écran est petit)
+              Flexible(child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Column(
                   children: [
@@ -1770,8 +1521,78 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-              ),
+              )),
+              // iOS : adresse du commerce (touche → Plans), comme sur la maquette.
+              if (kIsIOS && (widget.card['merchants']?['address'] as String? ?? '').trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: GestureDetector(
+                    onTap: () => launchUrl(
+                      Uri.parse('https://maps.apple.com/?q=${Uri.encodeComponent(widget.card['merchants']['address'] as String)}'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+                      decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14)),
+                      child: Row(children: [
+                        Container(
+                          width: 30, height: 30,
+                          decoration: BoxDecoration(color: const Color(0xFF2C7BE5), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(CupertinoIcons.location_solid, color: Colors.white, size: 17),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(widget.card['merchants']['address'] as String,
+                              maxLines: 2, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 17, color: context.cText, letterSpacing: -0.3)),
+                        ),
+                        Icon(CupertinoIcons.chevron_forward, size: 16, color: context.cSub.withValues(alpha: 0.7)),
+                      ]),
+                    ),
+                  ),
+                ),
+              // iOS : aujourd'hui (date + ouvert/fermé maintenant). Tous les horaires sont au dos.
+              if (kIsIOS && !MerchantHours.fromMerchant(widget.card['merchants'] as Map?).isEmpty)
+                Builder(builder: (_) {
+                  final h = MerchantHours.fromMerchant(widget.card['merchants'] as Map?);
+                  final (isOpen, txt) = h.statusNow();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: GestureDetector(
+                      onTap: _toggleFlip,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+                        decoration: BoxDecoration(color: context.cSurface, borderRadius: BorderRadius.circular(14)),
+                        child: Row(children: [
+                          Container(
+                            width: 30, height: 30,
+                            decoration: BoxDecoration(
+                              color: isOpen ? const Color(0xFF27AE60) : const Color(0xFF9096A4),
+                              borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(CupertinoIcons.clock_fill, color: Colors.white, size: 17),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(txt, style: TextStyle(fontSize: 17, letterSpacing: -0.3,
+                                  color: isOpen ? const Color(0xFF27AE60) : context.cText)),
+                              Text('${MerchantHours.todayLabel()} · ${h.range}',
+                                  style: TextStyle(fontSize: 14, color: context.cSub)),
+                            ]),
+                          ),
+                          Icon(CupertinoIcons.chevron_forward, size: 16, color: context.cSub.withValues(alpha: 0.7)),
+                        ]),
+                      ),
+                    ),
+                  );
+                }),
               // ── Bouton Ajouter au Wallet ─────────────────────────────────────
+              if (kIsIOS)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).padding.bottom + 16),
+                  child: _AppleWalletButton(loading: _walletLoading, onTap: _addToWallet),
+                )
+              else
               Padding(
                 padding: EdgeInsets.fromLTRB(
                     20, 0, 20, MediaQuery.of(context).padding.bottom + 16),
@@ -1787,11 +1608,11 @@ class _QRModalState extends State<QRModal> with TickerProviderStateMixin {
                           )
                         : const Icon(Icons.account_balance_wallet_rounded, size: 18),
                     label: Text(
-                      Platform.isIOS ? 'Ajouter à Apple Wallet' : 'Ajouter à Google Wallet',
+                      kIsIOS ? 'Ajouter à Apple Wallet' : 'Ajouter à Google Wallet',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Platform.isIOS
+                      backgroundColor: kIsIOS
                           ? const Color(0xFF000000)
                           : const Color(0xFF2C7BE5),
                       foregroundColor: Colors.white,
@@ -1941,4 +1762,149 @@ class _SlideInCardState extends State<_SlideInCard> with SingleTickerProviderSta
     opacity: _fade,
     child: SlideTransition(position: _slide, child: widget.child),
   );
+}
+
+
+/// iOS : carte sortie de la pile, posée au milieu de l'écran.
+class CardPopOut extends StatelessWidget {
+  final String heroTag;
+  final Animation<double> animation;
+  final Widget face;
+  final VoidCallback onOpen;
+  const _CardPopOut({required this.heroTag, required this.animation, required this.face, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final w = min(MediaQuery.of(context).size.width - 32, 568.0); // iPad : pas plus large que la pile
+    final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    void close() => Navigator.pop(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: close,
+        onVerticalDragEnd: (d) { if ((d.primaryVelocity ?? 0) > 150) close(); },
+        child: Stack(children: [
+          // Fond flouté fixe, qui apparaît/disparaît en fondu (léger pour rester fluide).
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: fade,
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: ColoredBox(color: const Color(0xFF0B1220).withValues(alpha: 0.30)),
+              ),
+            ),
+          ),
+          Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              GestureDetector(
+                onTap: onOpen,
+                child: Hero(
+                  tag: heroTag,
+                  createRectTween: (b, e) => RectTween(begin: b, end: e),
+                  child: SizedBox(width: w, height: 220, child: face),
+                ),
+              ),
+              const SizedBox(height: 18),
+              FadeTransition(
+                opacity: fade,
+                child: const Text('Touche la carte pour l\'ouvrir',
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// iOS : page « carte ouverte ». La carte arrive en volant depuis la pile ;
+/// le reste (titre, adresse, Wallet) apparaît en fondu. Toucher le fond
+/// ou glisser vers le bas ferme : la carte redescend à sa place.
+class OpenCardPage extends StatelessWidget {
+  final Animation<double> animation;
+  final Widget child;
+  const _OpenCardPage({required this.animation, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () => Navigator.maybePop(context),
+            child: FadeTransition(opacity: fade, child: const ColoredBox(color: Color(0x660B1220))),
+          ),
+        ),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: GestureDetector(
+            onVerticalDragEnd: (d) { if ((d.primaryVelocity ?? 0) > 250) Navigator.maybePop(context); },
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 640, maxHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - 8),
+              child: FadeTransition(opacity: fade, alwaysIncludeSemantics: true, child: child),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+
+/// Bouton « Ajouter à Apple Wallet » dans le style du badge Apple :
+/// fond noir, icône Wallet en couleurs, « Ajouter à » en petit au-dessus.
+class _AppleWalletButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onTap;
+  const _AppleWalletButton({required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFA6A6A6), width: 0.5),
+        ),
+        alignment: Alignment.center,
+        child: loading
+            ? const CupertinoActivityIndicator(color: Colors.white)
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                const _WalletGlyph(),
+                const SizedBox(width: 10),
+                Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                  Text('Ajouter à', style: TextStyle(color: Colors.white, fontSize: 11, height: 1.1, fontWeight: FontWeight.w400)),
+                  Text('Apple Wallet', style: TextStyle(color: Colors.white, fontSize: 20, height: 1.1, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
+                ]),
+              ]),
+      ),
+    );
+  }
+}
+
+class _WalletGlyph extends StatelessWidget {
+  const _WalletGlyph();
+  @override
+  Widget build(BuildContext context) {
+    const stripes = [Color(0xFF3D9BE9), Color(0xFFF9B92D), Color(0xFF4CB848), Color(0xFFEE4136)];
+    return Container(
+      width: 32, height: 24,
+      padding: const EdgeInsets.fromLTRB(3, 3, 3, 0),
+      decoration: BoxDecoration(color: const Color(0xFFD9D9D9), borderRadius: BorderRadius.circular(5)),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+        child: Column(children: [
+          for (final c in stripes) Expanded(child: Container(color: c, margin: const EdgeInsets.only(bottom: 1))),
+        ]),
+      ),
+    );
+  }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../merchant/merchant_tokens.dart' show kIsIOS;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -19,12 +20,29 @@ import '../../config/api.dart';
 import '../../main.dart';
 import '../auth_screen.dart';
 import 'cards_tab.dart';
+import 'cards_tab_ios.dart';
 import 'history_tab.dart';
+import 'history_tab_ios.dart';
 import 'rewards_wallet_screen.dart';
 import 'manage_cards_screen.dart';
+import 'manage_cards_screen_ios.dart';
 import 'notifications_sheet.dart';
 import 'help_sheet.dart';
+import 'widgets/client_bottom_nav_ios.dart';
+import 'widgets/client_bottom_nav.dart';
+import 'widgets/client_header_ios.dart';
+import 'widgets/client_header.dart';
+import 'widgets/client_glow_background.dart';
+import 'widgets/client_rewards_ios.dart';
+import 'widgets/client_notifications_ios.dart';
+import 'widgets/client_profile_ios.dart';
+import 'widgets/client_profile_android.dart';
+import 'widgets/client_notifs_android.dart';
+import 'widgets/client_sheets_ios.dart';
+import 'widgets/client_settings_ios.dart';
+import '../../config/demo_mode.dart';
 import 'scan_tab.dart';
+import 'scan_tab_ios.dart';
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
 import '../../utils/platform_route.dart';
@@ -61,6 +79,7 @@ class _ClientHomeState extends State<ClientHome>
   List<dynamic> _rewards = [];
   int _notifCount = 0;
   bool _rewardPillActive = false; // true pendant l'ouverture de la modal récompenses
+  bool _searching = false;        // iOS : recherche active → titre et sélecteur cachés
   List<dynamic> _cards = [];
   List<dynamic> _history = [];
   bool _statsLoaded = false;
@@ -173,6 +192,14 @@ class _ClientHomeState extends State<ClientHome>
       // Tap sur notif depuis background → refresh PUIS route selon le type
       FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
         if (!mounted) return;
+        // T2 : tracker l'ouverture si l'ID est disponible
+        final notifId = msg.data['notification_id'] as String?;
+        if (notifId != null) {
+          try {
+            await http.post(Uri.parse('$apiUrl/notifications/$notifId/opened'),
+                headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'});
+          } catch (_) {}
+        }
         await _loadNotifs();
         if (!mounted) return;
         if (msg.data['type'] == 'recompense') {
@@ -222,6 +249,8 @@ class _ClientHomeState extends State<ClientHome>
     if (res.statusCode == 200 || res.statusCode == 201) {
       final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
       if (cardId != null) await _refreshCard(cardId); else _loadStats();
+      if (!mounted) return;
+      if (kIsIOS) { _showJoinedIos(cardId); return; }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carte ajoutée !'),
@@ -230,6 +259,7 @@ class _ClientHomeState extends State<ClientHome>
         ),
       );
     } else if (res.statusCode == 409) {
+      if (kIsIOS) { showIosAlert(context, 'Déjà dans tes cartes', 'Tu as déjà la carte de ce commerce.'); return; }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Tu as déjà cette carte !'),
@@ -237,6 +267,17 @@ class _ClientHomeState extends State<ClientHome>
         ),
       );
     }
+  }
+
+  /// iOS : après un lien d'invitation, même fenêtre « Carte ajoutée » qu'après un scan.
+  void _showJoinedIos(String? cardId) {
+    final card = _cards.cast<Map?>().firstWhere((c) => c?['id'] == cardId, orElse: () => null);
+    if (card == null) { showIosAlert(context, 'Carte ajoutée', 'Ta nouvelle carte est dans tes cartes.'); return; }
+    showCardAddedIos(context,
+        merchant: (card['merchants'] as Map?) ?? const {}, design: card['card_design'],
+        userName: _userName, alreadyMember: false).then((seeCard) {
+      if (seeCard == false && mounted) _setTab(1);
+    });
   }
 
   Future<void> _checkPendingJoin() async {
@@ -254,6 +295,8 @@ class _ClientHomeState extends State<ClientHome>
     if ((res.statusCode == 200 || res.statusCode == 201) && mounted) {
       final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
       if (cardId != null) await _refreshCard(cardId); else _loadStats();
+      if (!mounted) return;
+      if (kIsIOS) { _showJoinedIos(cardId); return; }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carte ajoutée !'),
@@ -357,7 +400,50 @@ class _ClientHomeState extends State<ClientHome>
     }
   }
 
+  /// Enregistre nom / email / téléphone (même logique que la fenêtre Android).
+  Future<void> _savePersonalInfo(String name, String email, String phone) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_phone', phone);
+    if (!QartaDemo.enabled) {
+      try {
+        final reqBody = <String, dynamic>{'name': name};
+        if (!_isOAuth) reqBody['email'] = email;
+        final res = await http.patch(
+          Uri.parse('$apiUrl/users/me'),
+          headers: {
+            'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(reqBody),
+        );
+        if (res.statusCode == 200 && mounted) {
+          final updated = jsonDecode(res.body);
+          setState(() {
+            _userEmail = updated['email'] ?? _userEmail;
+            _userName  = updated['name']  ?? _userName;
+          });
+          await prefs.setString('name',  _userName);
+          await prefs.setString('email', _userEmail);
+        }
+      } catch (_) {}
+    } else if (mounted) {
+      setState(() { _userName = name; if (!_isOAuth) _userEmail = email; });
+    }
+    if (mounted) setState(() => _phone = phone);
+  }
+
   Future<void> _showPersonalInfo() async {
+    if (kIsIOS) {
+      await Navigator.push(context, CupertinoPageRoute(builder: (_) => PersonalInfoPageIos(
+        name: _userName,
+        email: _userEmail,
+        phone: _phone,
+        emailLocked: _isOAuth,
+        lockedBy: _isGoogle ? 'Google' : 'Apple',
+        onSave: _savePersonalInfo,
+      )));
+      return;
+    }
     if (_openingPersonalInfo) return;
     _openingPersonalInfo = true;
     if (!mounted) { _openingPersonalInfo = false; return; }
@@ -832,6 +918,7 @@ class _ClientHomeState extends State<ClientHome>
         'color': style['color'],
         'read': n['read'] ?? false,
         'type': type,
+        'dt': dt,
       };
     }).toList();
     _notifs = mapped;
@@ -867,6 +954,7 @@ class _ClientHomeState extends State<ClientHome>
             'color': style['color'],
             'read': n['read'] ?? false,
             'type': type,
+            'dt': dt,
           };
         }).toList();
         setState(() { _notifs = mapped; _notifsLoaded = true; });
@@ -893,6 +981,7 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _openProfil() {
+    _prevTab = _tab == 3 || _tab == 4 ? 0 : _tab;
     _setTab(3);
   }
 
@@ -1069,6 +1158,16 @@ class _ClientHomeState extends State<ClientHome>
         if (idx > 0) { final c = _cards.removeAt(idx); _cards.insert(0, c); }
       }
     });
+    if (kIsIOS) {
+      // iOS : le tampon s'affiche directement dans la carte ouverte
+      // (« Tampon ajouté · à l'instant ») ; une carte pleine ouvre « Carte complète ! ».
+      if (e.reward) {
+        _onRewardUnlockedIos(e);
+      } else if (!QartaDemo.enabled) {
+        _refreshCard(e.cardId);
+      }
+      return;
+    }
     if (e.reward) _lastStampEvent = e;
     _showStampPopup(e);
   }
@@ -1153,6 +1252,25 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   void _showChangePassword() {
+    if (kIsIOS) {
+      Navigator.push(context, CupertinoPageRoute(builder: (_) => ChangePasswordPageIos(
+        onSave: (current, next) async {
+          if (QartaDemo.enabled) return null;
+          try {
+            final res = await http.put(
+              Uri.parse('$apiUrl/users/change-password'),
+              headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
+              body: jsonEncode({'current_password': current, 'new_password': next}),
+            );
+            if (res.statusCode == 200) return null;
+            return (jsonDecode(res.body) as Map?)?['detail']?.toString() ?? 'Le mot de passe n\'a pas pu être changé.';
+          } catch (_) {
+            return 'Pas de connexion. Vérifie ton réseau et réessaie.';
+          }
+        },
+      )));
+      return;
+    }
     final currentCtrl  = TextEditingController();
     final newCtrl      = TextEditingController();
     final confirmCtrl  = TextEditingController();
@@ -1304,7 +1422,7 @@ class _ClientHomeState extends State<ClientHome>
   void _showDeleteAccount() {
     final passCtrl = TextEditingController();
     bool loading = false;
-    (Platform.isIOS ? showCupertinoDialog<void> : showDialog<void>)(
+    (kIsIOS ? showCupertinoDialog<void> : showDialog<void>)(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
@@ -1326,7 +1444,12 @@ class _ClientHomeState extends State<ClientHome>
                   if (res.statusCode == 200) {
                     _logout();
                   } else if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(jsonDecode(res.body)['detail'] ?? 'Erreur'), backgroundColor: Colors.red));
+                    final msg = (jsonDecode(res.body) as Map?)?['detail']?.toString() ?? 'Le compte n\'a pas pu être supprimé. Réessaie.';
+                    if (kIsIOS) {
+                      showIosAlert(context, 'Suppression impossible', msg);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+                    }
                   }
                 } catch (_) { setDialogState(() => loading = false); }
               },
@@ -1338,10 +1461,12 @@ class _ClientHomeState extends State<ClientHome>
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
               const SizedBox(height: 12),
-              TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
+              kIsIOS
+                  ? CupertinoTextField(controller: passCtrl, obscureText: true, placeholder: 'Ton mot de passe')
+                  : TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
             ]),
           );
-          if (Platform.isIOS) {
+          if (kIsIOS) {
             return CupertinoAlertDialog(
               title: const Text('Supprimer mon compte', style: TextStyle(color: Color(0xFFE24B4A))),
               content: content,
@@ -1369,8 +1494,9 @@ class _ClientHomeState extends State<ClientHome>
   void _openNotifs() {
     _prevTab = _tab;
     setState(() => _tab = 4);
-    // Marque toutes comme lues dès l'ouverture (comme WhatsApp)
-    if (_notifCount > 0) _markAllRead();
+    // Marque toutes comme lues dès l'ouverture (comme WhatsApp).
+    // iOS : on garde les points bleus visibles ; « Tout lire » ou la sortie les efface.
+    if (_notifCount > 0 && !kIsIOS) _markAllRead();
   }
 
   void _closeNotifs() {
@@ -1380,6 +1506,7 @@ class _ClientHomeState extends State<ClientHome>
 
   // Centralise les changements de tab — reset Cartes si on quitte tab 0 avec Récompenses actif
   void _setTab(int tab) {
+    if (tab != 0) _searching = false;
     if (_tab == 0 && tab != 0 && _rewardPillActive) {
       _rewardPillActive = false;
       _pillPageCtrl.jumpToPage(0);
@@ -1418,6 +1545,7 @@ class _ClientHomeState extends State<ClientHome>
       }
       _notifCount = 0;
     });
+    if (QartaDemo.enabled) return;
     final res = await http.put(
       Uri.parse('$apiUrl/notifications/client/read-all'),
       headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
@@ -1438,6 +1566,8 @@ class _ClientHomeState extends State<ClientHome>
 
   @override
   Widget build(BuildContext context) {
+    if (kIsIOS && (_tab == 0 || _tab == 2)) return _buildIosHome();
+    if (kIsIOS && (_tab == 3 || _tab == 4)) return _buildIosPage();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -1448,13 +1578,34 @@ class _ClientHomeState extends State<ClientHome>
             if (_tab == 1)
               Positioned.fill(child: _buildTabContent())
             else
-              Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(child: _buildTabContent()),
-                ],
-              ),
-            if (_tab != 1) _buildBottomNav(),
+              Column(children: [
+                ClientHeader(
+                  tab: _tab,
+                  firstName: _firstName,
+                  initials: _initials,
+                  profileImageUrl: _profileImageUrl,
+                  profileImagePath: _profileImagePath,
+                  cardCount: _cardCount,
+                  rewardCount: _rewardCount,
+                  notifCount: _notifCount,
+                  rewardPillActive: _rewardPillActive,
+                  notifFilter: _notifFilter,
+                  onProfileTap: _openProfil,
+                  onNotifTap: _openNotifs,
+                  onBackFromProfil: () => _setTab(0),
+                  onCloseNotifs: _closeNotifs,
+                  onGoToCards: _goToCards,
+                  onGoToRewards: _goToRewards,
+                  onFilterChanged: (f) => setState(() => _notifFilter = f),
+                  onPhotoTap: _showPhotoOptions,
+                ),
+                Expanded(child: _buildTabContent()),
+              ]),
+            if (_tab != 1) ClientBottomNav(
+              currentTab: _tab,
+              onTabChanged: _setTab,
+              onScanTap: () => _setTab(1),
+            ),
             if (_stampBadge != null) _buildStampBadge(_stampBadge!),
           ],
         ),
@@ -1462,9 +1613,257 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  // ── HEADER (inclut les pills) ──────────────────────────────────────────────
+  // ── iOS : accueil style Apple (Cartes / Historique) ──────────────────────
+  Widget _buildIosHome() {
+    final avatar = _profileImageUrl != null
+        ? NetworkImage(_profileImageUrl!) as ImageProvider
+        : _profileImagePath != null ? FileImage(File(_profileImagePath!)) : null;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: context.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: context.qBg,
+        body: Stack(children: [
+          const Positioned.fill(child: ClientGlowBackground()),
+          Positioned.fill(child: iosReadableWidth(Stack(children: [
+          Column(children: [
+            if (_searching && _tab == 0) SizedBox(height: MediaQuery.paddingOf(context).top),
+            // Pendant la recherche, le titre et le sélecteur se replient (comme sur iPhone).
+            AnimatedSize(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _searching && _tab == 0
+                  ? const SizedBox(width: double.infinity)
+                  : Column(mainAxisSize: MainAxisSize.min, children: [
+            SafeArea(
+                  bottom: false,
+                  child: ClientHeaderIos(
+                    caption: ClientHeaderIos.today(),
+                    title: _tab == 0 ? 'Bonjour $_firstName' : 'Historique',
+                    notifCount: _notifCount,
+                    onNotifTap: _openNotifs,
+                    onProfileTap: _openProfil,
+                    avatarImage: avatar,
+                    initials: _initials,
+                  ),
+                ),
+                if (_tab == 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: CupertinoSlidingSegmentedControl<int>(
+                        groupValue: _rewardPillActive ? 1 : 0,
+                        padding: const EdgeInsets.all(2),
+                        children: {
+                          0: _segLabel('Cartes', _cardCount),
+                          1: _segLabel('Récompenses', _rewardCount),
+                        },
+                        onValueChanged: (v) => v == 1 ? _goToRewards() : _goToCards(),
+                      ),
+                    ),
+                  ),
+                        ]),
+            ),
+            Expanded(child: _buildTabContent()),
+          ]),
+          // Comme sur iPhone : la barre se cache pendant qu'on tape (clavier ouvert).
+          if (MediaQuery.viewInsetsOf(context).bottom == 0)
+            ClientBottomNavIos(
+              currentTab: _tab,
+              onTabChanged: _setTab,
+              onScanTap: () => _setTab(1),
+            ),
+          ]))),
+          if (_stampBadge != null) _buildStampBadge(_stampBadge!),
+        ]),
+      ),
+    );
+  }
 
-  Widget _buildHeader() {
+  Widget _segLabel(String label, int n) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Text.rich(TextSpan(children: [
+          TextSpan(text: label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.qText)),
+          TextSpan(text: '  $n', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.qSub)),
+        ])),
+      );
+
+
+  // ── iOS : Profil (tab 3) et Notifications (tab 4), plein écran sans barre ──
+  Widget _buildIosPage() {
+    final avatar = _profileImageUrl != null
+        ? NetworkImage(_profileImageUrl!) as ImageProvider
+        : _profileImagePath != null ? FileImage(File(_profileImagePath!)) : null;
+    final account = _isOAuth ? (_isGoogle ? 'Compte Google' : 'Compte Apple') : _userEmail;
+    final cardsTxt = '$_cardCount carte${_cardCount > 1 ? 's' : ''}';
+    final Widget body = _tab == 4
+        ? ClientNotificationsIos(
+            notifs: _notifs,
+            filter: _notifFilter,
+            onFilter: (f) => setState(() => _notifFilter = f),
+            onBack: _closeNotifs,
+            onReadAll: _markAllRead,
+            onTap: (n) => setState(() {
+              n['read'] = true;
+              _notifCount = _notifs.where((x) => !(x['read'] as bool)).length;
+            }),
+          )
+        : ClientProfileIos(
+            name: _userName,
+            subtitle: account.isEmpty ? cardsTxt : '$account · $cardsTxt',
+            initials: _initials,
+            avatar: avatar,
+            cardCount: _cardCount,
+            showPassword: !_isOAuth,
+            onBack: () => _setTab(_prevTab),
+            onAvatarTap: _showPhotoOptions,
+            onPersonalInfo: _showPersonalInfo,
+            onPassword: _showChangePassword,
+            onCards: () => Navigator.push(
+              context,
+              platformRoute(
+                builder: (_) => kIsIOS
+                    ? ManageCardsScreenIos(
+                        token: widget.token,
+                        userName: _userName,
+                        cards: _cards,
+                        rewards: _rewards,
+                        onRefresh: _refreshManual,
+                      )
+                    : ManageCardsScreen(
+                        token: widget.token,
+                        userName: _userName,
+                        cards: _cards,
+                        rewards: _rewards,
+                        onRefresh: _refreshManual,
+                      ),
+              ),
+            ),
+            onNotifSettings: _openNotifSettingsIos,
+            onHelp: () => Navigator.push(context, CupertinoPageRoute(
+              builder: (_) => const HelpPageIos(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'),
+            )),
+            onLogout: _logout,
+            onDelete: _showDeleteAccount,
+          );
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: context.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: Scaffold(backgroundColor: context.cBg, body: iosReadableWidth(body)),
+    );
+  }
+
+  // ── iOS : réglages des notifications (enregistrés à chaque interrupteur) ──
+  Future<void> _openNotifSettingsIos() async {
+    final p = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    Navigator.push(context, CupertinoPageRoute(builder: (_) => NotificationSettingsPageIos(
+      push: p.getBool('notif_push') ?? true,
+      offres: p.getBool('notif_offres') ?? true,
+      visites: p.getBool('notif_visites') ?? false,
+      onSave: (push, offres, visites) async {
+        await p.setBool('notif_push', push);
+        await p.setBool('notif_offres', offres);
+        await p.setBool('notif_visites', visites);
+        if (QartaDemo.enabled) return true;
+        try {
+          final res = await AuthService.authPut('/notifications/preferences', '', {
+            'notif_push': push, 'notif_offres': offres, 'notif_visites': visites,
+          });
+          return res.statusCode >= 200 && res.statusCode < 300;
+        } catch (_) {
+          return false;
+        }
+      },
+    )));
+  }
+
+  // ── iOS : ouvrir une carte (depuis « Les plus proches ») ─────────────────
+  void _openCardIos(Map card) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QRModal(
+        token: widget.token,
+        card: card,
+        style: CardStyle.fromDesign(card['card_design'],
+            merchantLogoUrl: card['merchants']?['logo_url'] as String?, fallbackColor: kNavyCard),
+        userName: _userName,
+        onStampAdded: _refreshManual,
+        onStampEvent: _onStampEvent,
+      ),
+    );
+  }
+
+  // ── iOS : utiliser une récompense (QR + « Récompense utilisée ») ──────────
+  void _useRewardIos(String merchantName, Map reward) {
+    showRewardQrIos(
+      context,
+      reward: reward,
+      merchantName: merchantName,
+      userName: _userName,
+      onRedeemed: () {
+        if (QartaDemo.enabled) {
+          setState(() {
+            _rewards = _rewards.where((r) => r['id'] != reward['id']).toList();
+            _rewardCount = _rewards.length;
+          });
+        } else {
+          _refreshManual();
+        }
+      },
+    );
+  }
+
+  // ── iOS : la carte vient d'être complétée → « Carte complète ! » ──────────
+  Future<void> _onRewardUnlockedIos(StampEvent e) async {
+    final idx = _cards.indexWhere((c) => c['id'] == e.cardId);
+    if (idx < 0) return;
+    final card = _cards[idx] as Map;
+    final merchant = (card['merchants'] as Map?) ?? {};
+    final useNow = await showRewardUnlockedIos(
+      context, merchant: merchant, design: card['card_design'], userName: _userName,
+    );
+    if (!mounted) return;
+    // La carte repart avec le surplus (souvent 0).
+    setState(() {
+      final i = _cards.indexWhere((c) => c['id'] == e.cardId);
+      if (i >= 0) {
+        final c = Map<String, dynamic>.from(_cards[i] as Map);
+        if (e.isPoints) { c['points_count'] = e.newCount; } else { c['stamps_count'] = e.newCount; }
+        _cards[i] = c;
+      }
+    });
+    Map? reward;
+    if (QartaDemo.enabled) {
+      reward = {
+        'id': 'r-demo-${DateTime.now().millisecondsSinceEpoch}',
+        'merchant_id': card['merchant_id'],
+        'merchant_name': merchant['business_name'],
+        'description': merchant['reward_description'],
+        'card_design': card['card_design'],
+        'merchant': merchant,
+      };
+      setState(() { _rewards = [..._rewards, reward]; _rewardCount = _rewards.length; });
+    } else {
+      _refreshCard(e.cardId);
+      await _loadRewardsCount();
+      reward = _rewards.cast<Map?>().firstWhere((r) => r?['merchant_id'] == card['merchant_id'], orElse: () => null);
+    }
+    if (!mounted) return;
+    _goToRewards();
+    if (useNow == true && reward != null) {
+      _useRewardIos(merchant['business_name'] as String? ?? '', reward);
+    }
+  }
+
+  // ── HEADER Android : extrait dans ClientHeader ─────────────────────────────
+  // (voir lib/screens/client/widgets/client_header.dart)
+
+  // ── HEADER iOS (conservé pour la couleur d'indicateur) ─────────────────────
+
+  Widget _buildHeader_UNUSED() {
     return Container(
       color: context.qNavy,
       child: Stack(
@@ -1803,37 +2202,99 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone),
-            RewardsTab(token: widget.token, userName: _userName, initialRewards: _rewards, onChanged: _refreshManual),
+            if (kIsIOS)
+              CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v))
+            else
+              CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v)),
+            ClientRewardsIos(rewards: _rewards, cards: _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual),
           ],
         );
       case 1:
-        return ScanTab(
-          token: widget.token,
-          onCardAdded: (card, merchant) {
-            // Optimistic update : carte visible immédiatement, refresh en arrière-plan
-            final localCard = Map<String, dynamic>.from(card)
-              ..['merchants']    = merchant
-              ..['card_design']  = null
-              ..['last_scan_at'] = null;
-            setState(() {
-              _cards.insert(0, localCard);
-              _tab = 0;
-            });
-            // Confirme + complète (design) depuis le serveur
-            final cardId = card['id'] as String?;
-            if (cardId != null) _refreshCard(cardId);
-          },
-          onBack: () => _setTab(0),
-        );
+        void addCard(Map<String, dynamic> card, Map<String, dynamic> merchant, {required bool goHome}) {
+          // Optimistic update : carte visible immédiatement, refresh en arrière-plan
+          final localCard = Map<String, dynamic>.from(card)
+            ..['merchants']    = merchant
+            ..['card_design']  = card['card_design']
+            ..['last_scan_at'] = null;
+          setState(() {
+            _cards.insert(0, localCard);
+            _cardCount = _cards.length;
+            if (goHome) { _tab = 0; _rewardPillActive = false; }
+          });
+          // Confirme + complète (design) depuis le serveur
+          final cardId = card['id'] as String?;
+          if (cardId != null && !QartaDemo.enabled) _refreshCard(cardId);
+        }
+        return kIsIOS
+            ? ScanTabIos(
+                token: widget.token,
+                userName: _userName,
+                onCardAdded: (card, merchant) => addCard(card, merchant, goHome: true),
+                onCardAddedStay: (card, merchant) => addCard(card, merchant, goHome: false),
+                onBack: () => _setTab(0),
+              )
+            : ScanTab(
+                token: widget.token,
+                userName: _userName,
+                onCardAdded: (card, merchant) => addCard(card, merchant, goHome: true),
+                onCardAddedStay: (card, merchant) => addCard(card, merchant, goHome: false),
+                onBack: () => _setTab(0),
+              );
       case 2:
-        return HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual);
+        return kIsIOS
+            ? HistoryTabIos(token: widget.token, history: _history, onRefresh: _refreshManual, cards: _cards)
+            : HistoryTab(token: widget.token, history: _history, onRefresh: _refreshManual, cards: _cards);
       case 3:
-        return _buildProfilTab();
+        return ClientProfileAndroid(
+          isOAuth: _isOAuth,
+          isGoogle: _isGoogle,
+          onPersonalInfo: _showPersonalInfo,
+          onPassword: _showChangePassword,
+          onCards: () => Navigator.push(context, platformRoute(
+            builder: (_) => kIsIOS
+                ? ManageCardsScreenIos(
+                    token: widget.token,
+                    userName: _userName,
+                    cards: _cards,
+                    rewards: _rewards,
+                    onRefresh: _refreshManual,
+                  )
+                : ManageCardsScreen(
+                    token: widget.token,
+                    userName: _userName,
+                    cards: _cards,
+                    rewards: _rewards,
+                    onRefresh: _refreshManual,
+                  ),
+          )),
+          onNotifSettings: () => showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => const NotificationsSheet(),
+          ),
+          onHelp: () => showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => const HelpSheet(),
+          ),
+          onLogout: _logout,
+          onDelete: _showDeleteAccount,
+        );
       case 4:
-        return _buildNotifsTab();
+        return ClientNotifsAndroid(
+          notifs: _notifs,
+          filter: _notifFilter,
+          onTap: (n) => setState(() {
+            n['read'] = true;
+            _notifCount = _notifs.where((x) => !(x['read'] as bool)).length;
+          }),
+        );
       default:
-        return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
+        return kIsIOS
+            ? CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent)
+            : CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
   }
 
@@ -1916,13 +2377,21 @@ class _ClientHomeState extends State<ClientHome>
               onTap: () => Navigator.push(
                 context,
                 platformRoute(
-                  builder: (_) => ManageCardsScreen(
-                    token: widget.token,
-                    userName: _userName,
-                    cards: _cards,
-                    rewards: _rewards,
-                    onRefresh: _refreshManual,
-                  ),
+                  builder: (_) => kIsIOS
+                      ? ManageCardsScreenIos(
+                          token: widget.token,
+                          userName: _userName,
+                          cards: _cards,
+                          rewards: _rewards,
+                          onRefresh: _refreshManual,
+                        )
+                      : ManageCardsScreen(
+                          token: widget.token,
+                          userName: _userName,
+                          cards: _cards,
+                          rewards: _rewards,
+                          onRefresh: _refreshManual,
+                        ),
                 ),
               ),
             ),

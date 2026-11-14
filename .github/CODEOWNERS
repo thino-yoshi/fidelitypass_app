@@ -1,0 +1,22 @@
+# ══════════════════════════════════════════════════════════════
+# CODEOWNERS — Qarta App
+# Sur GitHub, c'est la DERNIÈRE règle qui correspond qui gagne.
+# L'ordre compte : du plus général au plus spécifique.
+# ══════════════════════════════════════════════════════════════
+
+# ── 1. Par défaut : tout le projet → Thigrou ──────────────────
+*                                                            @thino-yoshi
+
+# ── 2. Tout ce qui est iOS → Yassine ──────────────────────────
+*_ios.dart                                                   @asmarousslm
+/ios/                                                        @asmarousslm
+/lib/screens/client/widgets/client_hours.dart                @asmarousslm
+/lib/screens/client/widgets/client_glow_background.dart      @asmarousslm
+
+# ── 3. Fichiers partagés → les deux (en dernier = prioritaire)
+/lib/main.dart                                               @thino-yoshi @asmarousslm
+/lib/screens/client/client_home.dart                         @thino-yoshi @asmarousslm
+/lib/screens/client/cards_tab.dart                           @thino-yoshi @asmarousslm
+/lib/screens/merchant/merchant_tokens.dart                   @thino-yoshi @asmarousslm
+/pubspec.yaml                                                @thino-yoshi @asmarousslm
+/pubspec.lock                                                @thino-yoshi @asmarousslm

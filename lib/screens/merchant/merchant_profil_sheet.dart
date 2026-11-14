@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/app_colors.dart';
@@ -9,6 +8,7 @@ class MerchantProfilSheet extends StatelessWidget {
   final String token;
   final Map? merchantInfo;
   final VoidCallback onLogout;
+  final bool isTab;
   final VoidCallback? onNavigateToProgram;
   final VoidCallback? onNavigateToNotifs;
   final VoidCallback? onNavigateToQR;
@@ -22,6 +22,7 @@ class MerchantProfilSheet extends StatelessWidget {
     required this.token,
     required this.merchantInfo,
     required this.onLogout,
+    this.isTab = false,
     this.onNavigateToProgram,
     this.onNavigateToNotifs,
     this.onNavigateToQR,
@@ -33,12 +34,35 @@ class MerchantProfilSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsIOS) return _buildIOS(context);
-    return _buildMaterial(context);
+    if (isTab) {
+      return Scaffold(
+        backgroundColor: context.cBg,
+        body: SafeArea(
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+              child: Row(children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                  color: context.cText,
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Text('Profil',
+                  style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w700,
+                    color: context.cText,
+                  )),
+              ]),
+            ),
+            Expanded(child: _buildContent(context)),
+          ]),
+        ),
+      );
+    }
+    return _buildContent(context);
   }
 
-  // ─── Android : bottom sheet Material ────────────────────────────────────────
-  Widget _buildMaterial(BuildContext context) {
+  Widget _buildContent(BuildContext context) {
     final kBg     = context.cBg;
     final kWhite  = context.cSurface;
     final kBorder = context.cBorder;
@@ -49,12 +73,9 @@ class MerchantProfilSheet extends StatelessWidget {
     final initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
 
     return Container(
-      decoration: BoxDecoration(
-        color: kBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(
+      color: kBg,
+      child: Column(mainAxisSize: isTab ? MainAxisSize.max : MainAxisSize.min, children: [
+        if (!isTab) Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Center(child: Container(
             width: 36, height: 4,
@@ -91,12 +112,12 @@ class MerchantProfilSheet extends StatelessWidget {
                 icon: Icons.description_outlined,
                 iconBg: kPrimary.withValues(alpha: 0.12), iconColor: kPrimary,
                 label: 'Informations', sub: 'Nom, adresse',
-                onTap: () { Navigator.pop(context); onNavigateToInfo?.call(); }),
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToInfo?.call(); }),
               _Row(kBorder: kBorder, kText: kText, kSub: kSub,
                 icon: Icons.credit_card_outlined,
                 iconBg: kSuccess.withValues(alpha: 0.12), iconColor: kSuccess,
                 label: 'Ma carte fidélité', sub: 'Tampons, récompense, couleur',
-                onTap: () { Navigator.pop(context); onNavigateToCarteEditor?.call(); },
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToCarteEditor?.call(); },
                 noBorder: true),
             ]),
             const SizedBox(height: 14),
@@ -108,17 +129,17 @@ class MerchantProfilSheet extends StatelessWidget {
                 icon: Icons.notifications_outlined,
                 iconBg: kGold.withValues(alpha: 0.12), iconColor: kGold,
                 label: 'Notifications push', sub: 'Promos, rappels',
-                onTap: () { Navigator.pop(context); onNavigateToNotifs?.call(); }),
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToNotifs?.call(); }),
               _Row(kBorder: kBorder, kText: kText, kSub: kSub,
                 icon: Icons.qr_code_2_rounded,
                 iconBg: kPrimary.withValues(alpha: 0.12), iconColor: kPrimary,
                 label: 'QR Code boutique', sub: 'Afficher en caisse',
-                onTap: () { Navigator.pop(context); onNavigateToQR?.call(); }),
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToQR?.call(); }),
               _Row(kBorder: kBorder, kText: kText, kSub: kSub,
                 icon: Icons.show_chart_rounded,
                 iconBg: kPurple.withValues(alpha: 0.12), iconColor: kPurple,
                 label: 'Statistiques', sub: "Analyse de l'activité",
-                onTap: () { Navigator.pop(context); onNavigateToStats?.call(); },
+                onTap: () { if (!isTab) Navigator.pop(context); onNavigateToStats?.call(); },
                 noBorder: true),
             ]),
             const SizedBox(height: 14),
@@ -130,7 +151,7 @@ class MerchantProfilSheet extends StatelessWidget {
                 icon: Icons.help_outline_rounded,
                 iconBg: kBg, iconColor: kSub,
                 label: 'Aide & Support', sub: 'FAQ, nous contacter',
-                onTap: () => Navigator.pop(context)),
+                onTap: () { if (!isTab) Navigator.pop(context); }),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: themeNotifier,
                 builder: (_, mode, __) => Padding(
@@ -185,261 +206,8 @@ class MerchantProfilSheet extends StatelessWidget {
       ]),
     );
   }
-
-  // ─── iOS : style Apple HIG — CupertinoListSection ───────────────────────────
-  Widget _buildIOS(BuildContext context) {
-    final isDark     = context.isDark;
-    final sheetBg    = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
-    final handleColor = isDark ? const Color(0xFF48484A) : const Color(0xFFD1D1D6);
-    final titleColor  = isDark ? Colors.white            : const Color(0xFF000000);
-    final subColor    = const Color(0xFF8E8E93);
-
-    final name     = merchantInfo?['business_name'] as String? ?? 'Commerce';
-    final initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: sheetBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // Handle iOS style
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Center(child: Container(
-            width: 36, height: 5,
-            decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(3))))),
-        // En-tête profil
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          child: Row(children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: kPrimary.withValues(alpha: 0.14),
-                shape: BoxShape.circle,
-              ),
-              child: Center(child: Text(initials,
-                style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: kPrimary))),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: TextStyle(
-                fontSize: 17, fontWeight: FontWeight.w600,
-                color: titleColor, letterSpacing: -0.4)),
-              Text('Mon commerce', style: TextStyle(fontSize: 12, color: subColor)),
-            ])),
-          ]),
-        ),
-        // Corps scrollable
-        Flexible(child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(0, 0, 0, 16 + MediaQuery.of(context).padding.bottom),
-          child: Column(children: [
-            // Section MON COMMERCE
-            _IosSection(
-              header: 'MON COMMERCE',
-              rows: [
-                _IosRow(
-                  icon: CupertinoIcons.doc_text,
-                  iconBg: kPrimary, label: 'Informations',
-                  sub: 'Nom, adresse',
-                  onTap: () { Navigator.pop(context); onNavigateToInfo?.call(); }),
-                _IosRow(
-                  icon: CupertinoIcons.creditcard,
-                  iconBg: kSuccess, label: 'Ma carte fidélité',
-                  sub: 'Tampons, récompense, couleur',
-                  onTap: () { Navigator.pop(context); onNavigateToCarteEditor?.call(); },
-                  isLast: true),
-              ],
-            ),
-            // Section MARKETING
-            _IosSection(
-              header: 'MARKETING',
-              rows: [
-                _IosRow(
-                  icon: CupertinoIcons.bell,
-                  iconBg: kGold, label: 'Notifications push',
-                  sub: 'Promos, rappels',
-                  onTap: () { Navigator.pop(context); onNavigateToNotifs?.call(); }),
-                _IosRow(
-                  icon: CupertinoIcons.qrcode,
-                  iconBg: kPrimary, label: 'QR Code boutique',
-                  sub: 'Afficher en caisse',
-                  onTap: () { Navigator.pop(context); onNavigateToQR?.call(); }),
-                _IosRow(
-                  icon: CupertinoIcons.chart_bar,
-                  iconBg: kPurple, label: 'Statistiques',
-                  sub: "Analyse de l'activité",
-                  onTap: () { Navigator.pop(context); onNavigateToStats?.call(); },
-                  isLast: true),
-              ],
-            ),
-            // Section AIDE
-            _IosSection(
-              header: 'AIDE',
-              rows: [
-                _IosRow(
-                  icon: CupertinoIcons.question_circle,
-                  iconBg: const Color(0xFF636366),
-                  label: 'Aide & Support', sub: 'FAQ, nous contacter',
-                  onTap: () => Navigator.pop(context)),
-                // Toggle mode sombre
-                ValueListenableBuilder<ThemeMode>(
-                  valueListenable: themeNotifier,
-                  builder: (_, mode, __) => _IosDarkModeRow(
-                    isDark: mode == ThemeMode.dark,
-                    onChanged: (val) async {
-                      themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
-                      final p = await SharedPreferences.getInstance();
-                      await p.setBool('dark_mode', val);
-                    },
-                    isLast: true,
-                  ),
-                ),
-              ],
-            ),
-            // Bouton déconnexion
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: onLogout,
-                child: Container(
-                  width: double.infinity, height: 50,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(CupertinoIcons.square_arrow_left, color: kError, size: 18),
-                    SizedBox(width: 8),
-                    Text('Se déconnecter',
-                      style: TextStyle(
-                        color: kError, fontSize: 15, fontWeight: FontWeight.w500)),
-                  ]),
-                ),
-              ),
-            ),
-          ]),
-        )),
-      ]),
-    );
-  }
 }
 
-// ─── iOS : Section groupée ────────────────────────────────────────────────────
-class _IosSection extends StatelessWidget {
-  final String header;
-  final List<Widget> rows;
-
-  const _IosSection({required this.header, required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark   = context.isDark;
-    final cardBg   = isDark ? const Color(0xFF2C2C2E) : Colors.white;
-    final hdrColor = const Color(0xFF8E8E93);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(header,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-              color: hdrColor, letterSpacing: 0.5)),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: cardBg, borderRadius: BorderRadius.circular(12)),
-          child: Column(children: rows),
-        ),
-      ]),
-    );
-  }
-}
-
-// ─── iOS : Ligne de liste ─────────────────────────────────────────────────────
-class _IosRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconBg;
-  final String label;
-  final String sub;
-  final VoidCallback onTap;
-  final bool isLast;
-
-  const _IosRow({
-    required this.icon, required this.iconBg,
-    required this.label, required this.sub,
-    required this.onTap, this.isLast = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark   = context.isDark;
-    final divider  = isDark ? const Color(0xFF38383A) : const Color(0xFFE0E0E5);
-    final lblColor = isDark ? Colors.white : const Color(0xFF000000);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: isLast ? null : BoxDecoration(
-          border: Border(bottom: BorderSide(color: divider, width: 0.5))),
-        child: Row(children: [
-          Container(
-            width: 30, height: 30,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(7)),
-            child: Icon(icon, color: Colors.white, size: 16)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w400, color: lblColor)),
-            Text(sub, style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E93))),
-          ])),
-          const Icon(CupertinoIcons.chevron_right, size: 14, color: Color(0xFFC7C7CC)),
-        ]),
-      ),
-    );
-  }
-}
-
-// ─── iOS : Ligne mode sombre ──────────────────────────────────────────────────
-class _IosDarkModeRow extends StatelessWidget {
-  final bool isDark;
-  final void Function(bool) onChanged;
-  final bool isLast;
-
-  const _IosDarkModeRow({
-    required this.isDark, required this.onChanged, this.isLast = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final lblColor = isDark ? Colors.white : const Color(0xFF000000);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(children: [
-        Container(
-          width: 30, height: 30,
-          decoration: BoxDecoration(color: kPurple, borderRadius: BorderRadius.circular(7)),
-          child: const Icon(CupertinoIcons.moon_fill, color: Colors.white, size: 16)),
-        const SizedBox(width: 12),
-        Expanded(child: Text('Mode sombre',
-          style: TextStyle(fontSize: 14, color: lblColor))),
-        CupertinoSwitch(
-          value: isDark,
-          onChanged: onChanged,
-          activeTrackColor: kPrimary,
-        ),
-      ]),
-    );
-  }
-}
-
-// ─── Android uniquement ───────────────────────────────────────────────────────
 class _Section extends StatelessWidget {
   final Color kWhite;
   final Color kBorder;
