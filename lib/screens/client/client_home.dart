@@ -1579,33 +1579,15 @@ class _ClientHomeState extends State<ClientHome>
               Positioned.fill(child: _buildTabContent())
             else
               Column(children: [
-                ClientHeader(
-                  tab: _tab,
-                  firstName: _firstName,
-                  initials: _initials,
-                  profileImageUrl: _profileImageUrl,
-                  profileImagePath: _profileImagePath,
-                  cardCount: _cardCount,
-                  rewardCount: _rewardCount,
-                  notifCount: _notifCount,
-                  rewardPillActive: _rewardPillActive,
-                  notifFilter: _notifFilter,
-                  onProfileTap: _openProfil,
-                  onNotifTap: _openNotifs,
-                  onBackFromProfil: () => _setTab(0),
-                  onCloseNotifs: _closeNotifs,
-                  onGoToCards: _goToCards,
-                  onGoToRewards: _goToRewards,
-                  onFilterChanged: (f) => setState(() => _notifFilter = f),
-                  onPhotoTap: _showPhotoOptions,
-                ),
                 Expanded(child: _buildTabContent()),
               ]),
-            if (_tab != 1) ClientBottomNav(
-              currentTab: _tab,
-              onTabChanged: _setTab,
-              onScanTap: () => _setTab(1),
-            ),
+            if (_tab != 1) ...[
+              ClientBottomNav(
+                currentTab: _tab,
+                onTabChanged: _setTab,
+                onScanTap: () => _setTab(1),
+              ),
+            ],
             if (_stampBadge != null) _buildStampBadge(_stampBadge!),
           ],
         ),
@@ -2584,12 +2566,12 @@ class _ClientHomeState extends State<ClientHome>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            height: 76 + bottomPad,
+            height: 114 + bottomPad,
             decoration: BoxDecoration(
               color: navBg,
               border: Border(top: BorderSide(color: navBorder, width: 1)),
             ),
-            padding: EdgeInsets.only(bottom: bottomPad + 10),
+            padding: EdgeInsets.only(bottom: bottomPad + 14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -2613,10 +2595,10 @@ class _ClientHomeState extends State<ClientHome>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: active ? const Color(0xFF2C7BE5) : context.qNavInactive, size: 22),
-            const SizedBox(height: 3),
+            Icon(icon, color: active ? const Color(0xFF2C7BE5) : context.qNavInactive, size: 28),
+            const SizedBox(height: 4),
             Text(label, style: TextStyle(
-              fontSize: 10, fontWeight: FontWeight.w600,
+              fontSize: 11, fontWeight: FontWeight.w600,
               color: active ? const Color(0xFF2C7BE5) : context.qNavInactive,
             )),
           ],
@@ -2638,13 +2620,13 @@ class _ClientHomeState extends State<ClientHome>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 56, height: 56,
+              width: 70, height: 70,
               decoration: BoxDecoration(
                 color: bgColor,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(22),
                 boxShadow: [BoxShadow(color: bgColor.withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(0, 4))],
               ),
-              child: Icon(Icons.qr_code_scanner_rounded, color: iconColor, size: 26),
+              child: Icon(Icons.qr_code_scanner_rounded, color: iconColor, size: 32),
             ),
           ],
         ),

@@ -73,6 +73,8 @@ class CardsTab extends StatefulWidget {
 
 class _CardsTabState extends State<CardsTab> {
   String _search = '';
+  bool _searchExpanded = false;
+  final FocusNode _searchFocus = FocusNode();
 
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
@@ -145,6 +147,99 @@ class _CardsTabState extends State<CardsTab> {
         ),
       );
 
+  // Retourne blanc si la couleur de fond est sombre, noir si elle est claire
+  static Color _ink(Color bg) =>
+      bg.computeLuminance() > 0.45 ? const Color(0xFF0B1220) : Colors.white;
+
+  static Widget _miniCard(Color ink, String name, String count, String label, Color accent) => Expanded(
+    child: AspectRatio(
+      aspectRatio: 1.6,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [accent, accent.withValues(alpha: 0.7)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white70)),
+            const Spacer(),
+            Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+            Text(label, style: const TextStyle(fontSize: 9, color: Colors.white60)),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  static const _fakeCards = [
+    {'name': 'Blue Bottle Coffee', 'count': '7/10',  'label': 'tampons', 'color': Color(0xFF2C7BE5)},
+    {'name': 'Green Garden',       'count': '10/10', 'label': 'tampons', 'color': Color(0xFF10B981)},
+    {'name': 'Vinyl Records',      'count': '3/8',   'label': 'tampons', 'color': Color(0xFF8B5CF6)},
+    {'name': 'Urban Cuts',         'count': '1/6',   'label': 'tampons', 'color': Color(0xFFF59E0B)},
+  ];
+
+  static Widget _walletStack(Color ink) {
+    const cardH = 110.0;
+    const peek  = 44.0;
+    final total = cardH + peek * (_fakeCards.length - 1);
+    return ClipRect(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: SizedBox(
+          height: total,
+          child: Stack(
+            children: List.generate(_fakeCards.length, (j) {
+              final c = _fakeCards[j];
+              return Positioned(
+                top: j * peek,
+                left: 0, right: 0,
+                child: Container(
+                  height: cardH,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [(c['color'] as Color), (c['color'] as Color).withValues(alpha: 0.75)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [BoxShadow(color: (c['color'] as Color).withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(c['name'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                      const Spacer(),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Text(c['count'] as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+                        Text(c['label'] as String, style: const TextStyle(fontSize: 11, color: Colors.white60)),
+                      ]),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _jours = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+  static const _mois  = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  static String _formattedDate() {
+    final now = DateTime.now();
+    return '${_jours[now.weekday - 1]} ${now.day} ${_mois[now.month - 1]}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cards = _search.isEmpty
@@ -156,6 +251,153 @@ class _CardsTabState extends State<CardsTab> {
             return name.contains(q) || cardName.contains(q);
           }).toList();
 
+    // ── DESIGN ANDROID À IMPLÉMENTER ─────────────────────────────────────────
+    // Couleur du fond de l'app (clair ou sombre selon le thème)
+    final appBg = Theme.of(context).scaffoldBackgroundColor;
+    final ink   = _ink(appBg); // couleur du texte/icônes adaptée au fond
+
+    final dockPad = MediaQuery.of(context).padding.bottom + 120;
+    if (true) return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Container 1 : header (rouage + avatar) ──────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 16, 0),
+          child: SizedBox(
+            height: 52,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: () {},
+                  icon: Icon(Icons.settings_outlined, color: ink, size: 24),
+                ),
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: ink.withValues(alpha: 0.1),
+                  child: Icon(Icons.person, color: ink, size: 20),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // ── Container 2 : pastille crème (date + salutation) ────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 10, 18, 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDF3DC),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFBFA07A).withValues(alpha: 0.22),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formattedDate(),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF9C7E5A)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Comment vas-tu ${widget.userName.split(' ').first} ?',
+                    style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF3D2B1A)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // ── Container 4 : barre de recherche animée ─────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: LayoutBuilder(builder: (_, box) => AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              height: 44,
+              width: _searchExpanded ? box.maxWidth : 44,
+              decoration: BoxDecoration(
+                color: ink.withValues(alpha: _searchExpanded ? 0.07 : 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ink.withValues(alpha: 0.13)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _searchExpanded = !_searchExpanded;
+                        if (!_searchExpanded) _search = '';
+                      });
+                      if (_searchExpanded) {
+                        Future.delayed(const Duration(milliseconds: 60),
+                            () => _searchFocus.requestFocus());
+                      } else {
+                        _searchFocus.unfocus();
+                      }
+                    },
+                    child: AspectRatio(
+                      aspectRatio: 1.0,
+                      child: Center(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          transitionBuilder: (child, anim) =>
+                              ScaleTransition(scale: anim, child: child),
+                          child: Icon(
+                            _searchExpanded
+                                ? Icons.close_rounded
+                                : Icons.search_rounded,
+                            key: ValueKey(_searchExpanded),
+                            color: ink.withValues(alpha: 0.55),
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_searchExpanded)
+                    Expanded(
+                      child: TextField(
+                        focusNode: _searchFocus,
+                        onChanged: (v) => setState(() => _search = v),
+                        style: TextStyle(fontSize: 14, color: ink),
+                        decoration: InputDecoration(
+                          hintText: 'Rechercher une carte…',
+                          hintStyle: TextStyle(
+                              color: ink.withValues(alpha: 0.35), fontSize: 14),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.only(right: 12),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            )),
+          ),
+        ),
+        // ── Container 6 : WalletStack — prend tout l'espace restant ─────────
+        Expanded(
+          child: _WalletStack(cards: widget.cards, userName: widget.userName),
+        ),
+        // ── Espace sous le dock ──────────────────────────────────────────────
+        SizedBox(height: dockPad),
+      ],
+    );
+    // ── Ancien design (iOS stack) — gardé pour référence ──────────────────
+    // ignore: dead_code
     return ClientCardsStackIos(
       hasAnyCard: widget.cards.isNotEmpty,
       onSearchActive: widget.onSearchActive,
@@ -180,6 +422,252 @@ class _CardsTabState extends State<CardsTab> {
       },
     );
   }
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    super.dispose();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Wallet Stack — effet portefeuille interactif (Android design)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _WalletStack extends StatefulWidget {
+  final List<dynamic> cards;
+  final String userName;
+  const _WalletStack({required this.cards, required this.userName});
+  @override
+  State<_WalletStack> createState() => _WalletStackState();
+}
+
+class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixin {
+  int _selected = 0;
+
+  static const double _cardH   = 190.0;
+  static const double _peek    = 48.0;
+  static const _dur            = Duration(milliseconds: 380);
+  static const _curve          = Curves.easeOutCubic;
+
+  static const _fallbackColors = [
+    Color(0xFF2C7BE5), Color(0xFF10B981),
+    Color(0xFF8B5CF6), Color(0xFFF59E0B),
+    Color(0xFFEF4444), Color(0xFFF97316),
+  ];
+
+  OverlayEntry? _overlayEntry;
+  AnimationController? _overlayCtrl;
+
+  @override
+  void dispose() {
+    _closeCard(animate: false);
+    _overlayCtrl?.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _parsed {
+    return widget.cards.asMap().entries.map((e) {
+      final i     = e.key;
+      final card  = e.value as Map;
+      final m     = card['merchants'] as Map? ?? {};
+      final pts   = (m['program_type'] as String?) == 'points';
+      final cnt   = pts ? (card['points_count'] as int? ?? 0) : (card['stamps_count'] as int? ?? 0);
+      final mx    = pts ? (m['points_required'] as int? ?? 10) : (m['stamps_required'] as int? ?? 10);
+      final style = CardStyle.fromDesign(
+        card['card_design'],
+        merchantLogoUrl: card['merchants']?['logo_url'] as String?,
+        fallbackColor: _fallbackColors[i % _fallbackColors.length],
+      );
+      return <String, dynamic>{
+        'card':  card,
+        'style': style,
+        'name':  m['business_name'] as String? ?? 'Carte',
+        'count': cnt,
+        'max':   mx,
+        'label': pts ? 'points' : 'tampons',
+        'color': style.bgColors.first,
+      };
+    }).toList();
+  }
+
+  double _topFor(int i, int sel) {
+    if (i <= sel) return i * _peek;
+    return sel * _peek + _cardH + (i - sel - 1) * _peek;
+  }
+
+  double _totalH(int n) => n > 0 ? _cardH + (n - 1) * _peek : _cardH;
+
+  void _openCard(Map card, CardStyle style, Rect fromRect) {
+    if (_overlayEntry != null) return;
+
+    final screen = MediaQuery.of(context).size;
+    final padding = MediaQuery.of(context).padding;
+    final targetW = screen.width - 48;
+    const targetH = 220.0;
+    final targetRect = Rect.fromLTWH(
+      24,
+      padding.top + (screen.height - padding.top - padding.bottom - targetH) / 2,
+      targetW,
+      targetH,
+    );
+
+    _overlayCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+
+    final anim = CurvedAnimation(parent: _overlayCtrl!, curve: Curves.easeOutCubic);
+
+    _overlayEntry = OverlayEntry(builder: (ctx) {
+      return AnimatedBuilder(
+        animation: anim,
+        builder: (_, __) {
+          final t    = anim.value;
+          final rect = Rect.lerp(fromRect, targetRect, t)!;
+          final bg   = (t * 0.65).clamp(0.0, 0.65);
+          return Stack(children: [
+            GestureDetector(
+              onTap: _closeCard,
+              child: Container(color: Colors.black.withValues(alpha: bg)),
+            ),
+            Positioned(
+              left: rect.left,
+              top:  rect.top,
+              width:  rect.width,
+              height: rect.height,
+              child: GestureDetector(
+                onTap: () {},
+                child: Transform.scale(
+                  scale: 1.0 + t * 0.04,
+                  child: LoyaltyCardFace(
+                    card: card,
+                    style: style,
+                    userName: widget.userName,
+                  ),
+                ),
+              ),
+            ),
+          ]);
+        },
+      );
+    });
+
+    Overlay.of(context).insert(_overlayEntry!);
+    _overlayCtrl!.forward();
+  }
+
+  void _closeCard({bool animate = true}) {
+    if (_overlayEntry == null) return;
+    if (!animate) {
+      _overlayEntry!.remove();
+      _overlayEntry = null;
+      return;
+    }
+    _overlayCtrl!.reverse().whenComplete(() {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _parsed;
+    if (data.isEmpty) return const SizedBox.shrink();
+    final sel = _selected.clamp(0, data.length - 1);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SizedBox(
+        height: _totalH(data.length),
+        child: Stack(
+          children: List.generate(data.length, (i) {
+            final c = data[i];
+
+            return AnimatedPositioned(
+              duration: _dur,
+              curve: _curve,
+              top: _topFor(i, sel),
+              left: 0, right: 0,
+              child: Builder(builder: (cardCtx) => GestureDetector(
+                onTap: () {
+                  setState(() => _selected = i);
+                  final box = cardCtx.findRenderObject() as RenderBox?;
+                  if (box == null) return;
+                  final fromRect = box.localToGlobal(Offset.zero) & box.size;
+                  _openCard(c['card'] as Map, c['style'] as CardStyle, fromRect);
+                },
+                child: SizedBox(
+                  height: _cardH,
+                  child: LoyaltyCardFace(
+                    card: c['card'] as Map,
+                    style: c['style'] as CardStyle,
+                    userName: widget.userName,
+                  ),
+                ),
+              )),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  // Vue déployée — toutes les infos
+  Widget _expanded(Map c, int count, int max) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(c['name'] as String,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+        const Icon(Icons.credit_card, color: Colors.white38, size: 20),
+      ]),
+      const Spacer(),
+      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Text('$count', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -1)),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4, left: 2),
+          child: Text('/$max ${c['label']}', style: const TextStyle(fontSize: 13, color: Colors.white60)),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      max <= 15
+        ? Wrap(spacing: 5, runSpacing: 5, children: List.generate(max, (j) => Container(
+            width: 18, height: 18,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: j < count ? Colors.white : Colors.white.withValues(alpha: 0.22),
+            ),
+          )))
+        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: max > 0 ? count / max : 0,
+                backgroundColor: Colors.white.withValues(alpha: 0.22),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                minHeight: 8,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('$count / $max', style: const TextStyle(fontSize: 11, color: Colors.white70)),
+          ]),
+    ],
+  );
+
+  // Vue réduite — alignée en haut pour être visible dans le bandeau (peek)
+  Widget _collapsed(Map c, int count, int max) => Align(
+    alignment: Alignment.topCenter,
+    child: Row(
+      children: [
+        Text(c['name'] as String,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+        const Spacer(),
+        Text('$count/$max', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+        const SizedBox(width: 4),
+        const Icon(Icons.expand_less, color: Colors.white38, size: 14),
+      ],
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════

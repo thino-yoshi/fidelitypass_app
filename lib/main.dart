@@ -146,10 +146,10 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.light,
           colorSchemeSeed: const Color(0xFF2C7BE5),
           scaffoldBackgroundColor: const Color(0xFFF4F2EE),
-          // iPhone : police du système (SF Pro). Android : Sora, inchangé.
+          // iPhone : police du système (SF Pro). Android : Inter.
           textTheme: kIsIOS
               ? null
-              : GoogleFonts.soraTextTheme(ThemeData(brightness: Brightness.light).textTheme),
+              : GoogleFonts.interTextTheme(ThemeData(brightness: Brightness.light).textTheme),
         ),
         darkTheme: ThemeData(
           useMaterial3: true,
@@ -159,7 +159,7 @@ class MyApp extends StatelessWidget {
           cardColor: const Color(0xFF0F1E35),
           textTheme: kIsIOS
               ? null
-              : GoogleFonts.soraTextTheme(ThemeData(brightness: Brightness.dark).textTheme),
+              : GoogleFonts.interTextTheme(ThemeData(brightness: Brightness.dark).textTheme),
         ),
         home: const SplashRouter(),
       ),
