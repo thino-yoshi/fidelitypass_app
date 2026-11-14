@@ -9,6 +9,11 @@ import '../widgets/hero_background.dart';
 import 'client/client_home.dart';
 import 'merchant/merchant_home.dart';
 import 'merchant_redirect_screen.dart';
+// iPhone (style Apple) : écrans dans auth_screen_ios.dart, la logique reste ici.
+import 'auth_screen_ios.dart';
+import 'client/widgets/client_welcome_sheet_ios.dart';
+import 'merchant/merchant_tokens.dart' show kIsIOS;
+import '../config/app_colors.dart' show kNavy;
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -197,8 +202,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
           builder: (_) => MerchantHome(token: token, merchantName: name)));
     } else {
       AppLogger.nav('→ ClientHome ($name)');
+      final home = ClientHome(token: token, userName: name);
       Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => ClientHome(token: token, userName: name)));
+          // iPhone : compte tout juste créé → feuille « Bienvenue dans Qarta » (une fois).
+          builder: (_) => kIsIOS && isFreshAccount() ? ClientWelcomeGate(child: home) : home));
     }
   }
 
@@ -360,7 +367,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
       if (mounted) {
         setState(() {
           appleLoading = false;
-          error = e.toString().replaceAll('Exception: ', '');
+          error = kIsIOS ? appleErrorText(e) : e.toString().replaceAll('Exception: ', '');
         });
       }
     }
@@ -368,6 +375,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
+    if (kIsIOS && (screen == 'landing' || screen == 'login')) return _buildIos();
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -386,6 +394,51 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin, 
           ),
         ],
       ),
+    );
+  }
+
+  // ═══════════════════════════════════════
+  // iPHONE (style Apple) — écrans dans auth_screen_ios.dart
+  // ═══════════════════════════════════════
+  Widget _buildIos() {
+    return Scaffold(
+      backgroundColor: kNavy,
+      body: Stack(fit: StackFit.expand, children: [
+        const QartaNightBackground(),
+        if (screen == 'login')
+          AuthLoginIos(
+            emailCtrl: loginEmailCtrl,
+            passCtrl: loginPassCtrl,
+            rememberMe: _rememberMe,
+            onRememberMe: (v) => setState(() => _rememberMe = v),
+            loading: loading,
+            error: error,
+            onLogin: _doLogin,
+            onBack: () => setState(() { screen = 'landing'; error = ''; }),
+            onCreateAccount: () => setState(() { screen = 'register'; regStep = 1; regType = null; error = ''; }),
+            onHaveCode: () {
+              final email = loginEmailCtrl.text.trim();
+              if (email.isNotEmpty) {
+                setState(() { _pendingEmail = email; codeCtrl.clear(); screen = 'register'; regStep = 4; error = ''; });
+              } else {
+                _showEnterEmailDialog();
+              }
+            },
+          )
+        else
+          AuthLandingIos(
+            onApple: _doApple,
+            onGoogle: _doGoogle,
+            onEmail: () => setState(() { screen = 'login'; error = ''; }),
+            onMerchant: () async {
+              final r = await MerchantIntroIos.open(context);
+              if (r == 'login' && mounted) setState(() { screen = 'login'; error = ''; });
+            },
+            appleLoading: appleLoading,
+            googleLoading: googleLoading,
+            error: error,
+          ),
+      ]),
     );
   }
 
