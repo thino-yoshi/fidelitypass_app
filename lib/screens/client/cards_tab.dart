@@ -261,7 +261,9 @@ class _CardsTabState extends State<CardsTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ── Container 1 : header (rouage + avatar) ──────────────────────────
-        Padding(
+        Container(
+          decoration: BoxDecoration(border: Border.all(color: Colors.red, width: 2)),
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 16, 0),
           child: SizedBox(
             height: 52,
@@ -280,9 +282,11 @@ class _CardsTabState extends State<CardsTab> {
               ],
             ),
           ),
-        ),
+        )),
         // ── Container 2 : pastille crème (date + salutation) ────────────────
-        Padding(
+        Container(
+          decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 2)),
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: Align(
             alignment: Alignment.centerLeft,
@@ -316,9 +320,11 @@ class _CardsTabState extends State<CardsTab> {
               ),
             ),
           ),
-        ),
+        )),
         // ── Container 4 : barre de recherche animée ─────────────────────────
-        Padding(
+        Container(
+          decoration: BoxDecoration(border: Border.all(color: Colors.blue, width: 2)),
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Align(
             alignment: Alignment.centerLeft,
@@ -387,10 +393,13 @@ class _CardsTabState extends State<CardsTab> {
               ),
             )),
           ),
-        ),
+        )),
         // ── Container 6 : WalletStack — prend tout l'espace restant ─────────
         Expanded(
-          child: _WalletStack(cards: widget.cards, userName: widget.userName),
+          child: Container(
+            decoration: BoxDecoration(border: Border.all(color: Colors.orange, width: 2)),
+            child: _WalletStack(cards: widget.cards, userName: widget.userName),
+          ),
         ),
         // ── Espace sous le dock ──────────────────────────────────────────────
         SizedBox(height: dockPad),
@@ -602,6 +611,7 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
                     card: c['card'] as Map,
                     style: c['style'] as CardStyle,
                     userName: widget.userName,
+                    decorPattern: i % 6,
                   ),
                 ),
               )),
@@ -717,11 +727,13 @@ class LoyaltyCardFace extends StatelessWidget {
   final Map card;
   final CardStyle style;
   final String userName;
+  final int? decorPattern; // 0-5 : motif géométrique décoratif, null = aucun
   const LoyaltyCardFace({
     super.key,
     required this.card,
     required this.style,
     required this.userName,
+    this.decorPattern,
   });
 
   @override
@@ -752,6 +764,8 @@ class LoyaltyCardFace extends StatelessWidget {
             fit: fill ? StackFit.expand : StackFit.loose,
             children: [
               Positioned.fill(child: style.buildBackground()),
+              if (decorPattern != null)
+                Positioned.fill(child: CustomPaint(painter: _CardPatternPainter(decorPattern!))),
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
                 child: Column(
@@ -1129,6 +1143,135 @@ class CardStyle {
     final single = _parseColor(raw);
     return single == null ? null : [single];
   }
+}
+
+// ── Motifs géométriques décoratifs sur les cartes ────────────────────────────
+
+class _CardPatternPainter extends CustomPainter {
+  final int pattern; // 0-5
+
+  const _CardPatternPainter(this.pattern);
+
+  static final _paint = Paint()
+    ..color = Colors.white.withValues(alpha: 0.08)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+
+  static final _paintFill = Paint()
+    ..color = Colors.white.withValues(alpha: 0.05)
+    ..style = PaintingStyle.fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    switch (pattern % 6) {
+      case 0: _circles(canvas, size);    break;
+      case 1: _diagonals(canvas, size);  break;
+      case 2: _dots(canvas, size);       break;
+      case 3: _waves(canvas, size);      break;
+      case 4: _hexagons(canvas, size);   break;
+      case 5: _triangles(canvas, size);  break;
+    }
+  }
+
+  // 0 : Cercles concentriques dans le coin bas-droit
+  void _circles(Canvas canvas, Size s) {
+    final center = Offset(s.width * 1.1, s.height * 1.2);
+    for (int i = 1; i <= 5; i++) {
+      canvas.drawCircle(center, s.height * 0.35 * i, _paint);
+    }
+    canvas.drawCircle(Offset(-s.width * 0.1, -s.height * 0.2), s.height * 0.5, _paint);
+  }
+
+  // 1 : Lignes diagonales parallèles
+  void _diagonals(Canvas canvas, Size s) {
+    const step = 28.0;
+    for (double x = -s.height; x < s.width + s.height; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x + s.height, s.height), _paint);
+    }
+  }
+
+  // 2 : Grille de petits cercles (dots)
+  void _dots(Canvas canvas, Size s) {
+    const spacing = 20.0;
+    final dotPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.10)
+      ..style = PaintingStyle.fill;
+    for (double x = spacing; x < s.width; x += spacing) {
+      for (double y = spacing; y < s.height; y += spacing) {
+        canvas.drawCircle(Offset(x, y), 1.5, dotPaint);
+      }
+    }
+  }
+
+  // 3 : Vagues horizontales (arcs)
+  void _waves(Canvas canvas, Size s) {
+    const waveH = 10.0;
+    const waveL = 40.0;
+    for (double y = 20; y < s.height + 20; y += 22) {
+      final path = Path()..moveTo(0, y);
+      for (double x = 0; x < s.width; x += waveL) {
+        path.quadraticBezierTo(x + waveL / 4, y - waveH, x + waveL / 2, y);
+        path.quadraticBezierTo(x + 3 * waveL / 4, y + waveH, x + waveL, y);
+      }
+      canvas.drawPath(path, _paint);
+    }
+  }
+
+  // 4 : Hexagones (nid d'abeille)
+  void _hexagons(Canvas canvas, Size s) {
+    const r = 18.0;
+    final dx = r * 1.732;
+    final dy = r * 1.5;
+    int row = 0;
+    for (double y = -r; y < s.height + r; y += dy) {
+      final offset = (row % 2 == 0) ? 0.0 : dx / 2;
+      for (double x = -r + offset; x < s.width + r; x += dx) {
+        _drawHex(canvas, Offset(x, y), r);
+      }
+      row++;
+    }
+  }
+
+  void _drawHex(Canvas canvas, Offset center, double r) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (pi / 3) * i - pi / 6;
+      final pt = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+      if (i == 0) path.moveTo(pt.dx, pt.dy); else path.lineTo(pt.dx, pt.dy);
+    }
+    path.close();
+    canvas.drawPath(path, _paint);
+  }
+
+  // 5 : Triangles en coin
+  void _triangles(Canvas canvas, Size s) {
+    final corners = [
+      [Offset(0, 0), Offset(s.width * 0.5, 0), Offset(0, s.height * 0.5)],
+      [Offset(s.width, s.height), Offset(s.width * 0.5, s.height), Offset(s.width, s.height * 0.5)],
+    ];
+    for (final tri in corners) {
+      final path = Path()
+        ..moveTo(tri[0].dx, tri[0].dy)
+        ..lineTo(tri[1].dx, tri[1].dy)
+        ..lineTo(tri[2].dx, tri[2].dy)
+        ..close();
+      canvas.drawPath(path, _paintFill);
+      canvas.drawPath(path, _paint);
+    }
+    // petits triangles répétés
+    const step = 30.0;
+    for (double x = step; x < s.width - step; x += step) {
+      final triPath = Path()
+        ..moveTo(x, s.height * 0.1)
+        ..lineTo(x + 12, s.height * 0.1 + 20)
+        ..lineTo(x - 12, s.height * 0.1 + 20)
+        ..close();
+      canvas.drawPath(triPath, _paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CardPatternPainter old) => old.pattern != pattern;
 }
 
 // ── Widget badge récompense ───────────────────────────────────────────────────

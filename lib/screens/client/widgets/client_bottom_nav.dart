@@ -90,19 +90,22 @@ class _FloatingDock extends StatelessWidget {
     final bg     = const Color(0xFF0D1E37).withValues(alpha: isDark ? 0.94 : 0.90);
     final border = const Color(0xFF2C7BE5).withValues(alpha: 0.22);
 
+    final screenW = MediaQuery.of(context).size.width;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          width: screenW * 0.72,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: border),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _DockItem(
                 icon: Icons.credit_card_outlined,
@@ -111,9 +114,7 @@ class _FloatingDock extends StatelessWidget {
                 currentTab: currentTab,
                 onTap: onTabChanged,
               ),
-              const SizedBox(width: 4),
               _DockScan(onTap: onScanTap),
-              const SizedBox(width: 4),
               _DockItem(
                 icon: Icons.history_rounded,
                 label: 'Histo',
