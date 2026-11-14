@@ -1,33 +1,22 @@
 # ══════════════════════════════════════════════════════════════
 # CODEOWNERS — Qarta App
-# Chaque fichier a un propriétaire désigné.
-# Quand une PR touche un fichier de la liste, GitHub demande
-# automatiquement la review du propriétaire concerné.
+# Sur GitHub, c'est la DERNIÈRE règle qui correspond qui gagne.
+# L'ordre compte : du plus général au plus spécifique.
 # ══════════════════════════════════════════════════════════════
 
-# ── Fichiers partagés (review des deux) ───────────────────────
-lib/screens/client/client_home.dart                         @thino-yoshi @asmarousslm
-lib/screens/client/cards_tab.dart                           @thino-yoshi @asmarousslm
-lib/main.dart                                               @thino-yoshi @asmarousslm
-pubspec.yaml                                                @thino-yoshi @asmarousslm
+# ── 1. Par défaut : tout le projet → Thigrou ──────────────────
+*                                                            @thino-yoshi
 
-# ── Android — Thigrou (@thino-yoshi) ──────────────────────────
-lib/screens/client/history_tab.dart                         @thino-yoshi
-lib/screens/client/scan_tab.dart                            @thino-yoshi
-lib/screens/client/manage_cards_screen.dart                 @thino-yoshi
+# ── 2. Tout ce qui est iOS → Yassine ──────────────────────────
+*_ios.dart                                                   @asmarousslm
+/ios/                                                        @asmarousslm
+/lib/screens/client/widgets/client_hours.dart                @asmarousslm
+/lib/screens/client/widgets/client_glow_background.dart      @asmarousslm
 
-# ── iOS — Yassine (@asmarousslm) ──────────────────────────────
-lib/screens/client/cards_tab_ios.dart                       @asmarousslm
-lib/screens/client/history_tab_ios.dart                     @asmarousslm
-lib/screens/client/scan_tab_ios.dart                        @asmarousslm
-lib/screens/client/manage_cards_screen_ios.dart             @asmarousslm
-lib/screens/client/widgets/client_bottom_nav_ios.dart       @asmarousslm
-lib/screens/client/widgets/client_cards_stack_ios.dart      @asmarousslm
-lib/screens/client/widgets/client_header_ios.dart           @asmarousslm
-lib/screens/client/widgets/client_history_ios.dart          @asmarousslm
-lib/screens/client/widgets/client_notifications_ios.dart    @asmarousslm
-lib/screens/client/widgets/client_pass_face_ios.dart        @asmarousslm
-lib/screens/client/widgets/client_profile_ios.dart          @asmarousslm
-lib/screens/client/widgets/client_rewards_ios.dart          @asmarousslm
-lib/screens/client/widgets/client_settings_ios.dart         @asmarousslm
-lib/screens/client/widgets/client_sheets_ios.dart           @asmarousslm
+# ── 3. Fichiers partagés → les deux (en dernier = prioritaire)
+/lib/main.dart                                               @thino-yoshi @asmarousslm
+/lib/screens/client/client_home.dart                         @thino-yoshi @asmarousslm
+/lib/screens/client/cards_tab.dart                           @thino-yoshi @asmarousslm
+/lib/screens/merchant/merchant_tokens.dart                   @thino-yoshi @asmarousslm
+/pubspec.yaml                                                @thino-yoshi @asmarousslm
+/pubspec.lock                                                @thino-yoshi @asmarousslm
