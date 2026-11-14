@@ -18,6 +18,7 @@ import 'widgets/client_pass_face_ios.dart';
 import 'widgets/client_cards_stack_ios.dart';
 import 'widgets/client_hours.dart';
 import 'widgets/client_sheets_ios.dart' show showIosAlert;
+import '../merchant/merchant_tokens.dart' show kIsIOS;
 
 /// Événement émis quand le commerçant ajoute des tampons/points à une carte
 /// pendant que le client a son QR ouvert (détecté par polling).
@@ -1771,7 +1772,7 @@ class CardPopOut extends StatelessWidget {
   final Animation<double> animation;
   final Widget face;
   final VoidCallback onOpen;
-  const _CardPopOut({required this.heroTag, required this.animation, required this.face, required this.onOpen});
+  const CardPopOut({required this.heroTag, required this.animation, required this.face, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -1826,7 +1827,7 @@ class CardPopOut extends StatelessWidget {
 class OpenCardPage extends StatelessWidget {
   final Animation<double> animation;
   final Widget child;
-  const _OpenCardPage({required this.animation, required this.child});
+  const OpenCardPage({required this.animation, required this.child});
 
   @override
   Widget build(BuildContext context) {
