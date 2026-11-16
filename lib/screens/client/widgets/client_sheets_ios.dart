@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -223,8 +222,6 @@ Future<bool?> showRewardUnlockedIos(
           const SizedBox(height: 4),
           _textButton('Plus tard', () => Navigator.pop(ctx, false)),
         ]),
-        // Confettis seulement autour du cadeau (jamais sur le texte).
-        const Positioned(top: 0, left: 0, right: 0, height: 170, child: IgnorePointer(child: _Confetti())),
       ]),
     ),
   );
@@ -260,59 +257,6 @@ class _GiftBadge extends StatelessWidget {
   }
 }
 
-/// Petits confettis or et bleu ciel qui tombent une fois.
-class _Confetti extends StatefulWidget {
-  const _Confetti();
-  @override
-  State<_Confetti> createState() => _ConfettiState();
-}
-
-class _ConfettiState extends State<_Confetti> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..forward();
-  final _rnd = Random(7);
-  late final List<List<double>> _pieces = List.generate(
-      16, (_) => [_rnd.nextDouble(), _rnd.nextDouble() * 0.35, _rnd.nextDouble() * pi, _rnd.nextDouble()]);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, __) => CustomPaint(painter: _ConfettiPainter(_pieces, _c.value)),
-    );
-  }
-}
-
-class _ConfettiPainter extends CustomPainter {
-  final List<List<double>> pieces;
-  final double t;
-  _ConfettiPainter(this.pieces, this.t);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final opacity = t < 0.75 ? 1.0 : (1 - (t - 0.75) / 0.25);
-    for (var i = 0; i < pieces.length; i++) {
-      final p = pieces[i];
-      final x = p[0] * size.width;
-      final y = (p[1] + t * 0.6) * size.height;
-      final paint = Paint()..color = (i.isEven ? kGold : kBlueLight).withValues(alpha: opacity.clamp(0, 1));
-      canvas.save();
-      canvas.translate(x, y);
-      canvas.rotate(p[2] + t * 4 * (p[3] - 0.5));
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(-4, -8, 8, 16), const Radius.circular(2)), paint);
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ConfettiPainter old) => old.t != t;
-}
 
 // ── QR de la récompense + « Récompense utilisée » ────────────────────────────
 
