@@ -15,7 +15,7 @@ import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
 import 'widgets/client_pass_face_ios.dart';
-import 'widgets/client_cards_stack_ios.dart';
+import 'widgets/client_cards_stack.dart';
 import 'widgets/client_hours.dart';
 import 'widgets/client_sheets_ios.dart' show showIosAlert;
 import '../merchant/merchant_tokens.dart' show kIsIOS;
@@ -73,8 +73,6 @@ class CardsTab extends StatefulWidget {
 
 class _CardsTabState extends State<CardsTab> {
   String _search = '';
-  bool _searchExpanded = false;
-  final FocusNode _searchFocus = FocusNode();
 
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
@@ -95,24 +93,6 @@ class _CardsTabState extends State<CardsTab> {
 
   static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
 
-  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim, {required bool collapsedAtRest}) {
-    final full = ClientPassFaceIos(card: card, style: style);
-    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
-    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
-    return Material(
-      type: MaterialType.transparency,
-      child: AnimatedBuilder(
-        animation: t,
-        builder: (_, __) => t.value >= 1
-            ? full
-            : Stack(fit: StackFit.expand, children: [
-                ClientPassFaceIos(card: card, style: style, collapsed: true),
-                Opacity(opacity: t.value, child: full),
-              ]),
-      ),
-    );
-  }
-
   void _popOutCard(Map card, CardStyle style) {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
@@ -121,7 +101,7 @@ class _CardsTabState extends State<CardsTab> {
       pageBuilder: (ctx, anim, _) => CardPopOut(
         heroTag: 'card-${card['id']}',
         animation: anim,
-        face: ClientPassFaceIos(card: card, style: style),
+        face: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
         onOpen: () {
           Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
         },
@@ -147,99 +127,6 @@ class _CardsTabState extends State<CardsTab> {
         ),
       );
 
-  // Retourne blanc si la couleur de fond est sombre, noir si elle est claire
-  static Color _ink(Color bg) =>
-      bg.computeLuminance() > 0.45 ? const Color(0xFF0B1220) : Colors.white;
-
-  static Widget _miniCard(Color ink, String name, String count, String label, Color accent) => Expanded(
-    child: AspectRatio(
-      aspectRatio: 1.6,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [accent, accent.withValues(alpha: 0.7)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))],
-        ),
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white70)),
-            const Spacer(),
-            Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-            Text(label, style: const TextStyle(fontSize: 9, color: Colors.white60)),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  static const _fakeCards = [
-    {'name': 'Blue Bottle Coffee', 'count': '7/10',  'label': 'tampons', 'color': Color(0xFF2C7BE5)},
-    {'name': 'Green Garden',       'count': '10/10', 'label': 'tampons', 'color': Color(0xFF10B981)},
-    {'name': 'Vinyl Records',      'count': '3/8',   'label': 'tampons', 'color': Color(0xFF8B5CF6)},
-    {'name': 'Urban Cuts',         'count': '1/6',   'label': 'tampons', 'color': Color(0xFFF59E0B)},
-  ];
-
-  static Widget _walletStack(Color ink) {
-    const cardH = 110.0;
-    const peek  = 44.0;
-    final total = cardH + peek * (_fakeCards.length - 1);
-    return ClipRect(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: SizedBox(
-          height: total,
-          child: Stack(
-            children: List.generate(_fakeCards.length, (j) {
-              final c = _fakeCards[j];
-              return Positioned(
-                top: j * peek,
-                left: 0, right: 0,
-                child: Container(
-                  height: cardH,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [(c['color'] as Color), (c['color'] as Color).withValues(alpha: 0.75)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [BoxShadow(color: (c['color'] as Color).withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(c['name'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                      const Spacer(),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Text(c['count'] as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-                        Text(c['label'] as String, style: const TextStyle(fontSize: 11, color: Colors.white60)),
-                      ]),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
-    );
-  }
-
-  static const _jours = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
-  static const _mois  = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-  static String _formattedDate() {
-    final now = DateTime.now();
-    return '${_jours[now.weekday - 1]} ${now.day} ${_mois[now.month - 1]}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final cards = _search.isEmpty
@@ -251,163 +138,7 @@ class _CardsTabState extends State<CardsTab> {
             return name.contains(q) || cardName.contains(q);
           }).toList();
 
-    // ── DESIGN ANDROID À IMPLÉMENTER ─────────────────────────────────────────
-    // Couleur du fond de l'app (clair ou sombre selon le thème)
-    final appBg = Theme.of(context).scaffoldBackgroundColor;
-    final ink   = _ink(appBg); // couleur du texte/icônes adaptée au fond
-
-    final dockPad = MediaQuery.of(context).padding.bottom + 120;
-    if (true) return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── Container 1 : header (rouage + avatar) ──────────────────────────
-        Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.red, width: 2)),
-          child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 16, 0),
-          child: SizedBox(
-            height: 52,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: Icon(Icons.settings_outlined, color: ink, size: 24),
-                ),
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: ink.withValues(alpha: 0.1),
-                  child: Icon(Icons.person, color: ink, size: 20),
-                ),
-              ],
-            ),
-          ),
-        )),
-        // ── Container 2 : pastille crème (date + salutation) ────────────────
-        Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 2)),
-          child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 10, 18, 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFDF3DC),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFBFA07A).withValues(alpha: 0.22),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _formattedDate(),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF9C7E5A)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Comment vas-tu ${widget.userName.split(' ').first} ?',
-                    style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF3D2B1A)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        )),
-        // ── Container 4 : barre de recherche animée ─────────────────────────
-        Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.blue, width: 2)),
-          child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: LayoutBuilder(builder: (_, box) => AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              height: 44,
-              width: _searchExpanded ? box.maxWidth : 44,
-              decoration: BoxDecoration(
-                color: ink.withValues(alpha: _searchExpanded ? 0.07 : 0.10),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: ink.withValues(alpha: 0.13)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _searchExpanded = !_searchExpanded;
-                        if (!_searchExpanded) _search = '';
-                      });
-                      if (_searchExpanded) {
-                        Future.delayed(const Duration(milliseconds: 60),
-                            () => _searchFocus.requestFocus());
-                      } else {
-                        _searchFocus.unfocus();
-                      }
-                    },
-                    child: AspectRatio(
-                      aspectRatio: 1.0,
-                      child: Center(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          transitionBuilder: (child, anim) =>
-                              ScaleTransition(scale: anim, child: child),
-                          child: Icon(
-                            _searchExpanded
-                                ? Icons.close_rounded
-                                : Icons.search_rounded,
-                            key: ValueKey(_searchExpanded),
-                            color: ink.withValues(alpha: 0.55),
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_searchExpanded)
-                    Expanded(
-                      child: TextField(
-                        focusNode: _searchFocus,
-                        onChanged: (v) => setState(() => _search = v),
-                        style: TextStyle(fontSize: 14, color: ink),
-                        decoration: InputDecoration(
-                          hintText: 'Rechercher une carte…',
-                          hintStyle: TextStyle(
-                              color: ink.withValues(alpha: 0.35), fontSize: 14),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.only(right: 12),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            )),
-          ),
-        )),
-        // ── Container 6 : WalletStack — prend tout l'espace restant ─────────
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(border: Border.all(color: Colors.orange, width: 2)),
-            child: _WalletStack(cards: widget.cards, userName: widget.userName),
-          ),
-        ),
-        // ── Espace sous le dock ──────────────────────────────────────────────
-        SizedBox(height: dockPad),
-      ],
-    );
-    // ── Ancien design (iOS stack) — gardé pour référence ──────────────────
-    // ignore: dead_code
-    return ClientCardsStackIos(
+    return ClientCardsStack(
       hasAnyCard: widget.cards.isNotEmpty,
       onSearchActive: widget.onSearchActive,
       onSearch: (v) => setState(() => _search = v),
@@ -416,13 +147,11 @@ class _CardsTabState extends State<CardsTab> {
       cards: List.generate(cards.length, (i) {
         final card  = cards[i];
         final style = _styleFromCard(card, i);
-        final face = Hero(
+        return Hero(
           tag: 'card-${card['id']}',
           createRectTween: _straightRect,
-          flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
-          child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
+          child: LoyaltyCardFace(card: card, style: style, userName: widget.userName, decorPattern: i % 6),
         );
-        return face;
       }),
       onOpen: (i) {
         final card = cards[i];
@@ -430,12 +159,6 @@ class _CardsTabState extends State<CardsTab> {
         _popOutCard(card, _styleFromCard(card, i));
       },
     );
-  }
-
-  @override
-  void dispose() {
-    _searchFocus.dispose();
-    super.dispose();
   }
 }
 
