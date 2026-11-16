@@ -137,7 +137,7 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
     const body = 'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.';
     final confirmLabel = countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer';
 
-    return CupertinoAlertDialog(
+    return AlertDialog(
       title: Text(title),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         const SizedBox(height: 4),
@@ -145,9 +145,9 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
         if (lostRewards > 0) _rewardsWarning(lostRewards),
       ]),
       actions: [
-        CupertinoDialogAction(onPressed: onCancel, child: const Text('Annuler')),
-        CupertinoDialogAction(
-          isDestructiveAction: true,
+        TextButton(onPressed: onCancel, child: const Text('Annuler')),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: kError),
           onPressed: onConfirm,
           child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
@@ -166,7 +166,7 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
         .where((r) => selectedMerchantIds.contains(r['merchant_id'] as String?))
         .length;
 
-    final confirm = await showCupertinoDialog<bool>(
+    final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -222,10 +222,6 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
     return (w.length >= 2 ? '${w[0][0]}${w[1][0]}' : w[0].substring(0, w[0].length < 2 ? w[0].length : 2)).toUpperCase();
   }
 
-  Widget _seg(String t) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText)),
-      );
 
   Widget _iosRow(Map card, int index) {
     final id = card['id'] as String? ?? '';
@@ -299,7 +295,7 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
       backgroundColor: context.cBg,
       body: iosReadableWidth(Stack(children: [
         ListView(
-          physics: const BouncingScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(16, top + 8, 16, bottom + (_editing ? 100 : 30)),
           children: [
@@ -307,8 +303,8 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
               GlassBackButton(onTap: () => Navigator.maybePop(context)),
               const Spacer(),
               if (_cards.isNotEmpty)
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                TextButton(
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
                   onPressed: () => setState(() { _editing = !_editing; _selected.clear(); }),
                   child: Text(_editing ? 'OK' : 'Modifier',
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kPrimary)),
@@ -318,24 +314,28 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
             Text('Mes cartes', style: QText.largeTitle(context).copyWith(color: context.cText)),
             Text('${_cards.length} carte${_cards.length > 1 ? 's' : ''}', style: QText.body.copyWith(fontSize: 17, color: context.cSub)),
             const SizedBox(height: 14),
-            CupertinoSearchTextField(
-              placeholder: 'Rechercher une carte',
+            TextField(
               onChanged: (v) => setState(() => _search = v),
               style: QText.body.copyWith(fontSize: 17, color: context.cText),
+              decoration: InputDecoration(
+                hintText: 'Rechercher une carte',
+                hintStyle: TextStyle(color: context.cSub),
+                prefixIcon: Icon(Icons.search, color: context.cSub, size: 20),
+                filled: true,
+                fillColor: context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoSlidingSegmentedControl<_SortModeIos>(
-                groupValue: _sort == _SortModeIos.leastStamps ? _SortModeIos.mostStamps : _sort,
-                padding: const EdgeInsets.all(2),
-                children: {
-                  _SortModeIos.recent:  _seg('Récentes'),
-                  _SortModeIos.oldest:  _seg('Anciennes'),
-                  _SortModeIos.mostStamps: _seg('Tampons'),
-                },
-                onValueChanged: (v) { if (v != null) setState(() => _sort = v); },
-              ),
+            _SegPill<_SortModeIos>(
+              value: _sort == _SortModeIos.leastStamps ? _SortModeIos.mostStamps : _sort,
+              onChanged: (v) => setState(() => _sort = v),
+              children: const {
+                _SortModeIos.recent: Text('Récentes'),
+                _SortModeIos.oldest: Text('Anciennes'),
+                _SortModeIos.mostStamps: Text('Tampons'),
+              },
             ),
             const SizedBox(height: 18),
             if (cards.isEmpty)
@@ -364,19 +364,69 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
         if (_editing)
           Positioned(
             left: 16, right: 16, bottom: bottom + 12,
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              borderRadius: BorderRadius.circular(14),
-              color: kError,
-              disabledColor: context.cSub.withValues(alpha: 0.25),
+            child: ElevatedButton(
               onPressed: _selected.isEmpty || _deleting ? null : _deleteSelected,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kError,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: context.cSub.withValues(alpha: 0.25),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+                minimumSize: const Size(double.infinity, 0),
+              ),
               child: _deleting
-                  ? const CupertinoActivityIndicator(color: Colors.white)
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                   : Text(_selected.isEmpty ? 'Choisis des cartes' : 'Supprimer (${_selected.length})',
                       style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
             ),
           ),
       ])),
+    );
+  }
+}
+
+class _SegPill<T> extends StatelessWidget {
+  final T value;
+  final Map<T, Widget> children;
+  final ValueChanged<T> onChanged;
+  const _SegPill({required this.value, required this.children, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(children: [
+        for (final e in children.entries)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(e.key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                decoration: BoxDecoration(
+                  color: e.key == value
+                    ? (isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white)
+                    : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: e.key == value
+                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3, offset: const Offset(0, 1))]
+                    : [],
+                ),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText),
+                  child: Center(child: e.value),
+                ),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }

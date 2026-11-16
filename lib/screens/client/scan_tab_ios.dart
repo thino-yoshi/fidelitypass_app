@@ -215,7 +215,7 @@ class _ScanTabIosState extends State<ScanTabIos> with WidgetsBindingObserver, Si
                 ]),
               ),
             ),
-          if (_loading) const Padding(padding: EdgeInsets.only(bottom: 30), child: CupertinoActivityIndicator(color: Colors.white, radius: 14)),
+          if (_loading) const Padding(padding: EdgeInsets.only(bottom: 30), child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))),
           if (QartaDemo.enabled && _scanning)
             Padding(
               padding: const EdgeInsets.only(bottom: 30),
