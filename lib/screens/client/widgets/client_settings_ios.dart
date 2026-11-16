@@ -25,7 +25,7 @@ class IosSettingsPage extends StatelessWidget {
       child: Scaffold(
         backgroundColor: context.cBg,
         body: iosReadableWidth(ListView(
-          physics: const BouncingScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(16, top + 8, 16, MediaQuery.of(context).padding.bottom + 30),
           children: [
@@ -54,9 +54,9 @@ class IosTextAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (busy) return const Padding(padding: EdgeInsets.all(12), child: CupertinoActivityIndicator());
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+    if (busy) return const Padding(padding: EdgeInsets.all(10), child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)));
+    return TextButton(
+      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
       onPressed: onTap,
       child: Text(label,
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600,
@@ -420,8 +420,8 @@ class _HelpPageIosState extends State<HelpPageIos> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: SelectableText(widget.email, style: QText.body.copyWith(fontSize: 17, color: context.cText))),
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                TextButton(
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
                   onPressed: _copy,
                   child: Text(_copied ? 'Copié' : 'Copier',
                       style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: _copied ? kSuccess : kPrimary)),

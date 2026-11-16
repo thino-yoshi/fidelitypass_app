@@ -57,10 +57,11 @@ class ClientRewardsIos extends StatelessWidget {
     final groups = _byMerchant;
     final closest = _closest;
     final bottomPad = MediaQuery.of(context).padding.bottom + 110;
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
       slivers: [
-        CupertinoSliverRefreshControl(onRefresh: onRefresh),
         SliverPadding(
           padding: EdgeInsets.fromLTRB(16, 18, 16, bottomPad),
           sliver: SliverList(
@@ -91,6 +92,7 @@ class ClientRewardsIos extends StatelessWidget {
           ),
         ),
       ],
+    ),
     );
   }
 
@@ -377,15 +379,19 @@ Future<void> showRewardGroupIos(
                         Text(_earned(rewards[i] as Map), style: QText.caption.copyWith(color: ctx.cSub)),
                       ]),
                     ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                      minimumSize: const Size(0, 34),
-                      color: kGold,
-                      borderRadius: BorderRadius.circular(999),
+                    ElevatedButton(
                       onPressed: () {
                         Navigator.pop(ctx);
                         onUse(rewards[i] as Map);
                       },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kGold,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                        elevation: 0,
+                        minimumSize: const Size(0, 34),
+                      ),
                       child: const Text('Utiliser', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
                   ]),

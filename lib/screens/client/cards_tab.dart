@@ -16,7 +16,7 @@ import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
 import 'widgets/client_pass_face_ios.dart';
-import 'widgets/client_cards_stack_ios.dart';
+import 'widgets/client_cards_stack.dart';
 import 'widgets/client_hours.dart';
 import 'widgets/client_sheets_ios.dart' show showIosAlert;
 import '../merchant/merchant_tokens.dart' show kIsIOS;
@@ -53,6 +53,8 @@ class CardsTab extends StatefulWidget {
   final VoidCallback? onAnimationDone;
   final VoidCallback? onScanTap;
   final ValueChanged<bool>? onSearchActive;
+  final int? activeTab;
+  final ValueChanged<int>? onNavTap;
 
   const CardsTab({
     super.key,
@@ -66,6 +68,8 @@ class CardsTab extends StatefulWidget {
     this.onAnimationDone,
     this.onScanTap,
     this.onSearchActive,
+    this.activeTab,
+    this.onNavTap,
   });
 
   @override
@@ -94,24 +98,6 @@ class _CardsTabState extends State<CardsTab> {
 
   static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
 
-  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim, {required bool collapsedAtRest}) {
-    final full = ClientPassFaceIos(card: card, style: style);
-    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
-    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
-    return Material(
-      type: MaterialType.transparency,
-      child: AnimatedBuilder(
-        animation: t,
-        builder: (_, __) => t.value >= 1
-            ? full
-            : Stack(fit: StackFit.expand, children: [
-                ClientPassFaceIos(card: card, style: style, collapsed: true),
-                Opacity(opacity: t.value, child: full),
-              ]),
-      ),
-    );
-  }
-
   void _popOutCard(Map card, CardStyle style) {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
@@ -120,7 +106,7 @@ class _CardsTabState extends State<CardsTab> {
       pageBuilder: (ctx, anim, _) => CardPopOut(
         heroTag: 'card-${card['id']}',
         animation: anim,
-        face: ClientPassFaceIos(card: card, style: style),
+        face: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
         onOpen: () {
           Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
         },
@@ -157,7 +143,7 @@ class _CardsTabState extends State<CardsTab> {
             return name.contains(q) || cardName.contains(q);
           }).toList();
 
-    return ClientCardsStackIos(
+    return ClientCardsStack(
       hasAnyCard: widget.cards.isNotEmpty,
       onSearchActive: widget.onSearchActive,
       onSearch: (v) => setState(() => _search = v),
@@ -166,13 +152,11 @@ class _CardsTabState extends State<CardsTab> {
       cards: List.generate(cards.length, (i) {
         final card  = cards[i];
         final style = _styleFromCard(card, i);
-        final face = Hero(
+        return Hero(
           tag: 'card-${card['id']}',
           createRectTween: _straightRect,
-          flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
-          child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
+          child: LoyaltyCardFace(card: card, style: style, userName: widget.userName, decorPattern: i % 6),
         );
-        return face;
       }),
       onOpen: (i) {
         final card = cards[i];
@@ -180,6 +164,240 @@ class _CardsTabState extends State<CardsTab> {
         _popOutCard(card, _styleFromCard(card, i));
       },
     );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Wallet Stack — effet portefeuille interactif (Android design)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _WalletStack extends StatefulWidget {
+  final List<dynamic> cards;
+  final String userName;
+  const _WalletStack({required this.cards, required this.userName});
+  @override
+  State<_WalletStack> createState() => _WalletStackState();
+}
+
+class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixin {
+  int _selectedIdx = 0;
+  late final ScrollController _scrollCtrl;
+
+  // ── Dimensions ──────────────────────────────────────────────────────────────
+  static const double _slotH    = 210.0; // hauteur FIXE de chaque slot dans la liste
+  static const double _cardFull = 195.0; // carte expanded (centrée)
+  static const double _cardMin  = 72.0;  // carte collapsed (les autres)
+  static const _dur   = Duration(milliseconds: 320);
+  static const _curve = Curves.easeOutCubic;
+
+  static const _fallbackColors = [
+    Color(0xFF2C7BE5), Color(0xFF10B981),
+    Color(0xFF8B5CF6), Color(0xFFF59E0B),
+    Color(0xFFEF4444), Color(0xFFF97316),
+  ];
+
+  OverlayEntry? _overlayEntry;
+  AnimationController? _overlayCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl = ScrollController();
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    _closeCard(animate: false);
+    _overlayCtrl?.dispose();
+    super.dispose();
+  }
+
+  // ── Mise à jour de l'index centré pendant le scroll ──────────────────────
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final idx = (_scrollCtrl.offset / _slotH).round()
+        .clamp(0, (widget.cards.length - 1).clamp(0, 999));
+    if (idx != _selectedIdx) setState(() => _selectedIdx = idx);
+  }
+
+  // ── Snap vers un index ────────────────────────────────────────────────────
+  Future<void> _snapTo(int idx) {
+    setState(() => _selectedIdx = idx);
+    if (!_scrollCtrl.hasClients) return Future.value();
+    return _scrollCtrl.animateTo(
+      (idx * _slotH).toDouble(),
+      duration: _dur,
+      curve: _curve,
+    );
+  }
+
+  // ── Parsing des cartes depuis widget.cards ────────────────────────────────
+  List<Map<String, dynamic>> get _parsed {
+    return widget.cards.asMap().entries.map((e) {
+      final i     = e.key;
+      final card  = e.value as Map;
+      final m     = card['merchants'] as Map? ?? {};
+      final pts   = (m['program_type'] as String?) == 'points';
+      final cnt   = pts ? (card['points_count'] as int? ?? 0) : (card['stamps_count'] as int? ?? 0);
+      final mx    = pts ? (m['points_required'] as int? ?? 10) : (m['stamps_required'] as int? ?? 10);
+      final style = CardStyle.fromDesign(
+        card['card_design'],
+        merchantLogoUrl: card['merchants']?['logo_url'] as String?,
+        fallbackColor: _fallbackColors[i % _fallbackColors.length],
+      );
+      return <String, dynamic>{
+        'card':  card,
+        'style': style,
+        'name':  m['business_name'] as String? ?? 'Carte',
+        'count': cnt,
+        'max':   mx,
+        'label': pts ? 'points' : 'tampons',
+        'color': style.bgColors.first,
+      };
+    }).toList();
+  }
+
+  // ── Overlay animé (grand format + QR) ────────────────────────────────────
+  void _openCard(Map card, CardStyle style, Rect fromRect) {
+    if (_overlayEntry != null) return;
+
+    final screen  = MediaQuery.of(context).size;
+    final padding = MediaQuery.of(context).padding;
+    final targetW = screen.width - 48;
+    const targetH = 220.0;
+    final targetRect = Rect.fromLTWH(
+      24,
+      padding.top + (screen.height - padding.top - padding.bottom - targetH) / 2,
+      targetW,
+      targetH,
+    );
+
+    _overlayCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+    final anim = CurvedAnimation(parent: _overlayCtrl!, curve: Curves.easeOutCubic);
+
+    _overlayEntry = OverlayEntry(builder: (ctx) {
+      return AnimatedBuilder(
+        animation: anim,
+        builder: (_, __) {
+          final t    = anim.value;
+          final rect = Rect.lerp(fromRect, targetRect, t)!;
+          final bg   = (t * 0.65).clamp(0.0, 0.65);
+          return Stack(children: [
+            GestureDetector(
+              onTap: _closeCard,
+              child: Container(color: Colors.black.withValues(alpha: bg)),
+            ),
+            Positioned(
+              left: rect.left, top: rect.top,
+              width: rect.width, height: rect.height,
+              child: GestureDetector(
+                onTap: () {},
+                child: Transform.scale(
+                  scale: 1.0 + t * 0.04,
+                  child: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
+                ),
+              ),
+            ),
+          ]);
+        },
+      );
+    });
+
+    Overlay.of(context).insert(_overlayEntry!);
+    _overlayCtrl!.forward();
+  }
+
+  void _closeCard({bool animate = true}) {
+    if (_overlayEntry == null) return;
+    if (!animate) {
+      _overlayEntry!.remove();
+      _overlayEntry = null;
+      return;
+    }
+    _overlayCtrl!.reverse().whenComplete(() {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+    });
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final data = _parsed;
+    if (data.isEmpty) return const SizedBox.shrink();
+
+    return LayoutBuilder(builder: (_, constraints) {
+      // Padding vertical pour que la première/dernière carte soient centrables
+      final vertPad = ((constraints.maxHeight / 2) - (_slotH / 2)).clamp(0.0, double.infinity);
+
+      return NotificationListener<ScrollEndNotification>(
+        onNotification: (_) {
+          // Snap après relâchement
+          if (_scrollCtrl.hasClients) {
+            final idx = (_scrollCtrl.offset / _slotH)
+                .round()
+                .clamp(0, data.length - 1);
+            _snapTo(idx);
+          }
+          return false;
+        },
+        child: ListView.builder(
+          controller: _scrollCtrl,
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.symmetric(vertical: vertPad, horizontal: 16),
+          itemCount: data.length,
+          itemBuilder: (cardCtx, i) {
+            final c         = data[i];
+            final isFocused = i == _selectedIdx;
+
+            return GestureDetector(
+              onTap: () {
+                if (isFocused) {
+                  // Carte déjà au centre → ouvre l'overlay grand format
+                  final box = cardCtx.findRenderObject() as RenderBox?;
+                  Rect fromRect = Rect.zero;
+                  if (box != null) {
+                    final origin = box.localToGlobal(Offset.zero);
+                    // La carte est centrée dans le slot → décaler vers le centre du slot
+                    fromRect = Rect.fromLTWH(
+                      origin.dx,
+                      origin.dy + (_slotH - _cardFull) / 2,
+                      box.size.width,
+                      _cardFull,
+                    );
+                  }
+                  _openCard(c['card'] as Map, c['style'] as CardStyle, fromRect);
+                } else {
+                  // Carte hors-centre → scroll vers elle
+                  _snapTo(i);
+                }
+              },
+              // Slot de hauteur FIXE — le ListView garde des offsets uniformes pour le snap
+              child: SizedBox(
+                height: _slotH,
+                child: Align(
+                  alignment: Alignment.center,
+                  child: AnimatedContainer(
+                    duration: _dur,
+                    curve: _curve,
+                    height: isFocused ? _cardFull : _cardMin,
+                    child: LoyaltyCardFace(
+                      card:         c['card']  as Map,
+                      style:        c['style'] as CardStyle,
+                      userName:     widget.userName,
+                      decorPattern: i % 6,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    });
   }
 }
 
@@ -230,11 +448,13 @@ class LoyaltyCardFace extends StatelessWidget {
   final Map card;
   final CardStyle style;
   final String userName;
+  final int? decorPattern; // 0-5 : motif géométrique décoratif, null = aucun
   const LoyaltyCardFace({
     super.key,
     required this.card,
     required this.style,
     required this.userName,
+    this.decorPattern,
   });
 
   @override
@@ -265,6 +485,8 @@ class LoyaltyCardFace extends StatelessWidget {
             fit: fill ? StackFit.expand : StackFit.loose,
             children: [
               Positioned.fill(child: style.buildBackground()),
+              if (decorPattern != null)
+                Positioned.fill(child: CustomPaint(painter: _CardPatternPainter(decorPattern!))),
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 13, 18, 11),
                 child: Column(
@@ -642,6 +864,135 @@ class CardStyle {
     final single = _parseColor(raw);
     return single == null ? null : [single];
   }
+}
+
+// ── Motifs géométriques décoratifs sur les cartes ────────────────────────────
+
+class _CardPatternPainter extends CustomPainter {
+  final int pattern; // 0-5
+
+  const _CardPatternPainter(this.pattern);
+
+  static final _paint = Paint()
+    ..color = Colors.white.withValues(alpha: 0.08)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+
+  static final _paintFill = Paint()
+    ..color = Colors.white.withValues(alpha: 0.05)
+    ..style = PaintingStyle.fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    switch (pattern % 6) {
+      case 0: _circles(canvas, size);    break;
+      case 1: _diagonals(canvas, size);  break;
+      case 2: _dots(canvas, size);       break;
+      case 3: _waves(canvas, size);      break;
+      case 4: _hexagons(canvas, size);   break;
+      case 5: _triangles(canvas, size);  break;
+    }
+  }
+
+  // 0 : Cercles concentriques dans le coin bas-droit
+  void _circles(Canvas canvas, Size s) {
+    final center = Offset(s.width * 1.1, s.height * 1.2);
+    for (int i = 1; i <= 5; i++) {
+      canvas.drawCircle(center, s.height * 0.35 * i, _paint);
+    }
+    canvas.drawCircle(Offset(-s.width * 0.1, -s.height * 0.2), s.height * 0.5, _paint);
+  }
+
+  // 1 : Lignes diagonales parallèles
+  void _diagonals(Canvas canvas, Size s) {
+    const step = 28.0;
+    for (double x = -s.height; x < s.width + s.height; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x + s.height, s.height), _paint);
+    }
+  }
+
+  // 2 : Grille de petits cercles (dots)
+  void _dots(Canvas canvas, Size s) {
+    const spacing = 20.0;
+    final dotPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.10)
+      ..style = PaintingStyle.fill;
+    for (double x = spacing; x < s.width; x += spacing) {
+      for (double y = spacing; y < s.height; y += spacing) {
+        canvas.drawCircle(Offset(x, y), 1.5, dotPaint);
+      }
+    }
+  }
+
+  // 3 : Vagues horizontales (arcs)
+  void _waves(Canvas canvas, Size s) {
+    const waveH = 10.0;
+    const waveL = 40.0;
+    for (double y = 20; y < s.height + 20; y += 22) {
+      final path = Path()..moveTo(0, y);
+      for (double x = 0; x < s.width; x += waveL) {
+        path.quadraticBezierTo(x + waveL / 4, y - waveH, x + waveL / 2, y);
+        path.quadraticBezierTo(x + 3 * waveL / 4, y + waveH, x + waveL, y);
+      }
+      canvas.drawPath(path, _paint);
+    }
+  }
+
+  // 4 : Hexagones (nid d'abeille)
+  void _hexagons(Canvas canvas, Size s) {
+    const r = 18.0;
+    final dx = r * 1.732;
+    final dy = r * 1.5;
+    int row = 0;
+    for (double y = -r; y < s.height + r; y += dy) {
+      final offset = (row % 2 == 0) ? 0.0 : dx / 2;
+      for (double x = -r + offset; x < s.width + r; x += dx) {
+        _drawHex(canvas, Offset(x, y), r);
+      }
+      row++;
+    }
+  }
+
+  void _drawHex(Canvas canvas, Offset center, double r) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (pi / 3) * i - pi / 6;
+      final pt = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+      if (i == 0) path.moveTo(pt.dx, pt.dy); else path.lineTo(pt.dx, pt.dy);
+    }
+    path.close();
+    canvas.drawPath(path, _paint);
+  }
+
+  // 5 : Triangles en coin
+  void _triangles(Canvas canvas, Size s) {
+    final corners = [
+      [Offset(0, 0), Offset(s.width * 0.5, 0), Offset(0, s.height * 0.5)],
+      [Offset(s.width, s.height), Offset(s.width * 0.5, s.height), Offset(s.width, s.height * 0.5)],
+    ];
+    for (final tri in corners) {
+      final path = Path()
+        ..moveTo(tri[0].dx, tri[0].dy)
+        ..lineTo(tri[1].dx, tri[1].dy)
+        ..lineTo(tri[2].dx, tri[2].dy)
+        ..close();
+      canvas.drawPath(path, _paintFill);
+      canvas.drawPath(path, _paint);
+    }
+    // petits triangles répétés
+    const step = 30.0;
+    for (double x = step; x < s.width - step; x += step) {
+      final triPath = Path()
+        ..moveTo(x, s.height * 0.1)
+        ..lineTo(x + 12, s.height * 0.1 + 20)
+        ..lineTo(x - 12, s.height * 0.1 + 20)
+        ..close();
+      canvas.drawPath(triPath, _paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CardPatternPainter old) => old.pattern != pattern;
 }
 
 // ── Widget badge récompense ───────────────────────────────────────────────────

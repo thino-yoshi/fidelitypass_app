@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'cards_tab.dart' show CardStyle, StampEvent, QRModal, CardPopOut, OpenCardPage;
+import 'cards_tab.dart' show CardStyle, StampEvent, QRModal, CardPopOut, OpenCardPage, LoyaltyCardFace;
 import 'widgets/client_cards_stack_ios.dart';
-import 'widgets/client_pass_face_ios.dart';
 
 class CardsTabIos extends StatefulWidget {
   final String token;
@@ -53,25 +52,7 @@ class _CardsTabIosState extends State<CardsTabIos> {
     );
   }
 
-  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
-
-  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim, {required bool collapsedAtRest}) {
-    final full = ClientPassFaceIos(card: card, style: style);
-    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
-    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
-    return Material(
-      type: MaterialType.transparency,
-      child: AnimatedBuilder(
-        animation: t,
-        builder: (_, __) => t.value >= 1
-            ? full
-            : Stack(fit: StackFit.expand, children: [
-                ClientPassFaceIos(card: card, style: style, collapsed: true),
-                Opacity(opacity: t.value, child: full),
-              ]),
-      ),
-    );
-  }
+  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);  // gardé pour Hero
 
   void _popOutCard(Map card, CardStyle style) {
     Navigator.of(context).push(PageRouteBuilder(
@@ -81,7 +62,7 @@ class _CardsTabIosState extends State<CardsTabIos> {
       pageBuilder: (ctx, anim, _) => CardPopOut(
         heroTag: 'card-${card['id']}',
         animation: anim,
-        face: ClientPassFaceIos(card: card, style: style),
+        face: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
         onOpen: () {
           Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
         },
@@ -127,13 +108,11 @@ class _CardsTabIosState extends State<CardsTabIos> {
       cards: List.generate(cards.length, (i) {
         final card  = cards[i];
         final style = _styleFromCard(card, i);
-        final face = Hero(
+        return Hero(
           tag: 'card-${card['id']}',
           createRectTween: _straightRect,
-          flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
-          child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
+          child: LoyaltyCardFace(card: card, style: style, userName: widget.userName, decorPattern: i % 6),
         );
-        return face;
       }),
       onOpen: (i) {
         final card = cards[i];

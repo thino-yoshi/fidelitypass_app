@@ -93,9 +93,9 @@ class _Item extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = active ? kBlueLight : Colors.white.withValues(alpha: 0.55);
     return Expanded(
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           SizedBox(height: 30, child: Center(child: Icon(icon, color: color, size: 24))),
           Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
@@ -112,9 +112,9 @@ class _ScanBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
         child: Center(
           child: Container(
             width: 72, height: 46,

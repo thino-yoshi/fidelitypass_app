@@ -57,7 +57,7 @@ class ClientNotificationsIos extends StatelessWidget {
     final hasUnread = notifs.any((n) => !(n['read'] as bool? ?? true));
     final top = MediaQuery.of(context).padding.top;
     return ListView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, top + 8, 16, MediaQuery.of(context).padding.bottom + 30),
       children: [
         Row(children: [
@@ -116,10 +116,6 @@ class ClientNotificationsIos extends StatelessWidget {
     );
   }
 
-  Widget _seg(String t, BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText)),
-      );
 
   Widget _row(BuildContext context, Map n, {required bool divider}) {
     final type = n['type'] as String? ?? 'promo';
@@ -201,6 +197,51 @@ class _Glass extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SegPill<T> extends StatelessWidget {
+  final T value;
+  final Map<T, Widget> children;
+  final ValueChanged<T> onChanged;
+  const _SegPill({required this.value, required this.children, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(children: [
+        for (final e in children.entries)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(e.key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                decoration: BoxDecoration(
+                  color: e.key == value
+                    ? (isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white)
+                    : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: e.key == value
+                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3, offset: const Offset(0, 1))]
+                    : [],
+                ),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText),
+                  child: Center(child: e.value),
+                ),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }

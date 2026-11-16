@@ -105,6 +105,11 @@ class _HistoryTabState extends State<HistoryTab> {
       final d = i['dt'] as DateTime?;
       return d != null && d.year == now.year && d.month == now.month;
     }
+    // ── DESIGN ANDROID À IMPLÉMENTER ─────────────────────────────────────────
+    // ignore: dead_code
+    if (true) return const SizedBox.expand();
+    // ── Ancien design (iOS historique) — gardé pour référence ─────────────
+    // ignore: dead_code
     return ClientHistoryIos(
       grouped:      grouped,
       monthVisits:  allItems.where((i) => i['type'] == 'stamp'  && thisMonth(i)).length,
