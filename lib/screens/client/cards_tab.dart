@@ -678,13 +678,42 @@ class _CardsFullPageState extends State<_CardsFullPage> {
       color: Colors.transparent,
       child: Stack(children: [
         const Positioned.fill(child: _NightBg()),
-        // Cartes Version 1 — LoyaltyCardFace empilées, tap → QR modal
+        // Cartes en liste verticale — une par une, tap → QR modal
         Positioned(
           top: topPad + 60, left: 0, right: 0, bottom: dockPad,
-          child: _WalletStack(
-            cards: widget.cards,
-            userName: widget.userName,
-            onOpenCard: (card, style) => widget.onPopOutCard(card, style),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Column(
+              children: [
+                for (var i = 0; i < widget.cards.length; i++) ...[
+                  GestureDetector(
+                    onTap: () {
+                      final card  = widget.cards[i] as Map;
+                      final style = CardStyle.fromDesign(
+                        card['card_design'],
+                        merchantLogoUrl: card['merchants']?['logo_url'] as String?,
+                        fallbackColor: widget.palette[i % widget.palette.length],
+                      );
+                      widget.onPopOutCard(card, style);
+                    },
+                    child: SizedBox(
+                      height: 200,
+                      child: LoyaltyCardFace(
+                        card: widget.cards[i] as Map,
+                        style: CardStyle.fromDesign(
+                          (widget.cards[i] as Map)['card_design'],
+                          merchantLogoUrl: (widget.cards[i] as Map)['merchants']?['logo_url'] as String?,
+                          fallbackColor: widget.palette[i % widget.palette.length],
+                        ),
+                        userName: widget.userName,
+                        decorPattern: i % 6,
+                      ),
+                    ),
+                  ),
+                  if (i < widget.cards.length - 1) const SizedBox(height: 14),
+                ],
+              ],
+            ),
           ),
         ),
         // Bouton retour
