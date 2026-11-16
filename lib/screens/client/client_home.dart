@@ -89,6 +89,8 @@ class _ClientHomeState extends State<ClientHome>
   StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
   Timer?     _stampBadgeTimer;
   Timer?     _slideInTimer;
+  String?    _cardToastText;
+  Timer?     _cardToastTimer;
   Timer?     _keepAliveTimer;
   StreamSubscription<Uri>? _deepLinkSub;
   StreamSubscription<dynamic>? _fcmForegroundSub;
@@ -973,6 +975,7 @@ class _ClientHomeState extends State<ClientHome>
     _pillPageCtrl.dispose();
     _stampBadgeTimer?.cancel();
     _slideInTimer?.cancel();
+    _cardToastTimer?.cancel();
     _keepAliveTimer?.cancel();
     _deepLinkSub?.cancel();
     _fcmForegroundSub?.cancel();
@@ -1184,6 +1187,41 @@ class _ClientHomeState extends State<ClientHome>
         _refreshCard(e.cardId); // 1 seule carte au lieu de tout recharger
       }
     });
+  }
+
+  Widget _buildCardToast(String name) {
+    final bottom = MediaQuery.of(context).viewPadding.bottom + 110;
+    return Positioned(
+      bottom: bottom,
+      left: 24, right: 24,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOut,
+        builder: (_, v, child) => Opacity(
+          opacity: v,
+          child: Transform.translate(offset: Offset(0, 16 * (1 - v)), child: child),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D1B2A),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 14, offset: const Offset(0, 4))],
+          ),
+          child: Row(children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF4CAF50), size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$name ajoutée à vos cartes',
+                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _buildStampBadge(StampEvent e) {
@@ -1573,23 +1611,30 @@ class _ClientHomeState extends State<ClientHome>
       child: Scaffold(
         backgroundColor: context.qBg,
         extendBody: true,
-        body: Stack(
-          children: [
-            if (_tab == 1)
-              Positioned.fill(child: _buildTabContent())
-            else
-              Column(children: [
-                Expanded(child: _buildTabContent()),
-              ]),
-            if (_tab != 1) ...[
-              ClientBottomNav(
-                currentTab: _tab,
-                onTabChanged: _setTab,
-                onScanTap: () => _setTab(1),
-              ),
+        resizeToAvoidBottomInset: false,
+        body: MediaQuery(
+          data: MediaQuery.of(context).copyWith(viewInsets: EdgeInsets.zero),
+          child: Stack(
+            children: [
+              if (_tab == 1)
+                Positioned.fill(child: _buildTabContent())
+              else
+                Column(children: [
+                  Expanded(child: _buildTabContent()),
+                ]),
+              // Sur l'onglet Cartes (0), le NavDock dans les modules remplace la bottom nav
+              if (_tab != 1 && _tab != 0) ...[
+                ClientBottomNav(
+                  currentTab: _tab,
+                  onTabChanged: _setTab,
+                  onScanTap: () => _setTab(1),
+                  profileImageUrl: _profileImageUrl,
+                ),
+              ],
+              if (_cardToastText != null) _buildCardToast(_cardToastText!),
+              if (_stampBadge != null) _buildStampBadge(_stampBadge!),
             ],
-            if (_stampBadge != null) _buildStampBadge(_stampBadge!),
-          ],
+          ),
         ),
       ),
     );
@@ -1604,6 +1649,7 @@ class _ClientHomeState extends State<ClientHome>
       value: context.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: context.qBg,
+        resizeToAvoidBottomInset: false,
         body: Stack(children: [
           const Positioned.fill(child: ClientGlowBackground()),
           Positioned.fill(child: iosReadableWidth(Stack(children: [
@@ -2187,7 +2233,7 @@ class _ClientHomeState extends State<ClientHome>
             if (kIsIOS)
               CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v))
             else
-              CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v)),
+              CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v), activeTab: _tab, onNavTap: _setTab),
             ClientRewardsIos(rewards: _rewards, cards: _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual),
           ],
         );
@@ -2198,10 +2244,16 @@ class _ClientHomeState extends State<ClientHome>
             ..['merchants']    = merchant
             ..['card_design']  = card['card_design']
             ..['last_scan_at'] = null;
+          final merchantName = merchant['business_name'] as String? ?? '';
           setState(() {
             _cards.insert(0, localCard);
             _cardCount = _cards.length;
             if (goHome) { _tab = 0; _rewardPillActive = false; }
+            _cardToastText = merchantName.isNotEmpty ? merchantName : 'Nouvelle carte';
+          });
+          _cardToastTimer?.cancel();
+          _cardToastTimer = Timer(const Duration(seconds: 3), () {
+            if (mounted) setState(() => _cardToastText = null);
           });
           // Confirme + complète (design) depuis le serveur
           final cardId = card['id'] as String?;

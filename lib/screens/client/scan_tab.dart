@@ -7,7 +7,6 @@ import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
 import '../../config/demo_mode.dart';
-import 'widgets/client_sheets_ios.dart' show showCardAddedIos;
 
 class ScanTab extends StatefulWidget {
   final String token;
@@ -117,20 +116,11 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
     Map<String, dynamic> merchant = const {},
   }) {
     if (!mounted) return;
-    showCardAddedIos(context,
-            merchant: merchant, design: card['card_design'] ?? merchant['card_design'],
-            userName: widget.userName, alreadyMember: alreadyMember)
-        .then((seeCard) {
-      if (!mounted) return;
-      if (seeCard == false) {
-        if (!alreadyMember) widget.onCardAddedStay?.call(card, merchant);
-        _resetScan();
-      } else if (!alreadyMember) {
-        widget.onCardAdded(card, merchant);
-      } else {
-        widget.onBack?.call();
-      }
-    });
+    if (alreadyMember) {
+      _showError('Vous êtes déjà membre de $merchantName');
+      return;
+    }
+    widget.onCardAdded(card, merchant);
   }
 
   void _resetScan() {
@@ -175,7 +165,7 @@ class _ScanTabState extends State<ScanTab> with WidgetsBindingObserver, SingleTi
         ),
       ),
       if (_controller != null && !QartaDemo.enabled)
-        MobileScanner(controller: _controller!, onDetect: _onDetect, scanWindow: rect),
+        MobileScanner(controller: _controller!, onDetect: _onDetect),
       _ScanOverlay(scanRect: rect, lineAnim: _lineAnim, corners: false),
       IgnorePointer(child: CustomPaint(size: MediaQuery.of(context).size, painter: _CornersPainter(rect.inflate(16)))),
       Positioned.fromRect(

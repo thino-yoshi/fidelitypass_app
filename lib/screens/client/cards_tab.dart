@@ -52,6 +52,8 @@ class CardsTab extends StatefulWidget {
   final VoidCallback? onAnimationDone;
   final VoidCallback? onScanTap;
   final ValueChanged<bool>? onSearchActive;
+  final int? activeTab;
+  final ValueChanged<int>? onNavTap;
 
   const CardsTab({
     super.key,
@@ -65,6 +67,8 @@ class CardsTab extends StatefulWidget {
     this.onAnimationDone,
     this.onScanTap,
     this.onSearchActive,
+    this.activeTab,
+    this.onNavTap,
   });
 
   @override
