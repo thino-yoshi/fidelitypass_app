@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoActivityIndicator;
+import 'package:flutter/physics.dart';
 import '../../config/demo_mode.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
@@ -41,6 +44,33 @@ class StampEvent {
   });
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// Modèle de grille modulaire — grille 2 colonnes fixes
+// ════════════════════════════════════════════════════════════════════════════
+
+enum _ModSize {
+  small, // 1 cellule carrée (½ largeur)
+  wide,  // 1 ligne pleine largeur
+  large, // 2 lignes pleine largeur (cards uniquement)
+}
+
+class _Mod {
+  final String id;
+  _ModSize size;
+  int row; // position fixe dans la grille (trous possibles)
+  _Mod(this.id, {this.size = _ModSize.wide, this.row = 0});
+  Map<String, dynamic> toJson() => {'id': id, 'sz': size.name, 'r': row};
+  static _Mod fromJson(Map<String, dynamic> j) {
+    final sz = switch (j['sz'] as String? ?? '') {
+      'small'  => _ModSize.small,
+      'large'  => _ModSize.large,
+      'square' => _ModSize.small, // migration ancienne sauvegarde
+      _        => _ModSize.wide,
+    };
+    return _Mod(j['id'] as String, size: sz, row: (j['r'] as int?) ?? 0);
+  }
+}
+
 class CardsTab extends StatefulWidget {
   final String token;
   final String userName;
@@ -52,6 +82,8 @@ class CardsTab extends StatefulWidget {
   final VoidCallback? onAnimationDone;
   final VoidCallback? onScanTap;
   final ValueChanged<bool>? onSearchActive;
+  final int activeTab;
+  final ValueChanged<int>? onNavTap;
 
   const CardsTab({
     super.key,
@@ -65,16 +97,20 @@ class CardsTab extends StatefulWidget {
     this.onAnimationDone,
     this.onScanTap,
     this.onSearchActive,
+    this.activeTab = 0,
+    this.onNavTap,
   });
 
   @override
   State<CardsTab> createState() => _CardsTabState();
 }
 
-class _CardsTabState extends State<CardsTab> {
-  String _search = '';
-  bool _searchExpanded = false;
-  final FocusNode _searchFocus = FocusNode();
+class _CardsTabState extends State<CardsTab> with TickerProviderStateMixin {
+  static final _kDefault = [
+    _Mod('greeting', size: _ModSize.wide,  row: 0),
+    _Mod('cards',    size: _ModSize.large, row: 1),
+    _Mod('navdock',  size: _ModSize.wide,  row: 2),
+  ];
 
   static const List<Color> _palette = [
     Color(0xFF2C7BE5),
@@ -85,13 +121,22 @@ class _CardsTabState extends State<CardsTab> {
     Color(0xFFE67E22),
   ];
 
-  CardStyle _styleFromCard(Map card, int fallbackIndex) {
-    return CardStyle.fromDesign(
-      card['card_design'],
-      merchantLogoUrl: (card['merchants']?['logo_url'] as String?),
-      fallbackColor: _palette[fallbackIndex % _palette.length],
-    );
-  }
+  List<_Mod> _mods = _kDefault.map((m) => _Mod(m.id, size: m.size, row: m.row)).toList();
+  String _search = '';
+  int    _activeCard = 0;
+
+  // ── Drag & drop modulaire ──────────────────────────────────────────────────
+  String? _dragId;    // id du module en mode édition/drag actif
+  final   _scrollCtrl = ScrollController();
+  final   Map<int, GlobalKey> _rowKeys = {};
+  late    AnimationController _snapCtrl;
+  final   _rootStackKey = GlobalKey();
+
+  CardStyle _styleFromCard(Map card, int i) => CardStyle.fromDesign(
+    card['card_design'],
+    merchantLogoUrl: (card['merchants']?['logo_url'] as String?),
+    fallbackColor: _palette[i % _palette.length],
+  );
 
   static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
 
@@ -122,320 +167,1407 @@ class _CardsTabState extends State<CardsTab> {
         heroTag: 'card-${card['id']}',
         animation: anim,
         face: ClientPassFaceIos(card: card, style: style),
-        onOpen: () {
-          Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
-        },
+        onOpen: () => Navigator.of(ctx).pushReplacement(_openCardRoute(card, style)),
       ),
     ));
   }
 
   Route<void> _openCardRoute(Map card, CardStyle style) => PageRouteBuilder(
-        opaque: false,
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 340),
-        pageBuilder: (ctx, anim, _) => OpenCardPage(
-          animation: anim,
-          child: QRModal(
-            token: widget.token,
-            card: card,
-            style: style,
-            userName: widget.userName,
-            onStampAdded: widget.onRefresh,
-            onStampEvent: widget.onStampEvent,
-            heroTag: 'card-${card['id']}',
-          ),
-        ),
-      );
-
-  // Retourne blanc si la couleur de fond est sombre, noir si elle est claire
-  static Color _ink(Color bg) =>
-      bg.computeLuminance() > 0.45 ? const Color(0xFF0B1220) : Colors.white;
-
-  static Widget _miniCard(Color ink, String name, String count, String label, Color accent) => Expanded(
-    child: AspectRatio(
-      aspectRatio: 1.6,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [accent, accent.withValues(alpha: 0.7)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))],
-        ),
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white70)),
-            const Spacer(),
-            Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-            Text(label, style: const TextStyle(fontSize: 9, color: Colors.white60)),
-          ],
-        ),
+    opaque: false,
+    transitionDuration: const Duration(milliseconds: 420),
+    reverseTransitionDuration: const Duration(milliseconds: 340),
+    pageBuilder: (ctx, anim, _) => OpenCardPage(
+      animation: anim,
+      child: QRModal(
+        token: widget.token, card: card, style: style,
+        userName: widget.userName, onStampAdded: widget.onRefresh,
+        onStampEvent: widget.onStampEvent, heroTag: 'card-${card['id']}',
       ),
     ),
   );
 
-  static const _fakeCards = [
-    {'name': 'Blue Bottle Coffee', 'count': '7/10',  'label': 'tampons', 'color': Color(0xFF2C7BE5)},
-    {'name': 'Green Garden',       'count': '10/10', 'label': 'tampons', 'color': Color(0xFF10B981)},
-    {'name': 'Vinyl Records',      'count': '3/8',   'label': 'tampons', 'color': Color(0xFF8B5CF6)},
-    {'name': 'Urban Cuts',         'count': '1/6',   'label': 'tampons', 'color': Color(0xFFF59E0B)},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+    _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _snapCtrl.addListener(() => setState(() {}));
+  }
 
-  static Widget _walletStack(Color ink) {
-    const cardH = 110.0;
-    const peek  = 44.0;
-    final total = cardH + peek * (_fakeCards.length - 1);
-    return ClipRect(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: SizedBox(
-          height: total,
-          child: Stack(
-            children: List.generate(_fakeCards.length, (j) {
-              final c = _fakeCards[j];
-              return Positioned(
-                top: j * peek,
-                left: 0, right: 0,
-                child: Container(
-                  height: cardH,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [(c['color'] as Color), (c['color'] as Color).withValues(alpha: 0.75)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+  Future<void> _loadOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('qarta_home_mods_v2');
+    if (raw == null) return;
+    try {
+      final list = (jsonDecode(raw) as List)
+          .map((j) => _Mod.fromJson(j as Map<String, dynamic>))
+          .toList();
+      final validIds = _kDefault.map((m) => m.id).toSet();
+      // Filtrer les ids obsolètes (ex: 'progress' retiré) + vérifier tous présents
+      final filtered = list.where((m) => validIds.contains(m.id)).toList();
+      if (validIds.every((id) => filtered.any((m) => m.id == id)) && mounted) {
+        // Migration depuis ancienne sauvegarde sans 'r' : tous row=0 → collision
+        // Réassigner les rows selon l'ordre de la liste
+        final uniqueRows = filtered.map((m) => m.row).toSet();
+        if (uniqueRows.length < filtered.length) {
+          for (var i = 0; i < filtered.length; i++) filtered[i].row = i;
+        }
+        setState(() => _mods = filtered);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('qarta_home_mods_v2', jsonEncode(_mods.map((m) => m.toJson()).toList()));
+  }
+
+  // Nombre de rows dans la grille : max(row) + 2 (1 zone vide en bas pour drop)
+  int get _gridRowCount {
+    if (_mods.isEmpty) return 4;
+    return _mods.map((m) => m.row).reduce(max) + 2;
+  }
+
+  // Modules présents sur une row (peut être vide = trou)
+  List<_Mod> _modsAtRow(int r) => _mods.where((m) => m.row == r).toList();
+
+  void _toggleSize(String id) {
+    final m = _mods.firstWhere((m) => m.id == id);
+    final wasSmall = m.size == _ModSize.small;
+    setState(() {
+      m.size = wasSmall ? _ModSize.wide : _ModSize.small;
+      if (wasSmall) {
+        // small → wide : chercher une row entièrement vide, sinon créer une nouvelle
+        final occupiedRows = _mods.where((x) => x.id != id).map((x) => x.row).toSet();
+        int emptyRow = 0;
+        while (occupiedRows.contains(emptyRow)) emptyRow++;
+        m.row = emptyRow;
+      }
+    });
+    _saveOrder();
+  }
+
+  List<dynamic> get _filteredCards {
+    if (_search.isEmpty) return widget.cards;
+    final q = _search.toLowerCase();
+    return widget.cards.where((c) {
+      final name  = (c['merchants']?['business_name'] as String? ?? '').toLowerCase();
+      final cName = ((c['card_design'] as Map?)?['cardName'] as String? ?? '').toLowerCase();
+      return name.contains(q) || cName.contains(q);
+    }).toList();
+  }
+
+  // ── Drag helpers ───────────────────────────────────────────────────────────
+
+  // Déplace un module vers une row cible.
+  // - Slot vide → move simple
+  // - Slot avec 1 small + drag est small → côte à côte sur la même row
+  // - Sinon → swap (les cibles vont à l'ancienne row du drag)
+  void _moveToRow(String dragId, int targetRow) {
+    final drag = _mods.firstWhere((m) => m.id == dragId);
+    final originRow = drag.row;
+    final at = _modsAtRow(targetRow);
+
+    if (at.isEmpty) {
+      drag.row = targetRow;
+    } else if (at.length == 1 &&
+               at[0].size == _ModSize.small &&
+               drag.size == _ModSize.small) {
+      // Les deux sont small → on les regroupe côte à côte
+      drag.row = targetRow;
+    } else {
+      // Incompatible (wide, large, ou row déjà pleine) → swap
+      for (final m in at) m.row = originRow;
+      drag.row = targetRow;
+    }
+  }
+
+  // Inverse l'ordre de deux smalls sur la même row (swap dans la liste _mods)
+  void _swapSiblings(String idA, String idB) {
+    final ia = _mods.indexWhere((m) => m.id == idA);
+    final ib = _mods.indexWhere((m) => m.id == idB);
+    if (ia >= 0 && ib >= 0) {
+      final tmp = _mods[ia];
+      _mods[ia] = _mods[ib];
+      _mods[ib] = tmp;
+    }
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final topPad   = MediaQuery.of(context).padding.top + 8;
+    final dockPad  = MediaQuery.of(context).viewPadding.bottom + 20;
+    final filtered = _filteredCards;
+    final rowCount = _gridRowCount;
+
+    return Stack(key: _rootStackKey, children: [
+      const Positioned.fill(child: _NightBg()),
+      SingleChildScrollView(
+        controller: _scrollCtrl,
+        padding: EdgeInsets.fromLTRB(16, topPad, 16, dockPad),
+        child: Column(
+          children: [
+            for (var r = 0; r < rowCount; r++)
+              _buildRow(r, _modsAtRow(r), filtered),
+          ],
+        ),
+      ),
+      if (_dragId != null)
+        Positioned(
+          bottom: dockPad + 16,
+          right:  16,
+          child: _buildDragButtons(),
+        ),
+    ]);
+  }
+
+  Widget _buildRow(int rowIdx, List<_Mod> mods, List<dynamic> filtered) {
+    final rowKey   = _rowKeys.putIfAbsent(rowIdx, () => GlobalKey());
+    final isEmpty  = mods.isEmpty;
+    final isOrigin = _dragId != null && mods.any((m) => m.id == _dragId);
+
+    return Padding(
+      key: ValueKey('row_$rowIdx'),
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DragTarget<String>(
+        onWillAcceptWithDetails: (d) => !isOrigin,
+        onAcceptWithDetails: (d) {
+          setState(() => _moveToRow(d.data, rowIdx));
+          _saveOrder();
+        },
+        builder: (ctx, candidates, _) {
+          final hovered = candidates.isNotEmpty && !isOrigin;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: hovered
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    color:  Colors.white.withValues(alpha: 0.10),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.30),
+                      width: 1.5,
                     ),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [BoxShadow(color: (c['color'] as Color).withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(c['name'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                      const Spacer(),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Text(c['count'] as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-                        Text(c['label'] as String, style: const TextStyle(fontSize: 11, color: Colors.white60)),
-                      ]),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
+                  )
+                : null,
+            child: Container(
+              key: rowKey,
+              child: isEmpty
+                  ? _buildEmptySlot(hovered)
+                  : _buildRowContent(rowIdx, mods, filtered),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Slot vide : visible pendant le drag, invisible sinon
+  Widget _buildEmptySlot(bool hovered) {
+    if (_dragId == null) return const SizedBox.shrink();
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: hovered ? 0.0 : 0.15),
+          width: 1,
         ),
       ),
     );
   }
 
-  static const _jours = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
-  static const _mois  = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-  static String _formattedDate() {
-    final now = DateTime.now();
-    return '${_jours[now.weekday - 1]} ${now.day} ${_mois[now.month - 1]}';
-  }
+  Widget _buildDragButtons() {
+    if (_dragId == null) return const SizedBox.shrink();
+    final mod = _mods.where((m) => m.id == _dragId!).firstOrNull;
+    if (mod == null) return const SizedBox.shrink();
 
-  @override
-  Widget build(BuildContext context) {
-    final cards = _search.isEmpty
-        ? widget.cards
-        : widget.cards.where((c) {
-            final q        = _search.toLowerCase();
-            final name     = (c['merchants']?['business_name'] as String? ?? '').toLowerCase();
-            final cardName = ((c['card_design'] as Map?)?['cardName'] as String? ?? '').toLowerCase();
-            return name.contains(q) || cardName.contains(q);
-          }).toList();
+    // Sibling small sur la même row (pour le bouton ↔)
+    final rowMates = _modsAtRow(mod.row).where((m) => m.id != _dragId).toList();
+    final sibling  = (rowMates.length == 1 && rowMates[0].size == _ModSize.small)
+        ? rowMates[0] : null;
 
-    // ── DESIGN ANDROID À IMPLÉMENTER ─────────────────────────────────────────
-    // Couleur du fond de l'app (clair ou sombre selon le thème)
-    final appBg = Theme.of(context).scaffoldBackgroundColor;
-    final ink   = _ink(appBg); // couleur du texte/icônes adaptée au fond
-
-    final dockPad = MediaQuery.of(context).padding.bottom + 120;
-    if (true) return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Container 1 : header (rouage + avatar) ──────────────────────────
-        Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.red, width: 2)),
-          child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 16, 0),
-          child: SizedBox(
-            height: 52,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: Icon(Icons.settings_outlined, color: ink, size: 24),
-                ),
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: ink.withValues(alpha: 0.1),
-                  child: Icon(Icons.person, color: ink, size: 20),
-                ),
-              ],
-            ),
-          ),
-        )),
-        // ── Container 2 : pastille crème (date + salutation) ────────────────
-        Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 2)),
-          child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
+        // Bouton ↔ inverser les deux smalls côte à côte
+        if (sibling != null) ...[
+          GestureDetector(
+            onTap: () {
+              setState(() => _swapSiblings(_dragId!, sibling.id));
+              _saveOrder();
+            },
             child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 10, 18, 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFDF3DC),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFBFA07A).withValues(alpha: 0.22),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _formattedDate(),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF9C7E5A)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Comment vas-tu ${widget.userName.split(' ').first} ?',
-                    style: const TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF3D2B1A)),
-                  ),
-                ],
-              ),
+              width: 44, height: 44,
+              decoration: const BoxDecoration(color: Color(0xFFFF9500), shape: BoxShape.circle),
+              child: const Icon(Icons.swap_horiz_rounded, color: Colors.white, size: 22),
             ),
           ),
-        )),
-        // ── Container 4 : barre de recherche animée ─────────────────────────
-        Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.blue, width: 2)),
-          child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: LayoutBuilder(builder: (_, box) => AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              height: 44,
-              width: _searchExpanded ? box.maxWidth : 44,
-              decoration: BoxDecoration(
-                color: ink.withValues(alpha: _searchExpanded ? 0.07 : 0.10),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: ink.withValues(alpha: 0.13)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _searchExpanded = !_searchExpanded;
-                        if (!_searchExpanded) _search = '';
-                      });
-                      if (_searchExpanded) {
-                        Future.delayed(const Duration(milliseconds: 60),
-                            () => _searchFocus.requestFocus());
-                      } else {
-                        _searchFocus.unfocus();
-                      }
-                    },
-                    child: AspectRatio(
-                      aspectRatio: 1.0,
-                      child: Center(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          transitionBuilder: (child, anim) =>
-                              ScaleTransition(scale: anim, child: child),
-                          child: Icon(
-                            _searchExpanded
-                                ? Icons.close_rounded
-                                : Icons.search_rounded,
-                            key: ValueKey(_searchExpanded),
-                            color: ink.withValues(alpha: 0.55),
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_searchExpanded)
-                    Expanded(
-                      child: TextField(
-                        focusNode: _searchFocus,
-                        onChanged: (v) => setState(() => _search = v),
-                        style: TextStyle(fontSize: 14, color: ink),
-                        decoration: InputDecoration(
-                          hintText: 'Rechercher une carte…',
-                          hintStyle: TextStyle(
-                              color: ink.withValues(alpha: 0.35), fontSize: 14),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.only(right: 12),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            )),
+          const SizedBox(width: 10),
+        ],
+        if (mod.id != 'cards') ...[
+          GestureDetector(
+            onTap: () {
+              _toggleSize(mod.id);
+              setState(() => _dragId = null);
+            },
+            child: Container(
+              width: 44, height: 44,
+              decoration: const BoxDecoration(color: Color(0xFF007AFF), shape: BoxShape.circle),
+              child: Center(child: Icon(
+                mod.size == _ModSize.wide ? Icons.crop_square_rounded : Icons.crop_landscape_rounded,
+                color: Colors.white, size: 20,
+              )),
+            ),
           ),
-        )),
-        // ── Container 6 : WalletStack — prend tout l'espace restant ─────────
-        Expanded(
+          const SizedBox(width: 10),
+        ],
+        GestureDetector(
+          onTap: () => setState(() => _dragId = null),
           child: Container(
-            decoration: BoxDecoration(border: Border.all(color: Colors.orange, width: 2)),
-            child: _WalletStack(cards: widget.cards, userName: widget.userName),
+            width: 44, height: 44,
+            decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle),
+            child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
           ),
         ),
-        // ── Espace sous le dock ──────────────────────────────────────────────
-        SizedBox(height: dockPad),
       ],
     );
-    // ── Ancien design (iOS stack) — gardé pour référence ──────────────────
-    // ignore: dead_code
-    return ClientCardsStackIos(
-      hasAnyCard: widget.cards.isNotEmpty,
-      onSearchActive: widget.onSearchActive,
-      onSearch: (v) => setState(() => _search = v),
-      onRefresh: () async => widget.onRefresh(),
-      onScanTap: widget.onScanTap ?? () {},
-      cards: List.generate(cards.length, (i) {
-        final card  = cards[i];
-        final style = _styleFromCard(card, i);
-        final face = Hero(
-          tag: 'card-${card['id']}',
-          createRectTween: _straightRect,
-          flightShuttleBuilder: (_, anim, __, ___, ____) => _passShuttle(card, style, anim, collapsedAtRest: i != 0),
-          child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
+  }
+
+  Widget _buildRowContent(int rowIdx, List<_Mod> mods, List<dynamic> filtered) {
+    return LayoutBuilder(builder: (_, cst) {
+      final fullW = cst.maxWidth;
+      final halfW = (fullW - 10) / 2;
+
+      if (mods.length >= 2) {
+        return Row(children: [
+          Expanded(child: _draggableTile(rowIdx, mods[0], halfW, filtered)),
+          const SizedBox(width: 10),
+          Expanded(child: _draggableTile(rowIdx, mods[1], halfW, filtered)),
+        ]);
+      }
+      final mod = mods[0];
+      if (mod.size == _ModSize.small) {
+        return Row(children: [
+          Expanded(child: _draggableTile(rowIdx, mod, halfW, filtered)),
+          const SizedBox(width: 10),
+          const Expanded(child: SizedBox()),
+        ]);
+      }
+      return _draggableTile(rowIdx, mod, fullW, filtered);
+    });
+  }
+
+  Widget _draggableTile(int rowIdx, _Mod mod, double tileW, List<dynamic> filtered) {
+    final content = mod.size == _ModSize.small
+        ? _GlassCard(child: _squareBody(mod.id, filtered))
+        : _GlassCard(child: _rectBody(mod.id, filtered));
+    final feedback = mod.size == _ModSize.small
+        ? _GlassCard(child: _squareBody(mod.id, _filteredCards))
+        : _GlassCard(child: _rectBody(mod.id, _filteredCards));
+
+    return LongPressDraggable<String>(
+      data: mod.id,
+      delay: const Duration(milliseconds: 400),
+      hapticFeedbackOnStart: true,
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          width: tileW,
+          child: Opacity(
+            opacity: 0.92,
+            child: Transform.scale(
+              scale: 1.05,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.40),
+                    blurRadius: 28,
+                    offset: const Offset(0, 10),
+                  )],
+                ),
+                child: feedback,
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: SizedBox(width: tileW),
+      onDragStarted: () => setState(() => _dragId = mod.id),
+      onDragEnd:     (_) {/* _dragId reste pour les boutons */},
+      child: content,
+    );
+  }
+
+  Widget _rectBody(String id, List<dynamic> filtered) {
+    switch (id) {
+      case 'greeting':
+        return _GreetingModule(userName: widget.userName, cardCount: widget.cards.length);
+      case 'cards':
+        return _CardsWalletModule(
+          cards: filtered,
+          scanTap: widget.onScanTap,
+          userName: widget.userName,
+          onOpen: () => Navigator.of(context).push(_openCardsRoute()),
         );
-        return face;
-      }),
-      onOpen: (i) {
-        final card = cards[i];
-        if (card['id'] == widget.cardIdToAnimate) return;
-        _popOutCard(card, _styleFromCard(card, i));
+      case 'navdock':
+        return _NavDockRect(activeTab: widget.activeTab, onTap: widget.onNavTap ?? (_) {});
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // Body pour _ModSize.small (½ largeur)
+  Widget _squareBody(String id, List<dynamic> filtered) {
+    switch (id) {
+      case 'greeting':
+        return _GreetingSquare(userName: widget.userName);
+      case 'navdock':
+        return _NavDockSquare(activeTab: widget.activeTab, onTap: widget.onNavTap ?? (_) {});
+      default:
+        return _rectBody(id, filtered); // fallback : version rect
+    }
+  }
+
+  Route<void> _openCardsRoute() {
+    return PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 400),
+      reverseTransitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (ctx, anim, _) {
+        final curve = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return ScaleTransition(
+          scale: Tween(begin: 0.88, end: 1.0).animate(curve),
+          child: FadeTransition(
+            opacity: CurvedAnimation(
+                parent: anim, curve: const Interval(0.0, 0.5)),
+            child: _CardsFullPage(
+              token: widget.token,
+              userName: widget.userName,
+              cards: widget.cards,
+              palette: _palette,
+              onRefresh: widget.onRefresh,
+              onStampEvent: widget.onStampEvent,
+              onScanTap: widget.onScanTap,
+              onPopOutCard: (card, style) {
+                Navigator.of(ctx).pop();
+                Future.microtask(() => _popOutCard(card, style));
+              },
+            ),
+          ),
+        );
       },
     );
   }
 
   @override
   void dispose() {
-    _searchFocus.dispose();
+    _scrollCtrl.dispose();
+    _snapCtrl.dispose();
     super.dispose();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Wallet Module — bulle compacte (toutes cartes pliées, tap → plein écran)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _CardsWalletModule extends StatelessWidget {
+  final List<dynamic> cards;
+  final VoidCallback? scanTap;
+  final VoidCallback onOpen;
+  final String userName;
+  const _CardsWalletModule({
+    required this.cards,
+    required this.onOpen,
+    required this.userName,
+    this.scanTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (cards.isEmpty) {
+      return GestureDetector(
+        onTap: onOpen,
+        child: _EmptyCardsModule(onScanTap: scanTap),
+      );
+    }
+    const cardH    = 90.0;  // hauteur d'une carte en mode compact
+    const cardPeek = 14.0;  // pixels visibles de chaque carte en dessous
+    const maxCards = 3;
+    final shown  = cards.length.clamp(1, maxCards);
+    final totalH = cardH + (shown - 1) * cardPeek;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+            height: totalH,
+            // Les cartes du dessous sont les premiers enfants du Stack
+            // → la carte[0] est en dernier = au premier plan
+            child: Stack(children: [
+              for (var i = shown - 1; i >= 0; i--)
+                Positioned(
+                  top: (i * cardPeek),
+                  left: 0, right: 0,
+                  height: cardH,
+                  child: LoyaltyCardFace(
+                    card: cards[i] as Map,
+                    style: CardStyle.fromDesign(
+                      (cards[i] as Map)['card_design'],
+                      merchantLogoUrl: ((cards[i] as Map)['merchants']?['logo_url'] as String?),
+                      fallbackColor: _CardsTabState._palette[i % _CardsTabState._palette.length],
+                    ),
+                    userName: userName,
+                    compact: true,
+                  ),
+                ),
+            ]),
+          ),
+          if (cards.length > maxCards)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '+${cards.length - maxCards} cartes',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Cards Full Page — plein écran avec bouton retour
+// ════════════════════════════════════════════════════════════════════════════
+
+class _CardsFullPage extends StatefulWidget {
+  final String token;
+  final String userName;
+  final List<dynamic> cards;
+  final List<Color> palette;
+  final VoidCallback onRefresh;
+  final void Function(StampEvent)? onStampEvent;
+  final VoidCallback? onScanTap;
+  final void Function(Map, CardStyle) onPopOutCard;
+
+  const _CardsFullPage({
+    required this.token, required this.userName, required this.cards,
+    required this.palette, required this.onRefresh, required this.onPopOutCard,
+    this.onStampEvent, this.onScanTap,
+  });
+
+  @override
+  State<_CardsFullPage> createState() => _CardsFullPageState();
+}
+
+class _CardsFullPageState extends State<_CardsFullPage> {
+  @override
+  Widget build(BuildContext context) {
+    final topPad  = MediaQuery.of(context).padding.top;
+    final dockPad = MediaQuery.of(context).viewPadding.bottom + 20;
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(children: [
+        const Positioned.fill(child: _NightBg()),
+        // Cartes Version 1 — LoyaltyCardFace empilées, tap → QR modal
+        Positioned(
+          top: topPad + 60, left: 0, right: 0, bottom: dockPad,
+          child: _WalletStack(
+            cards: widget.cards,
+            userName: widget.userName,
+            onOpenCard: (card, style) => widget.onPopOutCard(card, style),
+          ),
+        ),
+        // Bouton retour
+        Positioned(
+          top: topPad + 10, left: 16,
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white, size: 16,
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Search Sheet — clavier custom sans clavier système
+// ════════════════════════════════════════════════════════════════════════════
+
+class _SearchSheet extends StatefulWidget {
+  final String initial;
+  const _SearchSheet({required this.initial});
+  @override
+  State<_SearchSheet> createState() => _SearchSheetState();
+}
+
+class _SearchSheetState extends State<_SearchSheet> {
+  late String _q;
+
+  static const _rows = [
+    ['A','Z','E','R','T','Y','U','I','O','P'],
+    ['Q','S','D','F','G','H','J','K','L','M'],
+    ['W','X','C','V','B','N'],
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _q = widget.initial;
+  }
+
+  void _tap(String letter) => setState(() => _q += letter);
+  void _del() => setState(() { if (_q.isNotEmpty) _q = _q.substring(0, _q.length - 1); });
+  void _clear() => setState(() => _q = '');
+
+  @override
+  Widget build(BuildContext context) {
+    final bot = MediaQuery.of(context).viewPadding.bottom;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bot + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Poignée
+          Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFE0E0E0), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 16),
+          // Faux input
+          Container(
+            height: 46,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(children: [
+              const SizedBox(width: 14),
+              const Icon(Icons.search_rounded, size: 18, color: Color(0xFF8A9BB0)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(
+                _q.isEmpty ? 'Rechercher une carte...' : _q,
+                style: TextStyle(fontSize: 15, color: _q.isEmpty ? const Color(0xFF8A9BB0) : const Color(0xFF0D1B2A)),
+              )),
+              if (_q.isNotEmpty)
+                GestureDetector(
+                  onTap: _clear,
+                  child: const Padding(padding: EdgeInsets.only(right: 12), child: Icon(Icons.close_rounded, size: 18, color: Color(0xFF8A9BB0))),
+                )
+              else
+                const SizedBox(width: 14),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          // Clavier custom
+          for (final row in _rows) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final l in row) _Key(label: l, onTap: () => _tap(l)),
+                if (row == _rows.last) ...[
+                  const SizedBox(width: 6),
+                  _DelKey(onTap: _del),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+          // Espace + Valider
+          Row(children: [
+            Expanded(child: _Key(label: '␣', flex: true, onTap: () => _tap(' '))),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => Navigator.pop(context, _q),
+              child: Container(
+                height: 46,
+                width: 90,
+                decoration: BoxDecoration(color: const Color(0xFF0D1B2A), borderRadius: BorderRadius.circular(10)),
+                child: const Center(child: Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15))),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _Key extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool flex;
+  const _Key({required this.label, required this.onTap, this.flex = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final child = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        margin: const EdgeInsets.symmetric(horizontal: 1.5),
+        decoration: BoxDecoration(color: const Color(0xFFF0F0F0), borderRadius: BorderRadius.circular(8)),
+        child: Center(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0D1B2A)))),
+      ),
+    );
+    return flex ? Expanded(child: child) : SizedBox(width: 33, child: child);
+  }
+}
+
+class _DelKey extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DelKey({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        width: 46,
+        margin: const EdgeInsets.symmetric(horizontal: 1.5),
+        decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(8)),
+        child: const Center(child: Icon(Icons.backspace_outlined, size: 18, color: Color(0xFF0D1B2A))),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Nouveaux widgets glass — design modulaire
+// ════════════════════════════════════════════════════════════════════════════
+
+class _NightBg extends StatelessWidget {
+  const _NightBg();
+  @override
+  Widget build(BuildContext context) => Stack(children: [
+    Container(color: const Color(0xFF0D1B2A)),
+    Positioned(top: -60, left: -40,  child: _Orb(220, const Color(0xFF1A4A8A), 0.22)),
+    Positioned(bottom: 120, right: -60, child: _Orb(260, const Color(0xFF2D1B6B), 0.17)),
+    Positioned(top: 240, right: 30,  child: _Orb(130, const Color(0xFF0A6670), 0.15)),
+  ]);
+}
+
+class _Orb extends StatelessWidget {
+  final double size;
+  final Color color;
+  final double opacity;
+  const _Orb(this.size, this.color, this.opacity);
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size, height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      boxShadow: [BoxShadow(color: color.withValues(alpha: opacity), blurRadius: size, spreadRadius: size * 0.3)],
+    ),
+  );
+}
+
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  const _GlassCard({required this.child});
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(22),
+    child: BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: Colors.white.withValues(alpha: 0.07),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+class _GreetingModule extends StatelessWidget {
+  final String userName;
+  final int cardCount;
+  const _GreetingModule({required this.userName, required this.cardCount});
+  static const _jours = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+  static const _mois  = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  @override
+  Widget build(BuildContext context) {
+    final first = userName.split(' ').first;
+    final n     = DateTime.now();
+    final date  = '${_jours[n.weekday - 1]} ${n.day} ${_mois[n.month - 1]}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      child: Row(children: [
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Bonjour, $first 👋',
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+            const SizedBox(height: 4),
+            Text(date, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 14)),
+          ],
+        )),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('$cardCount',
+                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(cardCount == 1 ? 'carte' : 'cartes',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _CardsModule extends StatefulWidget {
+  final List<dynamic> cards;
+  final int activeIndex;
+  final ValueChanged<int> onActiveChanged;
+  final ValueChanged<String> onSearch;
+  final String search;
+  final ValueChanged<int> onOpen;
+  final Widget Function(int) cardBuilder;
+  final VoidCallback? scanTap;
+
+  const _CardsModule({
+    required this.cards, required this.activeIndex, required this.onActiveChanged,
+    required this.onSearch, required this.search, required this.onOpen,
+    required this.cardBuilder, this.scanTap,
+  });
+
+  @override
+  State<_CardsModule> createState() => _CardsModuleState();
+}
+
+class _CardsModuleState extends State<_CardsModule> {
+  static const double _cardH = 220.0;
+  static const double _peek  = 54.0;
+
+  Future<void> _openSearch() async {
+    final result = await showModalBottomSheet<String>(
+      context: context, isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SearchSheet(initial: widget.search),
+    );
+    if (result != null) widget.onSearch(result);
+  }
+
+  Widget _stackedCard(int i, bool isActive, bool isLast) {
+    const cardH = _cardH;
+    const peek  = _peek;
+    final framed = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => isActive ? widget.onOpen(i) : widget.onActiveChanged(i),
+      child: SizedBox(height: cardH, child: widget.cardBuilder(i)),
+    );
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: isActive ? 1.0 : peek / cardH),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      builder: (_, f, child) {
+        if (isLast && !isActive) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Align(alignment: Alignment.topCenter,
+                heightFactor: (peek + 14) / cardH, child: child),
+          );
+        }
+        if (!isActive && f < 0.99) {
+          const keep = peek + 18;
+          return Align(
+            alignment: Alignment.topCenter,
+            heightFactor: (f * cardH) / keep,
+            child: ClipRect(child: Align(
+                alignment: Alignment.topCenter,
+                heightFactor: keep / cardH, child: child)),
+          );
+        }
+        return Align(alignment: Alignment.topCenter, heightFactor: f, child: child);
+      },
+      child: framed,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cards  = widget.cards;
+    final active = widget.activeIndex;
+
+    if (cards.isEmpty) return _EmptyCardsModule(onScanTap: widget.scanTap);
+
+    final visible = cards.length.clamp(1, 5);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Barre de recherche
+        GestureDetector(
+          onTap: _openSearch,
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              const SizedBox(width: 12),
+              Icon(Icons.search_rounded, size: 18,
+                  color: Colors.white.withValues(alpha: 0.5)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                widget.search.isEmpty ? 'Rechercher...' : widget.search,
+                style: TextStyle(fontSize: 14,
+                    color: widget.search.isEmpty
+                        ? Colors.white.withValues(alpha: 0.4)
+                        : Colors.white),
+              )),
+              if (widget.search.isNotEmpty)
+                GestureDetector(
+                  onTap: () => widget.onSearch(''),
+                  child: Padding(padding: const EdgeInsets.only(right: 12),
+                      child: Icon(Icons.close_rounded, size: 16,
+                          color: Colors.white.withValues(alpha: 0.5))),
+                )
+              else
+                const SizedBox(width: 12),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Pile de cartes
+        for (var i = 0; i < visible; i++)
+          _stackedCard(i, i == active, i == visible - 1),
+        // Indicateur pagination
+        if (visible > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(visible, (i) => AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: i == active ? 20 : 6, height: 6,
+                decoration: BoxDecoration(
+                  color: i == active
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              )),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+class _EmptyCardsModule extends StatelessWidget {
+  final VoidCallback? onScanTap;
+  const _EmptyCardsModule({this.onScanTap});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.credit_card_rounded, size: 48,
+          color: Colors.white.withValues(alpha: 0.3)),
+      const SizedBox(height: 12),
+      Text('Aucune carte pour le moment',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 15, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Text('Scanne ton premier QR code pour commencer',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.4),
+              fontSize: 13),
+          textAlign: TextAlign.center),
+      const SizedBox(height: 16),
+      GestureDetector(
+        onTap: onScanTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2C7BE5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.qr_code_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('Scanner une carte',
+                style: TextStyle(color: Colors.white, fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      ),
+    ]),
+  );
+}
+
+class _ProgressModule extends StatelessWidget {
+  final List<dynamic> cards;
+  const _ProgressModule({required this.cards});
+  @override
+  Widget build(BuildContext context) {
+    Map? best;
+    int bCurr = 0, bTotal = 1;
+    double bRatio = 0;
+    for (final raw in cards) {
+      final c      = raw as Map;
+      final design = c['card_design'] as Map?;
+      if (design == null) continue;
+      final type    = design['rewardType'] as String? ?? 'stamps';
+      final total   = (design['stampsRequired'] as num?)?.toInt()
+          ?? (design['pointsRequired'] as num?)?.toInt() ?? 10;
+      final current = type == 'points'
+          ? (c['points_count'] as num?)?.toInt() ?? 0
+          : (c['stamps_count'] as num?)?.toInt() ?? 0;
+      if (total <= 0) continue;
+      final ratio = current / total;
+      if (ratio > bRatio && ratio < 1.0) {
+        bRatio = ratio; best = c; bCurr = current; bTotal = total;
+      }
+    }
+    if (best == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        child: Row(children: [
+          const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 20),
+          const SizedBox(width: 10),
+          Text('Aucune récompense en cours',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 14)),
+        ]),
+      );
+    }
+    final name    = (best['merchants']?['business_name'] as String?) ?? '';
+    final design  = best['card_design'] as Map?;
+    final type    = design?['rewardType'] as String? ?? 'stamps';
+    final label   = type == 'points' ? 'pts' : 'tampons';
+    final left    = bTotal - bCurr;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 18),
+          const SizedBox(width: 8),
+          Text('Prochaine récompense',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 13, fontWeight: FontWeight.w500)),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: Text(name,
+              style: const TextStyle(color: Colors.white, fontSize: 16,
+                  fontWeight: FontWeight.w700),
+              maxLines: 1, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 8),
+          Text('$bCurr / $bTotal $label',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13)),
+        ]),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: bRatio, minHeight: 8,
+            backgroundColor: Colors.white.withValues(alpha: 0.1),
+            valueColor: const AlwaysStoppedAnimation(Color(0xFF5BB8FF)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text('Plus que $left $label pour votre récompense !',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12)),
+      ]),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modules carrés (versions compactes)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _GreetingSquare extends StatelessWidget {
+  final String userName;
+  const _GreetingSquare({required this.userName});
+  static const _mois = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+  @override
+  Widget build(BuildContext context) {
+    final first = userName.split(' ').first;
+    final n = DateTime.now();
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('👋 $first',
+              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('${n.day} ${_mois[n.month - 1]} ${n.year}',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _greet(n.hour),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  static String _greet(int h) {
+    if (h < 12) return '☀️ Bonne matinée';
+    if (h < 18) return '🌤 Bon après-midi';
+    return '🌙 Bonne soirée';
+  }
+}
+
+class _ProgressSquare extends StatelessWidget {
+  final List<dynamic> cards;
+  const _ProgressSquare({required this.cards});
+  @override
+  Widget build(BuildContext context) {
+    Map? best;
+    int bCurr = 0, bTotal = 1;
+    double bRatio = 0;
+    for (final raw in cards) {
+      final c = raw as Map;
+      final design = c['card_design'] as Map?;
+      if (design == null) continue;
+      final type    = design['rewardType'] as String? ?? 'stamps';
+      final total   = (design['stampsRequired'] as num?)?.toInt()
+          ?? (design['pointsRequired'] as num?)?.toInt() ?? 10;
+      final current = type == 'points'
+          ? (c['points_count'] as num?)?.toInt() ?? 0
+          : (c['stamps_count'] as num?)?.toInt() ?? 0;
+      if (total <= 0) continue;
+      final ratio = current / total;
+      if (ratio > bRatio && ratio < 1.0) {
+        bRatio = ratio; best = c; bCurr = current; bTotal = total;
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 15),
+            const SizedBox(width: 5),
+            Text('Prochain', style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65), fontSize: 11, fontWeight: FontWeight.w500)),
+          ]),
+          const SizedBox(height: 10),
+          if (best != null) ...[
+            Text('$bCurr / $bTotal',
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                value: bRatio, minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.1),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFF5BB8FF)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text('encore ${bTotal - bCurr} pour ta récompense',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ] else
+            Text('Aucune\nrécompense',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// NavDock — module de navigation (rect et carré)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _NavDockRect extends StatelessWidget {
+  final int activeTab;
+  final ValueChanged<int> onTap;
+  const _NavDockRect({required this.activeTab, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+        _NavBtn(icon: Icons.credit_card_rounded,     label: 'Cartes',      active: activeTab == 0, onTap: () => onTap(0)),
+        _NavBtn(icon: Icons.qr_code_scanner_rounded, label: 'Scanner',     active: activeTab == 1, onTap: () => onTap(1), accent: true),
+        _NavBtn(icon: Icons.history_rounded,         label: 'Historique',  active: activeTab == 2, onTap: () => onTap(2)),
+        _NavBtn(icon: Icons.person_rounded,          label: 'Profil',      active: activeTab == 3, onTap: () => onTap(3)),
+      ]),
+    );
+  }
+}
+
+class _NavDockSquare extends StatelessWidget {
+  final int activeTab;
+  final ValueChanged<int> onTap;
+  const _NavDockSquare({required this.activeTab, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+          _NavBtnCompact(icon: Icons.credit_card_rounded,     active: activeTab == 0, onTap: () => onTap(0)),
+          _NavBtnCompact(icon: Icons.qr_code_scanner_rounded, active: activeTab == 1, onTap: () => onTap(1), accent: true),
+        ]),
+        const SizedBox(height: 10),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+          _NavBtnCompact(icon: Icons.history_rounded, active: activeTab == 2, onTap: () => onTap(2)),
+          _NavBtnCompact(icon: Icons.person_rounded,  active: activeTab == 3, onTap: () => onTap(3)),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _NavBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final bool accent;
+  final VoidCallback onTap;
+  const _NavBtn({required this.icon, required this.label, required this.active, required this.onTap, this.accent = false});
+  @override
+  Widget build(BuildContext context) {
+    final color = accent
+        ? const Color(0xFF5BB8FF)
+        : (active ? Colors.white : Colors.white.withValues(alpha: 0.4));
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (accent)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C7BE5).withValues(alpha: 0.25),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            )
+          else
+            Icon(icon, color: color, size: 22),
+          const SizedBox(height: 3),
+          Text(label, style: TextStyle(
+              color: color, fontSize: 10,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _NavBtnCompact extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final bool accent;
+  final VoidCallback onTap;
+  const _NavBtnCompact({required this.icon, required this.active, required this.onTap, this.accent = false});
+  @override
+  Widget build(BuildContext context) {
+    final color = accent
+        ? const Color(0xFF5BB8FF)
+        : (active ? Colors.white : Colors.white.withValues(alpha: 0.4));
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 54, height: 54,
+        decoration: BoxDecoration(
+          color: active
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Center(child: Icon(icon, color: color, size: 24)),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// _WalletCarousel — gardé pour compatibilité (non utilisé dans le nouveau design)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _WalletCarousel extends StatefulWidget {
+  final List<dynamic> cards;
+  final String userName;
+  const _WalletCarousel({required this.cards, required this.userName});
+
+  @override
+  State<_WalletCarousel> createState() => _WalletCarouselState();
+}
+
+class _WalletCarouselState extends State<_WalletCarousel> with SingleTickerProviderStateMixin {
+  static const List<Color> _fallbackColors = [
+    Color(0xFF2C7BE5), Color(0xFF10B981), Color(0xFFF59E0B),
+    Color(0xFFEF4444), Color(0xFF8B5CF6), Color(0xFFF97316),
+  ];
+
+  late final FixedExtentScrollController _scroll;
+  late final AnimationController _flyCtrl;
+  late final Animation<Offset> _flyAnim;
+  int _prevCount = 0;
+  bool _flying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prevCount = widget.cards.length;
+    _scroll = FixedExtentScrollController();
+    _flyCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 750));
+    _flyAnim = Tween<Offset>(begin: const Offset(0, -4), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _flyCtrl, curve: Curves.elasticOut));
+  }
+
+  @override
+  void didUpdateWidget(_WalletCarousel old) {
+    super.didUpdateWidget(old);
+    if (widget.cards.length > _prevCount) {
+      _prevCount = widget.cards.length;
+      setState(() => _flying = true);
+      _flyCtrl.reset();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) {
+          _scroll.animateToItem(0,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOut,
+          );
+        }
+        _flyCtrl.forward().whenComplete(() {
+          if (mounted) setState(() => _flying = false);
+        });
+      });
+    } else {
+      _prevCount = widget.cards.length;
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _flyCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _parsed {
+    return widget.cards.asMap().entries.map((e) {
+      final i    = e.key;
+      final card = e.value as Map;
+      final style = CardStyle.fromDesign(
+        card['card_design'],
+        merchantLogoUrl: card['merchants']?['logo_url'] as String?,
+        fallbackColor: _fallbackColors[i % _fallbackColors.length],
+      );
+      return <String, dynamic>{'card': card, 'style': style};
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _parsed;
+    if (data.isEmpty) return const SizedBox.shrink();
+
+    return ColoredBox(
+      color: Colors.white,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Carousel principal
+          Positioned.fill(
+            child: ListWheelScrollView.useDelegate(
+              controller: _scroll,
+              itemExtent: 248,
+              perspective: 0.002,
+              diameterRatio: 2.8,
+              squeeze: 1.0,
+              physics: const FixedExtentScrollPhysics(),
+              childDelegate: ListWheelChildBuilderDelegate(
+                childCount: data.length,
+                builder: (context, index) {
+                  // Masquer la première carte pendant l'animation (remplacée par la carte en vol)
+                  if (_flying && index == 0) {
+                    return const SizedBox(height: 220);
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    child: SizedBox(
+                      height: 220,
+                      child: LoyaltyCardFace(
+                        card:         data[index]['card']  as Map,
+                        style:        data[index]['style'] as CardStyle,
+                        userName:     widget.userName,
+                        decorPattern: index % 6,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          // Carte en vol — arrive par le haut et atterrit en position 0
+          if (_flying && data.isNotEmpty)
+            Positioned(
+              left: 20,
+              right: 20,
+              top: 24, // position centrale du premier item dans le carousel
+              child: SlideTransition(
+                position: _flyAnim,
+                child: SizedBox(
+                  height: 220,
+                  child: LoyaltyCardFace(
+                    card:         data[0]['card']  as Map,
+                    style:        data[0]['style'] as CardStyle,
+                    userName:     widget.userName,
+                    decorPattern: 0,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -446,7 +1578,8 @@ class _CardsTabState extends State<CardsTab> {
 class _WalletStack extends StatefulWidget {
   final List<dynamic> cards;
   final String userName;
-  const _WalletStack({required this.cards, required this.userName});
+  final void Function(Map, CardStyle)? onOpenCard;
+  const _WalletStack({required this.cards, required this.userName, this.onOpenCard});
   @override
   State<_WalletStack> createState() => _WalletStackState();
 }
@@ -455,10 +1588,9 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
   int _selectedIdx = 0;
   late final ScrollController _scrollCtrl;
 
-  // ── Dimensions ──────────────────────────────────────────────────────────────
-  static const double _slotH    = 210.0; // hauteur FIXE de chaque slot dans la liste
-  static const double _cardFull = 195.0; // carte expanded (centrée)
-  static const double _cardMin  = 72.0;  // carte collapsed (les autres)
+  // ── Dimensions portefeuille ──────────────────────────────────────────────────
+  static const double _cardFull = 220.0; // hauteur de chaque carte (toujours pleine)
+  static const double _peek     = 64.0;  // offset vertical entre chaque carte dans le Stack
   static const _dur   = Duration(milliseconds: 320);
   static const _curve = Curves.easeOutCubic;
 
@@ -475,35 +1607,26 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
   void initState() {
     super.initState();
     _scrollCtrl = ScrollController();
-    _scrollCtrl.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _scrollCtrl.removeListener(_onScroll);
     _scrollCtrl.dispose();
     _closeCard(animate: false);
     _overlayCtrl?.dispose();
     super.dispose();
   }
 
-  // ── Mise à jour de l'index centré pendant le scroll ──────────────────────
-  void _onScroll() {
-    if (!_scrollCtrl.hasClients) return;
-    final idx = (_scrollCtrl.offset / _slotH).round()
-        .clamp(0, (widget.cards.length - 1).clamp(0, 999));
-    if (idx != _selectedIdx) setState(() => _selectedIdx = idx);
-  }
+  // ── Sélectionne une carte (animation via AnimatedPositioned) ──────────────
+  void _selectCard(int i) => setState(() => _selectedIdx = i);
 
-  // ── Snap vers un index ────────────────────────────────────────────────────
-  Future<void> _snapTo(int idx) {
-    setState(() => _selectedIdx = idx);
-    if (!_scrollCtrl.hasClients) return Future.value();
-    return _scrollCtrl.animateTo(
-      (idx * _slotH).toDouble(),
-      duration: _dur,
-      curve: _curve,
-    );
+  // ── Hauteur totale du Stack portefeuille ──────────────────────────────────
+  double _stackH(int n) => n > 0 ? _peek * (n - 1) + _cardFull : _cardFull;
+
+  // ── Position top de la carte i quand sel est active ──────────────────────
+  double _topFor(int i, int sel) {
+    if (i <= sel) return i.toDouble() * _peek;
+    return sel.toDouble() * _peek + _cardFull + (i - sel - 1).toDouble() * _peek;
   }
 
   // ── Parsing des cartes depuis widget.cards ────────────────────────────────
@@ -534,6 +1657,7 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
 
   // ── Overlay animé (grand format + QR) ────────────────────────────────────
   void _openCard(Map card, CardStyle style, Rect fromRect) {
+    if (widget.onOpenCard != null) { widget.onOpenCard!(card, style); return; }
     if (_overlayEntry != null) return;
 
     final screen  = MediaQuery.of(context).size;
@@ -601,73 +1725,69 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
     final data = _parsed;
     if (data.isEmpty) return const SizedBox.shrink();
 
-    return LayoutBuilder(builder: (_, constraints) {
-      // Padding vertical pour que la première/dernière carte soient centrables
-      final vertPad = ((constraints.maxHeight / 2) - (_slotH / 2)).clamp(0.0, double.infinity);
+    final sel    = _selectedIdx.clamp(0, data.length - 1);
+    final stackH = _stackH(data.length);
 
-      return NotificationListener<ScrollEndNotification>(
-        onNotification: (_) {
-          // Snap après relâchement
-          if (_scrollCtrl.hasClients) {
-            final idx = (_scrollCtrl.offset / _slotH)
-                .round()
-                .clamp(0, data.length - 1);
-            _snapTo(idx);
-          }
-          return false;
-        },
-        child: ListView.builder(
-          controller: _scrollCtrl,
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.symmetric(vertical: vertPad, horizontal: 16),
-          itemCount: data.length,
-          itemBuilder: (cardCtx, i) {
-            final c         = data[i];
-            final isFocused = i == _selectedIdx;
+    Widget buildCard(int i) {
+      final c         = data[i];
+      final isFocused = i == sel;
 
-            return GestureDetector(
-              onTap: () {
-                if (isFocused) {
-                  // Carte déjà au centre → ouvre l'overlay grand format
-                  final box = cardCtx.findRenderObject() as RenderBox?;
-                  Rect fromRect = Rect.zero;
-                  if (box != null) {
-                    final origin = box.localToGlobal(Offset.zero);
-                    // La carte est centrée dans le slot → décaler vers le centre du slot
-                    fromRect = Rect.fromLTWH(
-                      origin.dx,
-                      origin.dy + (_slotH - _cardFull) / 2,
-                      box.size.width,
-                      _cardFull,
-                    );
-                  }
-                  _openCard(c['card'] as Map, c['style'] as CardStyle, fromRect);
-                } else {
-                  // Carte hors-centre → scroll vers elle
-                  _snapTo(i);
-                }
-              },
-              // Slot de hauteur FIXE — le ListView garde des offsets uniformes pour le snap
-              child: SizedBox(
-                height: _slotH,
-                child: Align(
-                  alignment: Alignment.center,
-                  child: AnimatedContainer(
-                    duration: _dur,
-                    curve: _curve,
-                    height: isFocused ? _cardFull : _cardMin,
-                    child: LoyaltyCardFace(
-                      card:         c['card']  as Map,
-                      style:        c['style'] as CardStyle,
-                      userName:     widget.userName,
-                      decorPattern: i % 6,
-                    ),
-                  ),
-                ),
-              ),
-            );
+      return AnimatedPositioned(
+        key: ValueKey(i),
+        duration: _dur,
+        curve: _curve,
+        top:    _topFor(i, sel),
+        left:   0,
+        right:  0,
+        height: _cardFull, // toujours pleine hauteur — le chevauchement fait l'effet portefeuille
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (isFocused) {
+              final box    = context.findRenderObject() as RenderBox?;
+              final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+              final w      = MediaQuery.of(context).size.width - 32;
+              _openCard(
+                c['card']  as Map,
+                c['style'] as CardStyle,
+                Rect.fromLTWH(16, _topFor(i, sel) + origin.dy, w, _cardFull),
+              );
+            } else {
+              _selectCard(i);
+            }
           },
+          child: LoyaltyCardFace(
+            card:         c['card']  as Map,
+            style:        c['style'] as CardStyle,
+            userName:     widget.userName,
+            decorPattern: i % 6,
+          ),
         ),
+      );
+    }
+
+    final stackWidget = SizedBox(
+      height: stackH,
+      child: Stack(
+        children: [
+          // Cartes non-actives en premier (dessous)
+          for (int i = 0; i < data.length; i++) if (i != sel) buildCard(i),
+          // Carte active en dernier (au-dessus de tout)
+          buildCard(sel),
+        ],
+      ),
+    );
+
+    return LayoutBuilder(builder: (_, constraints) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: stackH > constraints.maxHeight
+            ? SingleChildScrollView(
+                controller: _scrollCtrl,
+                physics: const BouncingScrollPhysics(),
+                child: stackWidget,
+              )
+            : stackWidget,
       );
     });
   }
@@ -721,12 +1841,14 @@ class LoyaltyCardFace extends StatelessWidget {
   final CardStyle style;
   final String userName;
   final int? decorPattern; // 0-5 : motif géométrique décoratif, null = aucun
+  final bool compact;      // true = affiche uniquement le header (mode peek portefeuille)
   const LoyaltyCardFace({
     super.key,
     required this.card,
     required this.style,
     required this.userName,
     this.decorPattern,
+    this.compact = false,
   });
 
   @override
@@ -743,6 +1865,51 @@ class LoyaltyCardFace extends StatelessWidget {
     final title = rawTitle.toUpperCase();
     final textColor = style.textColor;
     final accent = style.accentColor ?? const Color(0xFFFF2D78);
+
+    // Mode compact (peek portefeuille) : une seule ligne titre + prénom.
+    // Aucun Column multi-ligne → zéro risque d'overflow ou de NaN.
+    if (compact) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: style.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              style.buildBackground(),
+              if (decorPattern != null)
+                Positioned.fill(child: CustomPaint(painter: _CardPatternPainter(decorPattern!))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontFamily: style.fontFamily, fontSize: 16, fontWeight: FontWeight.w900, color: textColor),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        lcFirstName(userName),
+                        style: TextStyle(fontFamily: style.fontFamily, fontSize: 11, fontWeight: FontWeight.w700, color: textColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return LayoutBuilder(builder: (ctx, constraints) {
       final fill = constraints.hasBoundedHeight;
