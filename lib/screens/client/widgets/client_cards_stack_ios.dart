@@ -152,7 +152,17 @@ class _ClientCardsStackIosState extends State<ClientCardsStackIos> {
           padding: const EdgeInsets.only(top: 40),
           child: Center(child: Text('Aucune carte trouvée', style: QText.body.copyWith(color: context.cSub))),
         ),
-      for (var i = 0; i < cards.length; i++) _stacked(i, cards[i], last: i == cards.length - 1),
+      for (var i = 0; i < cards.length; i++) ...[
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => widget.onOpen(i),
+          child: SizedBox(
+            height: ClientCardsStackIos.cardHeight,
+            child: cards[i],
+          ),
+        ),
+        if (i < cards.length - 1) const SizedBox(height: 14),
+      ],
     ];
   }
 
