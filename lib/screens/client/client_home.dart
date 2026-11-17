@@ -80,6 +80,7 @@ class _ClientHomeState extends State<ClientHome>
   int _notifCount = 0;
   bool _rewardPillActive = false; // true pendant l'ouverture de la modal récompenses
   bool _searching = false;        // iOS : recherche active → titre et sélecteur cachés
+  bool _previewEmpty = false;     // true = cartes/récompenses vidées visuellement
   List<dynamic> _cards = [];
   List<dynamic> _history = [];
   bool _statsLoaded = false;
@@ -450,8 +451,6 @@ class _ClientHomeState extends State<ClientHome>
     _openingPersonalInfo = true;
     if (!mounted) { _openingPersonalInfo = false; return; }
 
-    const blue = Color(0xFF2C7BE5);
-
     // Champs éditables — utilise les données en cache (ouverture immédiate)
     final nameCtrl  = TextEditingController(text: _userName);
     final emailCtrl = TextEditingController(text: _userEmail);
@@ -528,9 +527,15 @@ class _ClientHomeState extends State<ClientHome>
             });
           }
 
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final bg  = isDark ? const Color(0xFF1E1D2A) : Colors.white;
-          final sub = isDark ? Colors.white54 : Colors.black45;
+          final isDark     = Theme.of(context).brightness == Brightness.dark;
+          final bg         = isDark ? const Color(0xFF0F1923) : const Color(0xFFF5F7FA);
+          final cardBg     = isDark ? const Color(0xFF1A2535) : Colors.white;
+          final sub        = isDark ? Colors.white.withValues(alpha: 0.55) : const Color(0xFF4A6080);
+          final textMain   = isDark ? Colors.white : const Color(0xFF0D1B2A);
+          final borderNorm = isDark ? kBlueLight.withValues(alpha: 0.14) : const Color(0xFFBDD3F8);
+          final borderFoc  = isDark ? kBlueLight.withValues(alpha: 0.50) : kPrimary.withValues(alpha: 0.45);
+          final iconBg     = isDark ? kBlueLight.withValues(alpha: 0.14) : kPrimary.withValues(alpha: 0.10);
+          final iconColor  = isDark ? kBlueLight : kPrimary;
 
           // ── champ éditable ─────────────────────────────────────────────
           Widget editableRow({
@@ -544,17 +549,18 @@ class _ClientHomeState extends State<ClientHome>
             final isEditing = editingField == fieldKey;
             return Container(
               decoration: BoxDecoration(
-                color: blue.withValues(alpha: 0.06),
+                color: cardBg,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: blue.withValues(alpha: isEditing ? 0.45 : 0.12)),
+                border: Border.all(color: isEditing ? borderFoc : borderNorm),
+                boxShadow: [BoxShadow(color: kBlueLight.withValues(alpha: isDark ? 0.04 : 0.06), blurRadius: 8)],
               ),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
                   Container(
                     width: 36, height: 36,
-                    decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                    child: Icon(icon, color: blue, size: 18),
+                    decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+                    child: Icon(icon, color: iconColor, size: 18),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -563,7 +569,8 @@ class _ClientHomeState extends State<ClientHome>
                             controller: ctrl,
                             autofocus: true,
                             keyboardType: keyboard,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                            cursorColor: iconColor,
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: textMain),
                             decoration: InputDecoration(
                               isDense: true,
                               border: InputBorder.none,
@@ -579,7 +586,7 @@ class _ClientHomeState extends State<ClientHome>
                                 ctrl.text.isEmpty ? 'Non renseigné' : ctrl.text,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600, fontSize: 15,
-                                  color: ctrl.text.isEmpty ? sub : null,
+                                  color: ctrl.text.isEmpty ? sub : textMain,
                                 ),
                               ),
                             ],
@@ -589,11 +596,11 @@ class _ClientHomeState extends State<ClientHome>
                   if (!readOnly)
                     isEditing
                         ? IconButton(
-                            icon: const Icon(Icons.check_rounded, color: blue, size: 20),
+                            icon: Icon(Icons.check_rounded, color: iconColor, size: 20),
                             onPressed: () => setS(() => editingField = null),
                           )
                         : IconButton(
-                            icon: const Icon(Icons.edit_rounded, color: blue, size: 18),
+                            icon: Icon(Icons.edit_rounded, color: iconColor, size: 18),
                             onPressed: () => setS(() => editingField = fieldKey),
                           )
                   else
@@ -621,14 +628,14 @@ class _ClientHomeState extends State<ClientHome>
                   Center(
                     child: Container(
                       width: 40, height: 4,
-                      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(color: borderNorm, borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      const Flexible(
-                        child: Text('Informations personnelles', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
+                      Flexible(
+                        child: Text('Informations personnelles', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textMain), overflow: TextOverflow.ellipsis),
                       ),
                       if (_isGoogle) ...[
                         const SizedBox(width: 8),
@@ -724,11 +731,12 @@ class _ClientHomeState extends State<ClientHome>
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: blue,
+                        backgroundColor: kPrimary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 0,
+                        elevation: isDark ? 0 : 2,
+                        shadowColor: kPrimary.withValues(alpha: 0.3),
                       ),
                       child: saving
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive())
@@ -1622,8 +1630,7 @@ class _ClientHomeState extends State<ClientHome>
                 Column(children: [
                   Expanded(child: _buildTabContent()),
                 ]),
-              // Sur l'onglet Cartes (0), le NavDock dans les modules remplace la bottom nav
-              if (_tab != 1 && _tab != 0) ...[
+              if (_tab != 1) ...[
                 ClientBottomNav(
                   currentTab: _tab,
                   onTabChanged: _setTab,
@@ -1665,12 +1672,40 @@ class _ClientHomeState extends State<ClientHome>
                   : Column(mainAxisSize: MainAxisSize.min, children: [
             SafeArea(
                   bottom: false,
-                  child: ClientHeaderIos(
-                    caption: ClientHeaderIos.today(),
+                  child: ClientHeader(
+                    caption: ClientHeader.today(),
                     title: _tab == 0 ? 'Bonjour $_firstName' : 'Historique',
+                    firstName: _firstName,
                     notifCount: _notifCount,
+                    cardCount: _cardCount,
+                    rewardCount: _rewardCount,
+                    recentNotifs: _notifs.take(10).toList(),
                     onNotifTap: _openNotifs,
-                    onProfileTap: _openProfil,
+                    profileActions: ProfileActions(
+                      onPersonalInfo: _showPersonalInfo,
+                      onPassword: _showChangePassword,
+                      onCards: () => Navigator.push(
+                        context,
+                        platformRoute(
+                          builder: (_) => ManageCardsScreen(
+                            token: widget.token,
+                            userName: _userName,
+                            cards: _cards,
+                            rewards: _rewards,
+                            onRefresh: _refreshManual,
+                          ),
+                        ),
+                      ),
+                      onNotifSettings: _openNotifSettingsIos,
+                      onHelp: () => Navigator.push(context, CupertinoPageRoute(
+                        builder: (_) => const HelpPageIos(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'),
+                      )),
+                      onLogout: _logout,
+                      onDelete: _showDeleteAccount,
+                      onClearData: () => setState(() => _previewEmpty = !_previewEmpty),
+                      previewEmpty: _previewEmpty,
+                      showPassword: !_isOAuth,
+                    ),
                     avatarImage: avatar,
                     initials: _initials,
                   ),
@@ -1697,7 +1732,7 @@ class _ClientHomeState extends State<ClientHome>
           ]),
           // Comme sur iPhone : la barre se cache pendant qu'on tape (clavier ouvert).
           if (MediaQuery.viewInsetsOf(context).bottom == 0)
-            ClientBottomNavIos(
+            ClientBottomNav(
               currentTab: _tab,
               onTabChanged: _setTab,
               onScanTap: () => _setTab(1),
@@ -1774,6 +1809,8 @@ class _ClientHomeState extends State<ClientHome>
             )),
             onLogout: _logout,
             onDelete: _showDeleteAccount,
+            onClearData: () => setState(() => _previewEmpty = !_previewEmpty),
+            previewEmpty: _previewEmpty,
           );
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: context.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -2230,11 +2267,8 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            if (kIsIOS)
-              CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v))
-            else
-              CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v), activeTab: _tab, onNavTap: _setTab),
-            ClientRewardsIos(rewards: _rewards, cards: _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual),
+            CardsTab(token: widget.token, userName: _userName, cards: _previewEmpty ? [] : _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v), activeTab: _tab, onNavTap: _setTab),
+            ClientRewardsIos(rewards: _previewEmpty ? [] : _rewards, cards: _previewEmpty ? [] : _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual),
           ],
         );
       case 1:
@@ -2326,9 +2360,7 @@ class _ClientHomeState extends State<ClientHome>
           }),
         );
       default:
-        return kIsIOS
-            ? CardsTabIos(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent)
-            : CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
+        return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
     }
   }
 

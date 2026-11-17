@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -173,23 +174,34 @@ class ClientWelcomeCard extends StatelessWidget {
       Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kNavyCard, kNavy]),
-          boxShadow: [BoxShadow(color: kNavy.withValues(alpha: 0.25), blurRadius: 30, offset: const Offset(0, 14))],
+          boxShadow: [BoxShadow(color: kNavy.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 10))],
         ),
-        child: CustomPaint(
-          painter: _DashedRRect(kBlueLight.withValues(alpha: 0.45)),
-          child: Padding(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  colors: [kNavyCard.withValues(alpha: 0.55), kNavy.withValues(alpha: 0.62)],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+              ),
+              child: CustomPaint(
+                painter: _DashedRRect(kBlueLight.withValues(alpha: 0.45)),
+                child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
         child: Column(children: [
           Container(
             width: 64, height: 64,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              color: kBlueLight.withValues(alpha: 0.16),
-              border: Border.all(color: kBlueLight.withValues(alpha: 0.4)),
-              boxShadow: [BoxShadow(color: kBlueLight.withValues(alpha: 0.45), blurRadius: 24)],
+              color: kPrimary,
+              boxShadow: [BoxShadow(color: kPrimary.withValues(alpha: 0.45), blurRadius: 24)],
             ),
-            child: const Icon(CupertinoIcons.qrcode_viewfinder, color: kBlueLight, size: 32),
+            child: const Icon(Icons.qr_code, color: Colors.white, size: 32),
           ),
           const SizedBox(height: 14),
           const Text('Ajoute ta première carte', textAlign: TextAlign.center,
@@ -210,13 +222,16 @@ class ClientWelcomeCard extends StatelessWidget {
                 elevation: 0,
               ),
               child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(CupertinoIcons.qrcode_viewfinder, color: Colors.white, size: 22),
+                Icon(Icons.qr_code, color: Colors.white, size: 22),
                 SizedBox(width: 8),
                 Text('Scanner un QR code', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
               ]),
             ),
           ),
         ]),
+          ),
+        ),
+      ),
           ),
         ),
       ),

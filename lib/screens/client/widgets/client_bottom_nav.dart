@@ -1,19 +1,17 @@
 import 'dart:ui' show ImageFilter;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../../../utils/logger.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import '../../../config/app_colors.dart';
 
-// ── Couleurs ──────────────────────────────────────────────────────────────────
-const _kNight      = Color(0xFF0D1B2A); // bleu nuit
-const _kBeige      = Color(0xFFE8D5B7); // beige/crème pill active
-const _kLightBlue  = Color(0xFF5BB8FF); // bleu clair — icône scan dans la bulle
-
-// ── Widget principal ──────────────────────────────────────────────────────────
-
+/// Barre du bas Android de l'espace client : pilule « Liquid Glass » bleu nuit
+/// (signature Qarta), Cartes · Scanner (au milieu, bleu ciel) · Historique.
+/// La bulle sous l'onglet actif glisse d'un onglet à l'autre.
 class ClientBottomNav extends StatelessWidget {
-  final int currentTab;
+  final int currentTab; // 0 = Cartes, 2 = Historique
   final void Function(int) onTabChanged;
   final VoidCallback onScanTap;
-  final String? profileImageUrl; // URL de la photo de profil
+  final String? profileImageUrl; // non utilisé, gardé pour compat
 
   const ClientBottomNav({
     super.key,
@@ -23,131 +21,59 @@ class ClientBottomNav extends StatelessWidget {
     this.profileImageUrl,
   });
 
+  static const double barHeight = 66;
+
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
-
+    final bottom = MediaQuery.of(context).padding.bottom;
     return Positioned(
-      bottom: bottomPad + 14,
-      left: 16,
-      right: 16,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // ── Barre principale (3/4) ───────────────────────────────────────
-          Expanded(
-            flex: 3,
-            child: _FloatingBar(
-              currentTab: currentTab,
-              onTabChanged: onTabChanged,
-              profileImageUrl: profileImageUrl,
-            ),
-          ),
-          const SizedBox(width: 10),
-          // ── Bulle scanner ronde (1/4) ────────────────────────────────────
-          _ScanBubble(onTap: onScanTap),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Barre principale : Cartes · Historique · Profil ───────────────────────────
-
-class _FloatingBar extends StatelessWidget {
-  final int currentTab;
-  final void Function(int) onTabChanged;
-  final String? profileImageUrl;
-
-  const _FloatingBar({
-    required this.currentTab,
-    required this.onTabChanged,
-    this.profileImageUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _PillItem(
-                icon: Icons.credit_card_outlined,
-                label: 'Cartes',
-                index: 0,
-                currentTab: currentTab,
-                onTap: onTabChanged,
-              ),
-              _PillItem(
-                icon: Icons.history_rounded,
-                label: 'Historique',
-                index: 2,
-                currentTab: currentTab,
-                onTap: onTabChanged,
-              ),
-              // Profil : photo ronde si disponible, sinon icône
-              _PillItem(
-                icon: Icons.person_outline_rounded,
-                label: 'Profil',
-                index: 3,
-                currentTab: currentTab,
-                onTap: onTabChanged,
-                profileImageUrl: profileImageUrl,
-                iconScale: 1.5,
-              ),
-            ],
-          ),
+      left: 20, right: 20,
+      bottom: bottom - 14 < 8 ? 8 : bottom - 14,
+      child: Container(
+        height: barHeight,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(barHeight / 2),
+          boxShadow: [
+            BoxShadow(color: kNavy.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 10)),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-// ── Bulle scanner ronde ───────────────────────────────────────────────────────
-
-class _ScanBubble extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ScanBubble({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        AppLogger.client('Dock → Scanner');
-        onTap();
-      },
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            width: 62,
-            height: 62,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.qr_code_scanner_rounded,
-                color: _kNight,
-                size: 26,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(barHeight / 2),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(barHeight / 2),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  colors: [kBlueLight.withValues(alpha: 0.28), kNavy.withValues(alpha: 0.55)],
+                ),
+                border: Border.all(color: kBlueLight.withValues(alpha: 0.22)),
               ),
+              padding: const EdgeInsets.all(5),
+              child: LayoutBuilder(builder: (context, c) {
+                final slot = c.maxWidth / 3;
+                final bubbleIndex = currentTab == 2 ? 2 : 0;
+                return Stack(children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 380),
+                    curve: Curves.easeOutBack,
+                    left: slot * bubbleIndex, top: 0, bottom: 0, width: slot,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(barHeight / 2),
+                        color: kBlueLight.withValues(alpha: 0.14),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                      ),
+                    ),
+                  ),
+                  Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    _Item(icon: Symbols.dynamic_feed, label: 'Cartes', active: currentTab == 0, onTap: () => onTabChanged(0)),
+                    _ScanBtn(onTap: onScanTap),
+                    _Item(icon: Symbols.search_activity, label: 'Historique', active: currentTab == 2, onTap: () => onTabChanged(2)),
+                  ]),
+                ]);
+              }),
             ),
           ),
         ),
@@ -156,89 +82,53 @@ class _ScanBubble extends StatelessWidget {
   }
 }
 
-// ── Item avec pill animée ─────────────────────────────────────────────────────
-
-class _PillItem extends StatelessWidget {
+class _Item extends StatelessWidget {
   final IconData icon;
   final String label;
-  final int index;
-  final int currentTab;
-  final void Function(int) onTap;
-  final String? profileImageUrl; // uniquement pour l'item Profil
-  final double iconScale;
-
-  const _PillItem({
-    required this.icon,
-    required this.label,
-    required this.index,
-    required this.currentTab,
-    required this.onTap,
-    this.profileImageUrl,
-    this.iconScale = 1.0,
-  });
+  final bool active;
+  final VoidCallback onTap;
+  const _Item({required this.icon, required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final active = currentTab == index;
+    final color = active ? kBlueLight : Colors.white.withValues(alpha: 0.55);
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          SizedBox(height: 30, child: Center(child: Icon(icon, color: color, size: 24))),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+        ]),
+      ),
+    );
+  }
+}
 
-    // Icône ou photo de profil
-    Widget iconWidget;
-    Widget rawIcon;
-    if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
-      rawIcon = CircleAvatar(
-        radius: 11,
-        backgroundImage: NetworkImage(profileImageUrl!),
-        backgroundColor: active ? _kNight.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.1),
-      );
-    } else {
-      rawIcon = Icon(
-        icon,
-        size: 22,
-        color: active ? _kLightBlue : _kNight,
-      );
-    }
-    iconWidget = Transform.scale(scale: iconScale, child: rawIcon);
+class _ScanBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ScanBtn({required this.onTap});
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        AppLogger.client('Dock → $label');
-        onTap(index);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(
-          horizontal: active ? 14 : 10,
-          vertical: 9,
-        ),
-        decoration: BoxDecoration(
-          color: active ? _kNight : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            iconWidget,
-            AnimatedSize(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              child: active
-                  ? Row(mainAxisSize: MainAxisSize.min, children: [
-                      const SizedBox(width: 6),
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _kLightBlue,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ])
-                  : const SizedBox.shrink(),
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Center(
+          child: Container(
+            width: 72, height: 46,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(23),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [kBlueLight, kPrimary],
+              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+              boxShadow: [BoxShadow(color: kBlueLight.withValues(alpha: 0.65), blurRadius: 18)],
             ),
-          ],
+            child: const Icon(Icons.qr_code, color: Colors.white, size: 24),
+          ),
         ),
       ),
     );

@@ -155,7 +155,7 @@ class _CardsTabState extends State<CardsTab> {
         return Hero(
           tag: 'card-${card['id']}',
           createRectTween: _straightRect,
-          child: LoyaltyCardFace(card: card, style: style, userName: widget.userName, decorPattern: i % 6),
+          child: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
         );
       }),
       onOpen: (i) {
@@ -388,7 +388,6 @@ class _WalletStackState extends State<_WalletStack> with TickerProviderStateMixi
                       card:         c['card']  as Map,
                       style:        c['style'] as CardStyle,
                       userName:     widget.userName,
-                      decorPattern: i % 6,
                     ),
                   ),
                 ),
