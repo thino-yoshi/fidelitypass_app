@@ -117,6 +117,12 @@ class ClientNotificationsIos extends StatelessWidget {
   }
 
 
+  static Widget _seg(String label, BuildContext context) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(label, style: TextStyle(fontSize: 13, color: context.cText)),
+      );
+
   Widget _row(BuildContext context, Map n, {required bool divider}) {
     final type = n['type'] as String? ?? 'promo';
     final unread = !(n['read'] as bool? ?? true);
