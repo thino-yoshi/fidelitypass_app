@@ -3,32 +3,20 @@ import '../merchant/merchant_tokens.dart' show kIsIOS;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
-import 'dart:ui';
-import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:app_links/app_links.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../services/auth_service.dart';
-import '../../services/api_service.dart';
-import '../../services/widget_service.dart';
-import '../../config/api.dart';
-import '../../main.dart';
+import '../../config/api.dart'; // utilisé dans client_home_ios.dart (part of)
+import '../../main.dart'; // themeNotifier utilisé dans client_home_ios.dart
 import '../auth_screen.dart';
 import 'cards_tab.dart';
-import 'cards_tab_ios.dart';
 import 'history_tab.dart';
 import 'history_tab_ios.dart';
-import 'rewards_wallet_screen.dart';
 import 'manage_cards_screen.dart';
 import 'manage_cards_screen_ios.dart';
 import 'notifications_sheet.dart';
 import 'help_sheet.dart';
-import 'widgets/client_bottom_nav_ios.dart';
+import 'widgets/client_bottom_nav_ios.dart'; // utilisé dans client_home_ios.dart (part of)
 import 'widgets/client_bottom_nav.dart';
 import 'widgets/client_header_ios.dart';
 import 'widgets/client_header.dart';
@@ -49,6 +37,7 @@ import 'scan_tab_ios.dart';
 import '../../config/app_colors.dart';
 import '../../utils/logger.dart';
 import '../../utils/platform_route.dart';
+import 'client_home_controller.dart';
 
 part 'client_home_ios.dart';
 
@@ -77,410 +66,190 @@ class ClientHome extends StatefulWidget {
 
 class _ClientHomeState extends State<ClientHome>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  int _tab = 0; // 0=cartes, 1=scan, 2=historique, 3=profil
-  int _cardCount = 0;
-  int _totalStamps = 0;
-  int _rewardCount = 0;
-  List<dynamic> _rewards = [];
-  int _notifCount = 0;
-  bool _rewardPillActive = false; // true pendant l'ouverture de la modal récompenses
-  bool _searching = false;        // iOS : recherche active → titre et sélecteur cachés
-  bool _previewEmpty = false;     // true = cartes/récompenses vidées visuellement
-  List<dynamic> _cards = [];
-  List<dynamic> _history = [];
-  bool _statsLoaded = false;
-  String? _animatingCardId;  // carte en cours d'animation "s'envole vers récompenses"
-  String? _slidingInCardId;  // carte qui entre depuis la gauche (juste après l'envol)
-  StampEvent? _lastStampEvent; // dernier événement récompense (pour maj en mémoire)
-  StampEvent? _stampBadge;   // badge toast affiché brièvement après un tampon/point
-  Timer?     _stampBadgeTimer;
-  Timer?     _slideInTimer;
-  String?    _cardToastText;
-  Timer?     _cardToastTimer;
-  Timer?     _keepAliveTimer;
-  StreamSubscription<Uri>? _deepLinkSub;
-  StreamSubscription<dynamic>? _fcmForegroundSub;
-  Uri? _lastHandledDeepLink;
-  int _prevTab = 0;
-  DateTime? _lastCardsRefresh;
+
+  late ClientHomeController _ctrl;
+
+  // ── Variables UI Android uniquement ────────────────────────────────────────
+  bool _searching = false;
+  bool _previewEmpty = false;
+  bool _rewardPillActive = false;
+  String? _animatingCardId;
+  String? _slidingInCardId;
+  StampEvent? _lastStampEvent;
+  StampEvent? _stampBadge;
+  Timer? _stampBadgeTimer;
+  Timer? _slideInTimer;
+  String? _cardToastText;
+  Timer? _cardToastTimer;
   late PageController _pillPageCtrl;
 
-  List<Map> _notifs = [];
-  bool _notifsLoaded = false;
-  String _notifFilter = 'tout';
-
-  String? _profileImagePath;  // fichier local (avant upload / fallback)
-  String? _profileImageUrl;   // URL serveur (Supabase Storage)
-  String  _userEmail = '';
-  String  _userName  = '';
-  String  _phone = '';
-  bool    _isGoogle = false;
-  bool    _isOAuth  = false; // true pour Google ET Apple (email non modifiable)
-
-
-  static const Map<String, Map<String, dynamic>> _notifStyle = {
-    'recompense': {'icon': '⭐', 'color': 0xFFFBBF24},
-    'tampon':     {'icon': '✓',  'color': 0xFF2C7BE5},
-    'promo':      {'icon': '→',  'color': 0xFF27AE60},
-    'targeted':   {'icon': '→',  'color': 0xFF27AE60},
-    'scheduled':  {'icon': '→',  'color': 0xFF27AE60},
-  };
+  // ── Getters de délégation (compatibilité client_home_ios.dart via part of) ─
+  List<dynamic> get _cards    => _ctrl.cards;
+  List<dynamic> get _rewards  => _ctrl.rewards;
+  set _rewards(List<dynamic> v) { _ctrl.rewards = v; _ctrl.rewardCount = v.length; }
+  List<dynamic> get _history  => _ctrl.history;
+  List<Map>     get _notifs   => _ctrl.notifs;
+  int    get _notifCount  => _ctrl.notifCount;
+  set _notifCount(int v)  => _ctrl.notifCount = v;
+  int    get _cardCount   => _ctrl.cardCount;
+  int    get _rewardCount => _ctrl.rewardCount;
+  set _rewardCount(int v) => _ctrl.rewardCount = v;
+  String get _notifFilter => _ctrl.notifFilter;
+  set _notifFilter(String v) => _ctrl.notifFilter = v;
+  bool   get _notifsLoaded => _ctrl.notifsLoaded;
+  bool   get _statsLoaded  => _ctrl.statsLoaded;
+  String get _userName     => _ctrl.userName;
+  String get _userEmail    => _ctrl.userEmail;
+  String get _phone        => _ctrl.phone;
+  bool   get _isGoogle     => _ctrl.isGoogle;
+  bool   get _isOAuth      => _ctrl.isOAuth;
+  String? get _profileImageUrl  => _ctrl.profileImageUrl;
+  String? get _profileImagePath => _ctrl.profileImagePath;
+  int    get _tab     => _ctrl.tab;
+  int    get _prevTab => _ctrl.prevTab;
+  String get _firstName => _ctrl.firstName;
+  String get _initials  => _ctrl.initials;
 
   @override
   void initState() {
     super.initState();
     AppLogger.client('ClientHome chargé → userName: ${widget.userName}');
-    _userName = widget.userName;
     WidgetsBinding.instance.addObserver(this);
     _pillPageCtrl = PageController();
-    if (widget.initialCards.isNotEmpty) {
-      _applyCards(widget.initialCards);
-    } else {
-      _loadStats();
-    }
-    if (widget.fromCache) {
-      // Données du cache : cartes + récompenses + historique visibles immédiatement
-      if (widget.initialRewards.isNotEmpty) {
-        _rewards = List<dynamic>.from(widget.initialRewards);
-        _rewardCount = _rewards.length;
-      }
-      if (widget.initialHistory.isNotEmpty) {
-        _history = List<dynamic>.from(widget.initialHistory);
-      }
-      _loadNotifs(); // Notifs toujours fraîches (trop dynamiques pour le cache)
-      Future.delayed(const Duration(milliseconds: 400), _silentRefreshAll);
-    } else {
-      if (widget.initialRewards.isNotEmpty) {
-        _rewards = List<dynamic>.from(widget.initialRewards);
-        _rewardCount = _rewards.length;
-      } else {
-        _loadRewardsCount();
-      }
-      if (widget.initialHistory.isNotEmpty) {
-        _history = List<dynamic>.from(widget.initialHistory);
-      } else {
-        _loadHistory();
-      }
-      if (widget.initialRawNotifs.isNotEmpty) {
-        _applyRawNotifs(widget.initialRawNotifs);
-      } else {
-        _loadNotifs();
-      }
-    }
-    _loadProfileImage();
-    _loadPhone();
-    _loadSessionInfo();
-    _checkPendingJoin();
-    _initDeepLinks();
-    _initNotifTapHandlers();
-    // Keep-alive Railway : ping toutes les 8 min pour éviter le cold start
-    _keepAliveTimer = Timer.periodic(const Duration(minutes: 8), (_) {
-      http.get(Uri.parse(apiUrl)).catchError((_) => http.Response('', 0));
-    });
-  }
-
-  void _initNotifTapHandlers() {
-    notifOpenNotifier.addListener(_onNotifOpen);
-    try {
-      FirebaseMessaging.instance.getInitialMessage().then((msg) async {
-        if (msg != null && mounted) {
-          await _loadNotifs();
-          if (!mounted) return;
-          if (msg.data['type'] == 'recompense') {
-            _goToRewards();
-          } else {
-            _openNotifs();
-          }
-        }
-      });
-      // Notif reçue pendant que l'app est ouverte → refresh instantané
-      _fcmForegroundSub = FirebaseMessaging.onMessage.listen((msg) {
-        if (mounted) _loadNotifs();
-      });
-      // Tap sur notif depuis background → refresh PUIS route selon le type
-      FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
-        if (!mounted) return;
-        // T2 : tracker l'ouverture si l'ID est disponible
-        final notifId = msg.data['notification_id'] as String?;
-        if (notifId != null) {
-          try {
-            await http.post(Uri.parse('$apiUrl/notifications/$notifId/opened'),
-                headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'});
-          } catch (_) {}
-        }
-        await _loadNotifs();
-        if (!mounted) return;
-        if (msg.data['type'] == 'recompense') {
-          _goToRewards();
-        } else {
-          _openNotifs();
-        }
-      });
-    } catch (e) {
-      debugPrint('[CLIENT] Firebase non dispo pour notif handlers : $e');
-    }
-  }
-
-  void _onNotifOpen() {
-    if (mounted) _openNotifs();
-  }
-
-  String? _merchantIdFromUri(Uri uri) {
-    // qarta://join/{id}  → host='join', pathSegments=['id']
-    if (uri.scheme == 'qarta' && uri.host == 'join' && uri.pathSegments.isNotEmpty) {
-      return uri.pathSegments.first;
-    }
-    // https://qarta.be/join/{id}  → pathSegments=['join','id']
-    final s = uri.pathSegments;
-    if (s.length >= 2 && s[0] == 'join') return s[1];
-    return null;
-  }
-
-  void _initDeepLinks() {
-    _deepLinkSub = AppLinks().uriLinkStream.listen((uri) {
-      final id = _merchantIdFromUri(uri);
-      if (id != null) _joinFromDeepLink(id);
-    });
-  }
-
-  Future<void> _joinFromDeepLink(String merchantId) async {
-    AppLogger.client('Deep link reçu → join merchant: $merchantId');
-    final res = await http.post(
-      Uri.parse('$apiUrl/cards/'),
-      headers: {
-        'Authorization': 'Bearer ${widget.token}',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'merchant_id': merchantId}),
+    _ctrl = ClientHomeController(
+      token: widget.token,
+      initialUserName: widget.userName,
+      initialCards:     widget.initialCards,
+      initialHistory:   widget.initialHistory,
+      initialRewards:   widget.initialRewards,
+      initialRawNotifs: widget.initialRawNotifs,
+      fromCache:        widget.fromCache,
     );
-    if (!mounted) return;
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
-      if (cardId != null) await _refreshCard(cardId); else _loadStats();
-      if (!mounted) return;
-      if (kIsIOS) { _showJoinedIos(cardId); return; }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Carte ajoutée !'),
-          backgroundColor: Color(0xFF2C7BE5),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else if (res.statusCode == 409) {
-      if (kIsIOS) { showIosAlert(context, 'Déjà dans tes cartes', 'Tu as déjà la carte de ce commerce.'); return; }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tu as déjà cette carte !'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  Future<void> _checkPendingJoin() async {
-    final merchantId = pendingJoinMerchantId;
-    if (merchantId == null) return;
-    pendingJoinMerchantId = null;
-    final res = await http.post(
-      Uri.parse('$apiUrl/cards/'),
-      headers: {
-        'Authorization': 'Bearer ${widget.token}',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'merchant_id': merchantId}),
-    );
-    if ((res.statusCode == 200 || res.statusCode == 201) && mounted) {
-      final cardId = (jsonDecode(res.body) as Map<String, dynamic>?)?['id'] as String?;
-      if (cardId != null) await _refreshCard(cardId); else _loadStats();
-      if (!mounted) return;
-      if (kIsIOS) { _showJoinedIos(cardId); return; }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Carte ajoutée !'),
-          backgroundColor: Color(0xFF2C7BE5),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    _ctrl.addListener(() { if (mounted) setState(() {}); });
+    _ctrl.onStampEvent = _handleStampEvent;
+    _ctrl.onLogout = () {
+      if (mounted) Navigator.pushReplacement(context, platformRoute(builder: (_) => const AuthScreen()));
+    };
+    _ctrl.onNotifOpen = () {
+      if (mounted) _openNotifs();
+    };
+    _ctrl.onMerchantJoined = _onMerchantJoined;
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      _checkLatestDeepLink();
-      final now = DateTime.now();
-      final stale = _lastCardsRefresh == null ||
-          now.difference(_lastCardsRefresh!).inSeconds >= 30;
-      if (stale) {
-        // Délai pour laisser l'animation de retour iOS/Android se terminer avant de charger
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (!mounted) return;
-          AppLogger.client('App revenue au premier plan → refresh cartes + récompenses');
-          Future.wait([_loadStats(), _loadRewardsCount(), _loadNotifs()]);
-        });
-      } else {
-        _loadNotifs();
-      }
+    if (state == AppLifecycleState.resumed) _ctrl.onAppResumed();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pillPageCtrl.dispose();
+    _stampBadgeTimer?.cancel();
+    _slideInTimer?.cancel();
+    _cardToastTimer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // ── Callbacks controller → UI ───────────────────────────────────────────────
+
+  void _onMerchantJoined(JoinMerchantResult result) {
+    if (!mounted) return;
+    if (result.status == JoinResult.added) {
+      if (kIsIOS) { _showJoinedIos(result.cardId); return; }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Carte ajoutée !'),
+        backgroundColor: Color(0xFF2C7BE5),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } else if (result.status == JoinResult.alreadyMember) {
+      if (kIsIOS) { showIosAlert(context, 'Déjà dans tes cartes', 'Tu as déjà la carte de ce commerce.'); return; }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Tu as déjà cette carte !'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
-  Future<void> _checkLatestDeepLink() async {
-    final uri = await AppLinks().getLatestLink();
-    if (uri == null || uri == _lastHandledDeepLink) return;
-    _lastHandledDeepLink = uri;
-    final id = _merchantIdFromUri(uri);
-    if (id != null) _joinFromDeepLink(id);
-  }
-
-  Future<void> _loadProfileImage() async {
-    // 1. Charger depuis SharedPreferences (affichage immédiat même sans réseau)
-    final prefs = await SharedPreferences.getInstance();
-    final cachedUrl  = prefs.getString('profile_image_url');
-    final cachedPath = prefs.getString('profile_image_path');
-    if (mounted) {
-      setState(() {
-        if (cachedUrl != null && cachedUrl.isNotEmpty) _profileImageUrl = cachedUrl;
-        if (cachedPath != null && File(cachedPath).existsSync()) _profileImagePath = cachedPath;
-      });
-    }
-    // 2. Charger l'URL distante + email depuis /users/me (mise à jour réseau)
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/users/me'),
-        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-      );
-      if (res.statusCode == 200 && mounted) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final url        = body['profile_picture_url'] as String?;
-        final email      = body['email'] as String? ?? '';
-        final serverName = body['name']  as String? ?? '';
-        // is_google : on garde true si déjà true en local (le serveur peut se tromper)
-        final serverIsGoogle = body['is_google'] as bool? ?? false;
-        final localIsGoogle  = prefs.getBool('is_google') ?? false;
-        final isGoogle = serverIsGoogle || localIsGoogle;
-        final isOAuth  = (body['is_oauth'] as bool? ?? false) || isGoogle;
-        // Persister tout en local — nom inclus pour affichage instantané au prochain lancement
-        if (url != null && url.isNotEmpty) await prefs.setString('profile_image_url', url);
-        if (email.isNotEmpty) await prefs.setString('email', email);
-        if (serverName.isNotEmpty) await prefs.setString('name', serverName);
-        await prefs.setBool('is_google', isGoogle);
-        await prefs.setBool('is_oauth', isOAuth);
-        setState(() {
-          if (url != null && url.isNotEmpty) _profileImageUrl = url;
-          if (email.isNotEmpty) _userEmail = email;
-          if (serverName.isNotEmpty) _userName = serverName;
-          _isGoogle  = isGoogle;
-          _isOAuth   = isOAuth;
-        });
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _loadPhone() async {
-    final prefs = await SharedPreferences.getInstance();
-    final phone = prefs.getString('user_phone') ?? '';
-    if (mounted) setState(() => _phone = phone);
-  }
-
-  Future<void> _loadSessionInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    final email    = prefs.getString('email') ?? '';
-    final isGoogle = prefs.getBool('is_google') ?? false;
-    final isOAuth  = prefs.getBool('is_oauth') ?? isGoogle;
-    if (mounted) {
-      setState(() {
-        if (email.isNotEmpty) _userEmail = email;
-        if (isGoogle) _isGoogle = true;
-        if (isOAuth)  _isOAuth  = true;
-      });
-    }
-  }
-
-  /// Enregistre nom / email / téléphone (même logique que la fenêtre Android).
-  Future<void> _savePersonalInfo(String name, String email, String phone) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_phone', phone);
-    if (!QartaDemo.enabled) {
-      try {
-        final reqBody = <String, dynamic>{'name': name};
-        if (!_isOAuth) reqBody['email'] = email;
-        final res = await http.patch(
-          Uri.parse('$apiUrl/users/me'),
-          headers: {
-            'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(reqBody),
-        );
-        if (res.statusCode == 200 && mounted) {
-          final updated = jsonDecode(res.body);
-          setState(() {
-            _userEmail = updated['email'] ?? _userEmail;
-            _userName  = updated['name']  ?? _userName;
-          });
-          await prefs.setString('name',  _userName);
-          await prefs.setString('email', _userEmail);
-        }
-      } catch (_) {}
-    } else if (mounted) {
-      setState(() { _userName = name; if (!_isOAuth) _userEmail = email; });
-    }
-    if (mounted) setState(() => _phone = phone);
-  }
-
-  Future<void> _showPersonalInfo() async {
-    if (Platform.isIOS) {
-      // Vrai appareil iOS → page native iOS
-      await Navigator.push(context, CupertinoPageRoute(builder: (_) => PersonalInfoPageIos(
-        name: _userName,
-        email: _userEmail,
-        phone: _phone,
-        emailLocked: _isOAuth,
-        lockedBy: _isGoogle ? 'Google' : 'Apple',
-        onSave: _savePersonalInfo,
-      )));
+  // Appelé par le controller après avoir mis à jour les cartes
+  void _handleStampEvent(StampEvent e) {
+    if (kIsIOS) {
+      if (e.reward) _onRewardUnlockedIos(e);
+      else if (!QartaDemo.enabled) _ctrl.refreshCard(e.cardId);
       return;
     }
-    // Android → page glassmorphism Android
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => PersonalInfoPageAndroid(
-      name: _userName,
-      email: _userEmail,
-      phone: _phone,
-      emailLocked: _isOAuth,
-      lockedBy: _isGoogle ? 'Google' : 'Apple',
-      onSave: _savePersonalInfo,
-    )));
+    if (e.reward) setState(() => _lastStampEvent = e);
+    _showStampPopup(e);
   }
 
-  Widget _infoRow({required IconData icon, required String label, required String value, required Color sub}) {
-    const blue = Color(0xFF2C7BE5);
-    return Container(
-      decoration: BoxDecoration(
-        color: blue.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: blue.withValues(alpha: 0.12)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: blue, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(fontSize: 11, color: sub)),
-              Text(value.isEmpty ? '—' : value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-            ],
-          ),
-        ],
-      ),
-    );
+  // ── Méthodes de délégation logique ─────────────────────────────────────────
+
+  // Point d'entrée pour les widgets (CardsTab, QRModal iOS) → logique dans controller
+  Future<void> _onStampEvent(StampEvent e) => _ctrl.handleStampEvent(e);
+
+  Future<void> _refreshCard(String cardId) => _ctrl.refreshCard(cardId);
+  Future<void> _loadRewardsCount()          => _ctrl.loadRewardsCount();
+  void         _markAllRead()               => _ctrl.markAllRead();
+  void         _logout()                    => _ctrl.logout();
+
+  Future<void> _refreshManual() async {
+    AppLogger.client('Refresh manuel → tout en arrière-plan');
+    _ctrl.loadStats();
+    _ctrl.loadRewardsCount();
+    _ctrl.loadHistory();
+    _ctrl.loadNotifs();
+    await Future.delayed(const Duration(milliseconds: 500));
   }
+
+  // ── Navigation / tabs ───────────────────────────────────────────────────────
+
+  void _setTab(int tab) {
+    if (tab != 0) setState(() => _searching = false);
+    if (_ctrl.tab == 0 && tab != 0 && _rewardPillActive) {
+      setState(() => _rewardPillActive = false);
+      _pillPageCtrl.jumpToPage(0);
+    }
+    _ctrl.setTab(tab);
+  }
+
+  void _openProfil() => _ctrl.openProfil();
+
+  void _openNotifs() {
+    _ctrl.openNotifs();
+    if (_notifCount > 0 && !kIsIOS) _markAllRead();
+  }
+
+  void _closeNotifs() => _ctrl.closeNotifs();
+
+  void _goToRewards() {
+    final already = _ctrl.tab == 0;
+    setState(() => _rewardPillActive = true);
+    _ctrl.setTab(0);
+    if (already) {
+      _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pillPageCtrl.jumpToPage(1);
+      });
+    }
+  }
+
+  void _goToCards() {
+    final already = _ctrl.tab == 0;
+    setState(() => _rewardPillActive = false);
+    _ctrl.setTab(0);
+    if (already) {
+      _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pillPageCtrl.jumpToPage(0);
+      });
+    }
+  }
+
+  // ── UI : photo de profil ────────────────────────────────────────────────────
 
   void _showPhotoOptions() {
     final hasPhoto = _profileImageUrl != null || _profileImagePath != null;
@@ -499,7 +268,7 @@ class _ClientHomeState extends State<ClientHome>
           _photoOptionRow(
             icon: Icons.photo_library_outlined,
             label: 'Changer la photo',
-            onTap: () { Navigator.pop(context); _pickProfileImage(); },
+            onTap: () { Navigator.pop(context); _ctrl.pickProfileImage(context); },
           ),
           if (hasPhoto) ...[
             const SizedBox(height: 4),
@@ -507,7 +276,7 @@ class _ClientHomeState extends State<ClientHome>
               icon: Icons.delete_outline_rounded,
               label: 'Supprimer la photo',
               color: const Color(0xFFE24B4A),
-              onTap: () { Navigator.pop(context); _deleteProfileImage(); },
+              onTap: () { Navigator.pop(context); _ctrl.deleteProfileImage(); },
             ),
           ],
         ]),
@@ -534,354 +303,238 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  Future<void> _pickProfileImage() async {
-    AppLogger.client('Photo profil → ouverture galerie');
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
-    if (picked == null) {
-      AppLogger.client('Photo profil → annulée');
+  // ── UI : infos perso ────────────────────────────────────────────────────────
+
+  Future<void> _showPersonalInfo() async {
+    if (Platform.isIOS) {
+      await Navigator.push(context, CupertinoPageRoute(builder: (_) => PersonalInfoPageIos(
+        name: _userName,
+        email: _userEmail,
+        phone: _phone,
+        emailLocked: _isOAuth,
+        lockedBy: _isGoogle ? 'Google' : 'Apple',
+        onSave: _ctrl.savePersonalInfo,
+      )));
       return;
     }
-
-    // Recadrage
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Recadrer',
-          toolbarColor: const Color(0xFF0B1220),
-          toolbarWidgetColor: Colors.white,
-          initAspectRatio: CropAspectRatioPreset.square,
-          lockAspectRatio: false,
-        ),
-        IOSUiSettings(title: 'Recadrer'),
-      ],
-    );
-    if (cropped == null) {
-      AppLogger.client('Photo profil → recadrage annulé');
-      return;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('profile_image_path', cropped.path);
-    if (mounted) setState(() => _profileImagePath = cropped.path);
-
-    try {
-      final req = http.MultipartRequest('POST', Uri.parse('$apiUrl/users/profile-picture'))
-        ..headers['Authorization'] = 'Bearer ${AuthService.currentToken ?? widget.token}'
-        ..files.add(await http.MultipartFile.fromPath('file', cropped.path));
-      final res = await http.Response.fromStream(await req.send());
-      if (res.statusCode == 200 && mounted) {
-        final url = jsonDecode(res.body)['profile_picture_url'] as String?;
-        if (url != null) {
-          await prefs.setString('profile_image_url', url);
-          setState(() => _profileImageUrl = url);
-        }
-      } else {
-        AppLogger.error('Photo profil → upload échoué : ${res.statusCode}');
-      }
-    } catch (e) {
-      AppLogger.error('Photo profil → exception : $e');
-    }
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => PersonalInfoPageAndroid(
+      name: _userName,
+      email: _userEmail,
+      phone: _phone,
+      emailLocked: _isOAuth,
+      lockedBy: _isGoogle ? 'Google' : 'Apple',
+      onSave: _ctrl.savePersonalInfo,
+    )));
   }
 
-  Future<void> _deleteProfileImage() async {
-    // Optimistic update : suppression UI immédiate
-    final prevUrl = _profileImageUrl;
-    final prevPath = _profileImagePath;
-    setState(() { _profileImageUrl = null; _profileImagePath = null; });
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.remove('profile_image_url');
-      prefs.remove('profile_image_path');
-    });
-    // Requête API en arrière-plan
-    http.delete(
-      Uri.parse('$apiUrl/users/profile-picture'),
-      headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-    ).then((res) {
-      if (res.statusCode != 200 && mounted) {
-        // Rollback si échec
-        setState(() { _profileImageUrl = prevUrl; _profileImagePath = prevPath; });
-        AppLogger.error('Delete photo profil → HTTP ${res.statusCode}');
-      }
-    }).catchError((e) {
-      if (mounted) setState(() { _profileImageUrl = prevUrl; _profileImagePath = prevPath; });
-      AppLogger.error('Delete photo profil → exception : $e');
-    });
-  }
+  // ── UI : changement de mot de passe ────────────────────────────────────────
 
-  void _applyRawNotifs(List<dynamic> raw) {
-    final mapped = raw.map((n) {
-      final type = n['type'] as String? ?? 'promo';
-      final style = _notifStyle[type] ?? _notifStyle['promo']!;
-      final dt = DateTime.tryParse(n['created_at'] as String? ?? '')?.toLocal();
-      final time = dt != null
-          ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
-          : '';
-      return <String, dynamic>{
-        'id': n['id'],
-        'icon': style['icon'],
-        'commerce': n['merchant_name'] ?? '',
-        'title': n['title'] ?? '',
-        'body': n['body'] ?? '',
-        'time': time,
-        'color': style['color'],
-        'read': n['read'] ?? false,
-        'type': type,
-        'dt': dt,
-      };
-    }).toList();
-    _notifs = mapped;
-    _notifsLoaded = true;
-    _notifCount = _notifs.where((n) => !(n['read'] as bool)).length;
-  }
-
-  Future<void> _loadNotifs() async {
-    AppLogger.client('Chargement notifications client...');
-    final sw = Stopwatch()..start();
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/notifications/client'),
-        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-      );
-      if (res.statusCode == 200 && mounted) {
-        final data = jsonDecode(res.body) as List;
-        AppLogger.client('[PERF] Notifications chargées en ${sw.elapsedMilliseconds}ms (${data.length} notifs)');
-        final mapped = data.map((n) {
-          final type = n['type'] as String? ?? 'promo';
-          final style = _notifStyle[type] ?? _notifStyle['promo']!;
-          final dt = DateTime.tryParse(n['created_at'] as String? ?? '')?.toLocal();
-          final time = dt != null
-              ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
-              : '';
-          return {
-            'id': n['id'],
-            'icon': style['icon'],
-            'commerce': n['merchant_name'] ?? '',
-            'title': n['title'] ?? '',
-            'body': n['body'] ?? '',
-            'time': time,
-            'color': style['color'],
-            'read': n['read'] ?? false,
-            'type': type,
-            'dt': dt,
-          };
-        }).toList();
-        setState(() { _notifs = mapped; _notifsLoaded = true; });
-        _updateNotifCount();
-      }
-    } catch (_) {}
-  }
-
-  void _updateNotifCount() {
-    setState(() => _notifCount = _notifs.where((n) => !(n['read'] as bool)).length);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _pillPageCtrl.dispose();
-    _stampBadgeTimer?.cancel();
-    _slideInTimer?.cancel();
-    _cardToastTimer?.cancel();
-    _keepAliveTimer?.cancel();
-    _deepLinkSub?.cancel();
-    _fcmForegroundSub?.cancel();
-    notifOpenNotifier.removeListener(_onNotifOpen);
-    super.dispose();
-  }
-
-  void _openProfil() {
-    _prevTab = _tab == 3 || _tab == 4 ? 0 : _tab;
-    _setTab(3);
-  }
-
-  void _applyCards(List<dynamic> data) {
-    int stamps = 0;
-    for (final c in data) stamps += c['stamps_count'] as int? ?? 0;
-    // Trier : dernière carte utilisée en tête (last_scan_at desc, jamais scannées en fin)
-    data.sort((a, b) {
-      final aAt = a['last_scan_at'] as String?;
-      final bAt = b['last_scan_at'] as String?;
-      if (aAt == null && bAt == null) return 0;
-      if (aAt == null) return 1;
-      if (bAt == null) return -1;
-      return bAt.compareTo(aAt);
-    });
-    AppLogger.client('Cartes → ${data.length} carte(s), $stamps tampon(s) total');
-    if (mounted) {
-      setState(() {
-        _cards       = data;
-        _cardCount   = data.length;
-        _totalStamps = stamps;
-        _statsLoaded = true;
-      });
-    }
-    WidgetService.updateFromCards(data);
-    _lastCardsRefresh = DateTime.now();
-  }
-
-  Future<void> _refreshAll() async {
-    AppLogger.client('Refresh → cartes + historique + récompenses + notifs');
-    await Future.wait([_loadStats(), _loadHistory(), _loadRewardsCount(), _loadNotifs()]);
-  }
-
-  /// Met à jour une seule carte sans recharger toutes les cartes.
-  /// Utilisé après un scan ou un ajout de carte.
-  Future<void> _refreshCard(String cardId) async {
-    final r = await ApiService.instance.getCardDetail(cardId);
-    if (!mounted || r.isErr) return;
-    final updated = r.value;
-    setState(() {
-      final idx = _cards.indexWhere((c) => c['id'] == cardId);
-      if (idx >= 0) {
-        _cards[idx] = updated;
-      } else {
-        // Nouvelle carte → l'ajouter en tête de liste
-        _cards.insert(0, updated);
-      }
-    });
-    AppLogger.client('[PERF] Carte ${updated['merchants']?['business_name'] ?? cardId} actualisée');
-  }
-
-  // Pull-to-refresh manuel : tout part en fire-and-forget, spinner = 500ms de feedback visuel.
-  // Railway peut être froid (5-9s), bloquer le spinner dessus est inutile.
-  // L UI se met à jour automatiquement via setState quand chaque requête rentre.
-  Future<void> _refreshManual() async {
-    AppLogger.client('Refresh manuel → tout en arrière-plan');
-    _loadStats();
-    _loadRewardsCount();
-    _loadHistory();
-    _loadNotifs();
-    await Future.delayed(const Duration(milliseconds: 500));
-  }
-
-  // Refresh silencieux global après chargement depuis le cache
-  Future<void> _silentRefreshAll() async {
-    if (!mounted) return;
-    AppLogger.client('[PERF] Refresh silencieux démarré');
-    final sw = Stopwatch()..start();
-    final results = await Future.wait([
-      ApiService.instance.getMyCards(),
-      ApiService.instance.getMyRewards(),
-    ]);
-    if (!mounted) return;
-    AppLogger.client('[PERF] Refresh silencieux terminé en ${sw.elapsedMilliseconds}ms');
-    final cardsResult   = results[0] as dynamic;
-    final rewardsResult = results[1] as dynamic;
-    if (cardsResult.isOk) {
-      final fresh = (cardsResult.value as List).map((c) => Map<String, dynamic>.from(c as Map)).toList();
-      _applyCards(fresh);
-      _saveCardsCache(fresh);
-    }
-    if (rewardsResult.isOk && rewardsResult.value != null) {
-      final fresh = rewardsResult.value as List;
-      if (mounted) setState(() { _rewards = fresh; _rewardCount = fresh.length; });
-      _saveRewardsCache(fresh);
-    }
-  }
-
-  Future<void> _saveCardsCache(List<dynamic> cards) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cache_client_cards', jsonEncode(cards));
-    } catch (_) {}
-  }
-
-  Future<void> _saveRewardsCache(List<dynamic> rewards) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cache_client_rewards', jsonEncode(rewards));
-    } catch (_) {}
-  }
-
-  Future<void> _saveHistoryCache(List<dynamic> history) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cache_client_history', jsonEncode(history));
-    } catch (_) {}
-  }
-
-  Future<void> _loadStats() async {
-    final sw = Stopwatch()..start();
-    final r = await ApiService.instance.getMyCards();
-    if (!mounted || r.isErr) return;
-    final data = r.value.map((c) => Map<String, dynamic>.from(c as Map)).toList();
-    AppLogger.client('[PERF] Cartes chargées en ${sw.elapsedMilliseconds}ms (${data.length} cartes)');
-    _applyCards(data);
-    _saveCardsCache(data);
-  }
-
-  Future<void> _loadHistory() async {
-    final sw = Stopwatch()..start();
-    try {
-      final res = await http.get(
-        Uri.parse('$apiUrl/cards/my-history'),
-        headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-      );
-      if (mounted && res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        AppLogger.client('[PERF] Historique chargé en ${sw.elapsedMilliseconds}ms (${data.length} entrées)');
-        setState(() => _history = data);
-        _saveHistoryCache(data);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _loadRewardsCount() async {
-    final sw = Stopwatch()..start();
-    final r = await ApiService.instance.getMyRewards();
-    if (mounted && r.isOk) {
-      AppLogger.client('[PERF] Récompenses chargées en ${sw.elapsedMilliseconds}ms (${r.value.length} récompenses)');
-      setState(() { _rewards = r.value; _rewardCount = r.value.length; });
-      _saveRewardsCache(r.value as List);
-    }
-  }
-
-  // ── Le commerçant a ajouté des tampons pendant que le QR était ouvert ────────
-  Future<void> _onStampEvent(StampEvent e) async {
-    AppLogger.client('StampEvent reçu → cardId: ${e.cardId}, delta: ${e.delta}, reward: ${e.reward}, merchant: ${e.merchantName}');
-    if (!mounted) return;
-
-    setState(() {
-      _tab = 0;
-      final idx = _cards.indexWhere((c) => c['id'] == e.cardId);
-      if (idx >= 0) {
-        // Copie mutable pour mettre à jour l'affichage sans refresh réseau
-        final card = Map<String, dynamic>.from(_cards[idx] as Map);
-        // Si récompense atteinte : afficher la carte PLEINE (total/total) pour l'animation
-        // Si simple ajout : mettre à jour le compteur normalement
-        if (e.reward) {
-          if (e.isPoints) {
-            card['points_count'] = e.total;
-          } else {
-            card['stamps_count'] = e.total;
-          }
-        } else {
-          if (e.isPoints) {
-            card['points_count'] = e.newCount;
-          } else {
-            card['stamps_count'] = e.newCount;
-          }
-        }
-        card['last_scan_at'] = DateTime.now().toUtc().toIso8601String();
-        _cards[idx] = card;
-        if (idx > 0) { final c = _cards.removeAt(idx); _cards.insert(0, c); }
-      }
-    });
+  void _showChangePassword() {
     if (kIsIOS) {
-      // iOS : le tampon s'affiche directement dans la carte ouverte
-      // (« Tampon ajouté · à l'instant ») ; une carte pleine ouvre « Carte complète ! ».
-      if (e.reward) {
-        _onRewardUnlockedIos(e);
-      } else if (!QartaDemo.enabled) {
-        _refreshCard(e.cardId);
-      }
+      Navigator.push(context, CupertinoPageRoute(builder: (_) => ChangePasswordPageIos(
+        onSave: (current, next) async {
+          if (QartaDemo.enabled) return null;
+          return await _ctrl.changePassword(current, next);
+        },
+      )));
       return;
     }
-    if (e.reward) _lastStampEvent = e;
-    _showStampPopup(e);
+    final currentCtrl = TextEditingController();
+    final newCtrl     = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    bool loading      = false;
+    bool showCurrent  = false;
+    bool showNew      = false;
+    bool showConfirm  = false;
+    const blue = Color(0xFF2C7BE5);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final bg     = isDark ? const Color(0xFF1E1D2A) : Colors.white;
+          final sub    = isDark ? Colors.white54 : Colors.black45;
+
+          Widget passField({
+            required TextEditingController ctrl,
+            required String label,
+            required bool visible,
+            required VoidCallback onToggle,
+          }) => Container(
+            decoration: BoxDecoration(
+              color: blue.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: blue.withValues(alpha: 0.12)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: Row(children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.lock_outline_rounded, color: blue, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: ctrl,
+                  obscureText: !visible,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: label,
+                    hintStyle: TextStyle(color: sub, fontWeight: FontWeight.w400),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(visible ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: sub, size: 18),
+                onPressed: onToggle,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ]),
+          );
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.lock_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Changer le mot de passe', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  ]),
+                  const SizedBox(height: 20),
+                  passField(ctrl: currentCtrl, label: 'Mot de passe actuel', visible: showCurrent, onToggle: () => setS(() => showCurrent = !showCurrent)),
+                  const SizedBox(height: 12),
+                  passField(ctrl: newCtrl, label: 'Nouveau mot de passe', visible: showNew, onToggle: () => setS(() => showNew = !showNew)),
+                  const SizedBox(height: 12),
+                  passField(ctrl: confirmCtrl, label: 'Confirmer le nouveau mot de passe', visible: showConfirm, onToggle: () => setS(() => showConfirm = !showConfirm)),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: loading ? null : () async {
+                        if (newCtrl.text != confirmCtrl.text) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Les mots de passe ne correspondent pas'),
+                            backgroundColor: Colors.red,
+                          ));
+                          return;
+                        }
+                        setS(() => loading = true);
+                        final err = await _ctrl.changePassword(currentCtrl.text, newCtrl.text);
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(err ?? 'Mot de passe mis à jour !'),
+                          backgroundColor: err == null ? blue : Colors.red,
+                        ));
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: blue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                      ),
+                      child: loading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive(backgroundColor: Colors.white))
+                          : const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
+
+  // ── UI : suppression de compte ──────────────────────────────────────────────
+
+  void _showDeleteAccount() {
+    final passCtrl = TextEditingController();
+    bool loading = false;
+    (kIsIOS ? showCupertinoDialog<void> : showDialog<void>)(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final actions = [
+            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: loading ? null : () async {
+                setDialogState(() => loading = true);
+                final err = await _ctrl.deleteAccount(passCtrl.text);
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (err != null && mounted) {
+                  if (kIsIOS) {
+                    showIosAlert(context, 'Suppression impossible', err);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: Colors.red));
+                  }
+                }
+                // Si err == null : _ctrl.logout() a déjà déclenché onLogout → navigation auto
+              },
+              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Supprimer'),
+            ),
+          ];
+          final content = Material(
+            color: Colors.transparent,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
+              const SizedBox(height: 12),
+              kIsIOS
+                  ? CupertinoTextField(controller: passCtrl, obscureText: true, placeholder: 'Ton mot de passe')
+                  : TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
+            ]),
+          );
+          if (kIsIOS) {
+            return CupertinoAlertDialog(
+              title: const Text('Supprimer mon compte', style: TextStyle(color: Color(0xFFE24B4A))),
+              content: content,
+              actions: actions,
+            );
+          }
+          return AlertDialog(
+            title: const Text('Supprimer mon compte', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE24B4A))),
+            content: content,
+            actions: actions,
+          );
+        },
+      ),
+    );
+  }
+
+  // ── UI : tampon / récompense Android ───────────────────────────────────────
 
   void _showStampPopup(StampEvent e) {
     _stampBadgeTimer?.cancel();
@@ -892,8 +545,32 @@ class _ClientHomeState extends State<ClientHome>
       if (e.reward) {
         setState(() => _animatingCardId = e.cardId);
       } else {
-        _refreshCard(e.cardId); // 1 seule carte au lieu de tout recharger
+        _ctrl.refreshCard(e.cardId);
       }
+    });
+  }
+
+  Future<void> _onRewardAnimationDone() async {
+    if (!mounted) return;
+    final e      = _lastStampEvent;
+    final cardId = _animatingCardId;
+    setState(() {
+      if (e != null && cardId != null) {
+        final idx = _ctrl.cards.indexWhere((c) => c['id'] == cardId);
+        if (idx >= 0) {
+          final card = Map<String, dynamic>.from(_ctrl.cards[idx] as Map);
+          if (e.isPoints) card['points_count'] = e.newCount;
+          else            card['stamps_count']  = e.newCount;
+          _ctrl.cards[idx] = card;
+        }
+      }
+      _animatingCardId = null;
+      _slidingInCardId = cardId;
+    });
+    if (cardId != null) _ctrl.refreshCard(cardId);
+    _slideInTimer?.cancel();
+    _slideInTimer = Timer(const Duration(milliseconds: 280), () {
+      if (mounted) setState(() => _slidingInCardId = null);
     });
   }
 
@@ -940,7 +617,6 @@ class _ClientHomeState extends State<ClientHome>
     final label  = e.reward
         ? '🎉 Récompense chez ${e.merchantName}'
         : '+${e.delta} ${unit}${e.delta > 1 ? "s" : ""} · ${e.merchantName}';
-
     return Positioned(
       top: 0, left: 0, right: 0,
       child: SafeArea(
@@ -972,343 +648,7 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  Future<void> _onRewardAnimationDone() async {
-    if (!mounted) return;
-    final e      = _lastStampEvent;
-    final cardId = _animatingCardId;
-    // Mise à jour en mémoire immédiate (surplus ex. 90/300) — pas d'attente réseau.
-    setState(() {
-      if (e != null && cardId != null) {
-        final idx = _cards.indexWhere((c) => c['id'] == cardId);
-        if (idx >= 0) {
-          final card = Map<String, dynamic>.from(_cards[idx] as Map);
-          if (e.isPoints) card['points_count'] = e.newCount;
-          else card['stamps_count'] = e.newCount;
-          _cards[idx] = card;
-        }
-      }
-      _animatingCardId = null;
-      _slidingInCardId = cardId; // déclenche le slide-in depuis la gauche
-    });
-    if (cardId != null) _refreshCard(cardId); // 1 seule carte au lieu de tout recharger
-    _slideInTimer?.cancel();
-    _slideInTimer = Timer(const Duration(milliseconds: 280), () {
-      if (mounted) setState(() => _slidingInCardId = null);
-    });
-  }
-
-  void _showChangePassword() {
-    if (kIsIOS) {
-      Navigator.push(context, CupertinoPageRoute(builder: (_) => ChangePasswordPageIos(
-        onSave: (current, next) async {
-          if (QartaDemo.enabled) return null;
-          try {
-            final res = await http.put(
-              Uri.parse('$apiUrl/users/change-password'),
-              headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
-              body: jsonEncode({'current_password': current, 'new_password': next}),
-            );
-            if (res.statusCode == 200) return null;
-            return (jsonDecode(res.body) as Map?)?['detail']?.toString() ?? 'Le mot de passe n\'a pas pu être changé.';
-          } catch (_) {
-            return 'Pas de connexion. Vérifie ton réseau et réessaie.';
-          }
-        },
-      )));
-      return;
-    }
-    final currentCtrl  = TextEditingController();
-    final newCtrl      = TextEditingController();
-    final confirmCtrl  = TextEditingController();
-    bool loading       = false;
-    bool showCurrent   = false;
-    bool showNew       = false;
-    bool showConfirm   = false;
-    const blue = Color(0xFF2C7BE5);
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final bg     = isDark ? const Color(0xFF1E1D2A) : Colors.white;
-          final sub    = isDark ? Colors.white54 : Colors.black45;
-
-          Widget passField({
-            required TextEditingController ctrl,
-            required String label,
-            required bool visible,
-            required VoidCallback onToggle,
-          }) =>
-              Container(
-                decoration: BoxDecoration(
-                  color: blue.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: blue.withValues(alpha: 0.12)),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(color: blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                      child: Icon(Icons.lock_outline_rounded, color: blue, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: ctrl,
-                        obscureText: !visible,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          border: InputBorder.none,
-                          hintText: label,
-                          hintStyle: TextStyle(color: sub, fontWeight: FontWeight.w400),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(visible ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: sub, size: 18),
-                      onPressed: onToggle,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              );
-
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-            child: Container(
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40, height: 4,
-                      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
-                        child: const Icon(Icons.lock_outline_rounded, color: Color(0xFFF59E0B), size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text('Changer le mot de passe', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  passField(ctrl: currentCtrl, label: 'Mot de passe actuel', visible: showCurrent, onToggle: () => setS(() => showCurrent = !showCurrent)),
-                  const SizedBox(height: 12),
-                  passField(ctrl: newCtrl, label: 'Nouveau mot de passe', visible: showNew, onToggle: () => setS(() => showNew = !showNew)),
-                  const SizedBox(height: 12),
-                  passField(ctrl: confirmCtrl, label: 'Confirmer le nouveau mot de passe', visible: showConfirm, onToggle: () => setS(() => showConfirm = !showConfirm)),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: loading ? null : () async {
-                        if (newCtrl.text != confirmCtrl.text) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                            content: Text('Les mots de passe ne correspondent pas'),
-                            backgroundColor: Colors.red,
-                          ));
-                          return;
-                        }
-                        setS(() => loading = true);
-                        try {
-                          final res = await http.put(
-                            Uri.parse('$apiUrl/users/change-password'),
-                            headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
-                            body: jsonEncode({'current_password': currentCtrl.text, 'new_password': newCtrl.text}),
-                          );
-                          if (!ctx.mounted) return;
-                          Navigator.pop(ctx);
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(res.statusCode == 200 ? 'Mot de passe mis à jour !' : jsonDecode(res.body)['detail'] ?? 'Erreur'),
-                            backgroundColor: res.statusCode == 200 ? blue : Colors.red,
-                          ));
-                        } catch (_) { setS(() => loading = false); }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: blue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 0,
-                      ),
-                      child: loading
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive(backgroundColor: Colors.white))
-                          : const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _showDeleteAccount() {
-    final passCtrl = TextEditingController();
-    bool loading = false;
-    (kIsIOS ? showCupertinoDialog<void> : showDialog<void>)(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final actions = [
-            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-            CupertinoDialogAction(
-              isDestructiveAction: true,
-              onPressed: loading ? null : () async {
-                setDialogState(() => loading = true);
-                try {
-                  final res = await http.delete(
-                    Uri.parse('$apiUrl/users/account'),
-                    headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}', 'Content-Type': 'application/json'},
-                    body: jsonEncode({'password': passCtrl.text}),
-                  );
-                  if (!ctx.mounted) return;
-                  Navigator.pop(ctx);
-                  if (res.statusCode == 200) {
-                    _logout();
-                  } else if (mounted) {
-                    final msg = (jsonDecode(res.body) as Map?)?['detail']?.toString() ?? 'Le compte n\'a pas pu être supprimé. Réessaie.';
-                    if (kIsIOS) {
-                      showIosAlert(context, 'Suppression impossible', msg);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
-                    }
-                  }
-                } catch (_) { setDialogState(() => loading = false); }
-              },
-              child: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive()) : const Text('Supprimer'),
-            ),
-          ];
-          final content = Material(
-            color: Colors.transparent,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('Cette action est irréversible. Toutes tes cartes et données seront supprimées.', style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
-              const SizedBox(height: 12),
-              kIsIOS
-                  ? CupertinoTextField(controller: passCtrl, obscureText: true, placeholder: 'Ton mot de passe')
-                  : TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Confirme ton mot de passe')),
-            ]),
-          );
-          if (kIsIOS) {
-            return CupertinoAlertDialog(
-              title: const Text('Supprimer mon compte', style: TextStyle(color: Color(0xFFE24B4A))),
-              content: content,
-              actions: actions,
-            );
-          }
-          return AlertDialog(
-            title: const Text('Supprimer mon compte', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE24B4A))),
-            content: content,
-            actions: actions,
-          );
-        },
-      ),
-    );
-  }
-
-  void _logout() async {
-    AppLogger.auth('Logout client → déconnexion');
-    await AuthService.logout();
-    if (!mounted) return;
-    AppLogger.nav('Logout → retour AuthScreen');
-    Navigator.pushReplacement(context, platformRoute(builder: (_) => const AuthScreen()));
-  }
-
-  void _openNotifs() {
-    _prevTab = _tab;
-    setState(() => _tab = 4);
-    // Marque toutes comme lues dès l'ouverture (comme WhatsApp).
-    // iOS : on garde les points bleus visibles ; « Tout lire » ou la sortie les efface.
-    if (_notifCount > 0 && !kIsIOS) _markAllRead();
-  }
-
-  void _closeNotifs() {
-    if (_notifCount > 0) _markAllRead();
-    setState(() => _tab = _prevTab);
-  }
-
-  // Centralise les changements de tab — reset Cartes si on quitte tab 0 avec Récompenses actif
-  void _setTab(int tab) {
-    if (tab != 0) _searching = false;
-    if (_tab == 0 && tab != 0 && _rewardPillActive) {
-      _rewardPillActive = false;
-      _pillPageCtrl.jumpToPage(0);
-    }
-    setState(() => _tab = tab);
-  }
-
-  void _goToRewards() {
-    final already = _tab == 0;
-    setState(() { _rewardPillActive = true; _tab = 0; });
-    if (already) {
-      _pillPageCtrl.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _pillPageCtrl.jumpToPage(1);
-      });
-    }
-  }
-
-  void _goToCards() {
-    final already = _tab == 0;
-    setState(() { _rewardPillActive = false; _tab = 0; });
-    if (already) {
-      _pillPageCtrl.animateToPage(0, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _pillPageCtrl.jumpToPage(0);
-      });
-    }
-  }
-
-  Future<void> _markAllRead() async {
-    setState(() {
-      for (var n in _notifs) {
-        n['read'] = true;
-      }
-      _notifCount = 0;
-    });
-    if (QartaDemo.enabled) return;
-    final res = await http.put(
-      Uri.parse('$apiUrl/notifications/client/read-all'),
-      headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-    );
-    AppLogger.client('Tout lu → serveur ${res.statusCode}: ${res.body}');
-  }
-
-  String get _firstName {
-    final parts = _userName.trim().split(' ');
-    return parts.isNotEmpty ? parts[0] : _userName;
-  }
-
-  String get _initials {
-    final parts = _userName.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U';
-  }
+  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1347,342 +687,7 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  // ── HEADER Android : extrait dans ClientHeader ─────────────────────────────
-  // (voir lib/screens/client/widgets/client_header.dart)
-
-  // ── HEADER iOS (conservé pour la couleur d'indicateur) ─────────────────────
-
-  Widget _buildHeader_UNUSED() {
-    return Container(
-      color: context.qNavy,
-      child: Stack(
-        children: [
-          // Orbe lumineux
-          Positioned(
-            top: -20, right: -10,
-            child: Container(
-              width: 200, height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [const Color(0xFF2C7BE5).withValues(alpha: 0.18), Colors.transparent],
-                ),
-              ),
-            ),
-          ),
-          // Contenu
-          Padding(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 14,
-              left: 20, right: 20, bottom: 18,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Ligne avatar + notifs
-                Row(
-                  children: [
-                    if (_tab == 3)
-                      // Profil : Stack — avatar centré exact, flèche+Profil à gauche, nom à droite
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (_, constraints) => Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Flèche + "Profil" collés à gauche
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => _setTab(0),
-                                      child: Container(
-                                        width: 34, height: 34,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.white.withValues(alpha: 0.10),
-                                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                                        ),
-                                        child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text('Profil',
-                                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                              ),
-                              // Avatar au centre exact
-                              Center(
-                                child: GestureDetector(
-                                  onTap: _showPhotoOptions,
-                                  child: Stack(
-                                    children: [
-                                      Container(
-                                        width: 100, height: 100,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                          border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                          image: _profileImageUrl != null
-                                              ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                              : _profileImagePath != null
-                                                  ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                                  : null,
-                                        ),
-                                        child: (_profileImageUrl == null && _profileImagePath == null)
-                                            ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 28, fontWeight: FontWeight.w700)))
-                                            : null,
-                                      ),
-                                      Positioned(
-                                        bottom: 2, right: 2,
-                                        child: Container(
-                                          width: 26, height: 26,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: const Color(0xFF2C7BE5),
-                                            border: Border.all(color: context.qNavy, width: 1.5),
-                                          ),
-                                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else if (_tab == 4)
-                      // Notifications : Row propre — retour | titre centré | cloche+Tout lu
-                      Expanded(
-                        child: Row(
-                          children: [
-                            // Retour
-                            GestureDetector(
-                              onTap: _closeNotifs,
-                              child: Container(
-                                width: 34, height: 34,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withValues(alpha: 0.10),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                                ),
-                                child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 15),
-                              ),
-                            ),
-                            // Titre centré
-                            const Expanded(
-                              child: Text('Notifications',
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                            ),
-                            // Spacer pour équilibrer la flèche retour et garder le titre centré
-                            const SizedBox(width: 34),
-                          ],
-                        ),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: () => _openProfil(),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38, height: 38,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(0xFF2C7BE5).withValues(alpha: 0.30),
-                                border: Border.all(color: const Color(0xFF4A9EFF).withValues(alpha: 0.45), width: 2),
-                                image: _profileImageUrl != null
-                                    ? DecorationImage(image: NetworkImage(_profileImageUrl!), fit: BoxFit.cover)
-                                    : _profileImagePath != null
-                                        ? DecorationImage(image: FileImage(File(_profileImagePath!)), fit: BoxFit.cover)
-                                        : null,
-                              ),
-                              child: (_profileImageUrl == null && _profileImagePath == null)
-                                  ? Center(child: Text(_initials, style: const TextStyle(color: Color(0xFF4A9EFF), fontSize: 13, fontWeight: FontWeight.w700)))
-                                  : null,
-                            ),
-                            const SizedBox(width: 9),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Bonjour', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, height: 1)),
-                                const SizedBox(height: 2),
-                                Text(_firstName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.2)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (_tab != 3 && _tab != 4) const Spacer(),
-                    // Bouton notifs (masqué sur profil et notifications car déjà dans le Stack)
-                    if (_tab != 3 && _tab != 4) GestureDetector(
-                      onTap: _openNotifs,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: 38, height: 38,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.08),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                            ),
-                            child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.8), size: 18),
-                          ),
-                          if (_notifCount > 0)
-                            Positioned(
-                              top: -2, right: -2,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE24B4A),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: context.qNavy, width: 2),
-                                ),
-                                child: Center(
-                                  child: Text('$_notifCount', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (_tab == 4) ...[
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 42,
-                  child: Row(
-                    children: [
-                      for (final f in [
-                        {'key': 'tout', 'label': 'Tout'},
-                        {'key': 'tampon', 'label': 'Tampons'},
-                        {'key': 'recompense', 'label': 'Récompenses'},
-                        {'key': 'promo', 'label': 'Promos'},
-                      ])
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _notifFilter = f['key']!),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(
-                                color: _notifFilter == f['key'] ? const Color(0xFF2C7BE5) : const Color(0xFF0F1E3A),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: _notifFilter == f['key']
-                                      ? Colors.transparent
-                                      : const Color(0xFF4A9EFF).withValues(alpha: 0.6),
-                                ),
-                              ),
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    f['label']!,
-                                    style: TextStyle(
-                                      color: _notifFilter == f['key'] ? Colors.white : const Color(0xFF4A9EFF),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                ] else if (_tab != 3) ...[
-                const SizedBox(height: 20),
-                // ── Pills avec indicateur glissant
-                SizedBox(
-                  height: 42,
-                  child: Stack(children: [
-                    Positioned.fill(child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                      ),
-                    )),
-                    TweenAnimationBuilder<Color?>(
-                      tween: ColorTween(end: _pillIndicatorColor),
-                      duration: const Duration(milliseconds: 300),
-                      builder: (_, color, __) {
-                        final c = color ?? const Color(0xFF2C7BE5);
-                        return AnimatedAlign(
-                          alignment: _rewardPillActive ? Alignment.centerRight : Alignment.centerLeft,
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeOutCubic,
-                          child: FractionallySizedBox(
-                            widthFactor: 0.5,
-                            heightFactor: 1.0,
-                            child: Container(
-                              margin: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: c.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(9),
-                                border: Border.all(color: c.withValues(alpha: 0.55)),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    Row(children: [
-                      Expanded(child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _goToCards,
-                        child: Center(child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('$_cardCount', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, height: 1)),
-                            const SizedBox(width: 5),
-                            Text(_cardCount > 1 ? 'Cartes' : 'Carte',
-                                maxLines: 1,
-                                style: TextStyle(color: Colors.white.withValues(alpha: !_rewardPillActive ? 0.9 : 0.55), fontSize: 13, fontWeight: FontWeight.w600)),
-                          ],
-                        )),
-                      )),
-                      Expanded(child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _goToRewards,
-                        child: Center(child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('$_rewardCount', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, height: 1)),
-                            const SizedBox(width: 5),
-                            Text(_rewardCount > 1 ? 'Récompenses' : 'Récompense',
-                                maxLines: 1,
-                                style: TextStyle(color: Colors.white.withValues(alpha: _rewardPillActive ? 0.9 : 0.55), fontSize: 13, fontWeight: FontWeight.w600)),
-                          ],
-                        )),
-                      )),
-                    ]),
-                  ]),
-                ),
-                ], // fin else (pills)
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  // ── TAB CONTENT ────────────────────────────────────────────────────────────
-
-  Color get _pillIndicatorColor => const Color(0xFF2C7BE5);
+  // ── Tab content ─────────────────────────────────────────────────────────────
 
   Widget _buildTabContent() {
     switch (_tab) {
@@ -1691,31 +696,48 @@ class _ClientHomeState extends State<ClientHome>
           controller: _pillPageCtrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CardsTab(token: widget.token, userName: _userName, cards: _previewEmpty ? [] : _cards, onRefresh: _refreshManual, onStampEvent: _onStampEvent, cardIdToAnimate: _animatingCardId, cardIdToSlideIn: _slidingInCardId, onAnimationDone: _onRewardAnimationDone, onScanTap: () => _setTab(1), onSearchActive: (v) => setState(() => _searching = v), activeTab: _tab, onNavTap: _setTab),
-            ClientRewardsIos(rewards: _previewEmpty ? [] : _rewards, cards: _previewEmpty ? [] : _cards, onUse: _useRewardIos, onCardTap: _openCardIos, onRefresh: _refreshManual),
+            CardsTab(
+              token: widget.token,
+              userName: _userName,
+              cards: _previewEmpty ? [] : _cards,
+              onRefresh: _refreshManual,
+              onStampEvent: _onStampEvent,
+              cardIdToAnimate: _animatingCardId,
+              cardIdToSlideIn: _slidingInCardId,
+              onAnimationDone: _onRewardAnimationDone,
+              onScanTap: () => _setTab(1),
+              onSearchActive: (v) => setState(() => _searching = v),
+              activeTab: _tab,
+              onNavTap: _setTab,
+            ),
+            ClientRewardsIos(
+              rewards: _previewEmpty ? [] : _rewards,
+              cards:   _previewEmpty ? [] : _cards,
+              onUse: _useRewardIos,
+              onCardTap: _openCardIos,
+              onRefresh: _refreshManual,
+            ),
           ],
         );
       case 1:
         void addCard(Map<String, dynamic> card, Map<String, dynamic> merchant, {required bool goHome}) {
-          // Optimistic update : carte visible immédiatement, refresh en arrière-plan
           final localCard = Map<String, dynamic>.from(card)
             ..['merchants']    = merchant
             ..['card_design']  = card['card_design']
             ..['last_scan_at'] = null;
           final merchantName = merchant['business_name'] as String? ?? '';
           setState(() {
-            _cards.insert(0, localCard);
-            _cardCount = _cards.length;
-            if (goHome) { _tab = 0; _rewardPillActive = false; }
+            _ctrl.cards.insert(0, localCard);
+            _ctrl.cardCount = _ctrl.cards.length;
+            if (goHome) { _ctrl.tab = 0; _rewardPillActive = false; }
             _cardToastText = merchantName.isNotEmpty ? merchantName : 'Nouvelle carte';
           });
           _cardToastTimer?.cancel();
           _cardToastTimer = Timer(const Duration(seconds: 3), () {
             if (mounted) setState(() => _cardToastText = null);
           });
-          // Confirme + complète (design) depuis le serveur
           final cardId = card['id'] as String?;
-          if (cardId != null && !QartaDemo.enabled) _refreshCard(cardId);
+          if (cardId != null && !QartaDemo.enabled) _ctrl.refreshCard(cardId);
         }
         return kIsIOS
             ? ScanTabIos(
@@ -1784,639 +806,7 @@ class _ClientHomeState extends State<ClientHome>
           }),
         );
       default:
-        return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _loadStats, onStampEvent: _onStampEvent);
+        return CardsTab(token: widget.token, userName: _userName, cards: _cards, onRefresh: _ctrl.loadStats, onStampEvent: _onStampEvent);
     }
   }
-
-  // ── SCAN TAB ───────────────────────────────────────────────────────────────
-
-  Widget _buildScanTab() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Scanner un QR code', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1828))),
-            const SizedBox(height: 6),
-            Text('Scanne le QR code affiché en caisse', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-            const SizedBox(height: 24),
-            Container(
-              width: 210, height: 210,
-              decoration: BoxDecoration(color: const Color(0xFF1A1828), borderRadius: BorderRadius.circular(22)),
-              child: Stack(
-                children: [
-                  ...[Alignment.topLeft, Alignment.topRight, Alignment.bottomLeft, Alignment.bottomRight]
-                      .map((a) => Align(
-                            alignment: a,
-                            child: Padding(padding: const EdgeInsets.all(18), child: _scanCorner(a)),
-                          )),
-                  const Center(child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white24, size: 48)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Pointe ta caméra vers le QR code\ndu commerce',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500], height: 1.6), textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _scanCorner(Alignment a) {
-    final isLeft = a == Alignment.topLeft || a == Alignment.bottomLeft;
-    final isTop = a == Alignment.topLeft || a == Alignment.topRight;
-    return SizedBox(width: 32, height: 32, child: CustomPaint(painter: _CornerPainter(isLeft: isLeft, isTop: isTop)));
-  }
-
-  // ── PROFIL TAB ─────────────────────────────────────────────────────────────
-
-  Widget _buildProfilTab() {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 76),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Section 1: compte
-          _profSec([
-            _profRow(
-              iconBg: const Color(0xFFE8F1FD),
-              icon: Icons.person_outline_rounded,
-              iconColor: const Color(0xFF2C7BE5),
-              label: 'Informations personnelles',
-              sub: 'Nom, email, téléphone',
-              onTap: _showPersonalInfo,
-            ),
-            if (!_isOAuth)
-              _profRow(
-                iconBg: const Color(0xFFFEF3C7),
-                icon: Icons.lock_outline_rounded,
-                iconColor: const Color(0xFFF59E0B),
-                label: 'Changer le mot de passe',
-                sub: 'Sécurité du compte',
-                onTap: _showChangePassword,
-              ),
-            _profRow(
-              iconBg: const Color(0xFFE4F5EB),
-              icon: Icons.credit_card_outlined,
-              iconColor: const Color(0xFF27AE60),
-              label: 'Mes cartes',
-              sub: 'Gérer et supprimer',
-              onTap: () => Navigator.push(
-                context,
-                platformRoute(
-                  builder: (_) => kIsIOS
-                      ? ManageCardsScreenIos(
-                          token: widget.token,
-                          userName: _userName,
-                          cards: _cards,
-                          rewards: _rewards,
-                          onRefresh: _refreshManual,
-                        )
-                      : ManageCardsScreen(
-                          token: widget.token,
-                          userName: _userName,
-                          cards: _cards,
-                          rewards: _rewards,
-                          onRefresh: _refreshManual,
-                        ),
-                ),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          // Section 2: préférences
-          _profSec([
-            _profRowDarkMode(),
-            _profRow(
-              iconBg: const Color(0xFFE8F1FD),
-              icon: Icons.notifications_outlined,
-              iconColor: const Color(0xFF2C7BE5),
-              label: 'Notifications',
-              sub: 'Push, offres, visites',
-              onTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const NotificationsSheet(),
-              ),
-            ),
-            _profRow(
-              iconBg: const Color(0xFFF4F2EE),
-              icon: Icons.help_outline_rounded,
-              iconColor: const Color(0xFF888888),
-              label: 'Aide et Support',
-              sub: 'FAQ, nous contacter',
-              onTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const HelpSheet(),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 20),
-          // Bouton déconnexion
-          GestureDetector(
-            onTap: _logout,
-            child: Container(
-              width: double.infinity, height: 48,
-              decoration: BoxDecoration(
-                color: context.qSurface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFDE8E7), width: 1.5),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.logout_rounded, color: Color(0xFFE24B4A), size: 16),
-                  SizedBox(width: 8),
-                  Text('Se déconnecter', style: TextStyle(color: Color(0xFFE24B4A), fontSize: 14, fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Bouton suppression
-          GestureDetector(
-            onTap: _showDeleteAccount,
-            child: Container(
-              width: double.infinity, height: 44,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: context.qBorder),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.delete_outline_rounded, color: context.qSub, size: 15),
-                  const SizedBox(width: 6),
-                  Text('Supprimer mon compte', style: TextStyle(color: context.qSub, fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _profSec(List<Widget> rows) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.qSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.qBorder),
-      ),
-      child: Column(children: rows),
-    );
-  }
-
-  Widget _profRow({
-    required Color iconBg,
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required String sub,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.qDivider)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: iconColor, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.qText)),
-                  Text(sub, style: TextStyle(fontSize: 11, color: context.qSub)),
-                ],
-              ),
-            ),
-            if (onTap != null)
-              Icon(Icons.chevron_right_rounded, color: context.qMuted, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _profRowDarkMode() {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (_, mode, __) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: context.qDivider))),
-        child: Row(
-          children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(
-                color: context.isDark ? const Color(0xFF428CE3) : const Color(0xFF061324),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.dark_mode_outlined, color: context.isDark ? const Color(0xFF061324) : const Color(0xFF428CE3), size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Mode sombre', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.qText)),
-                  Text("Thème de l'interface", style: TextStyle(fontSize: 11, color: context.qSub)),
-                ],
-              ),
-            ),
-            Switch.adaptive(
-              value: mode == ThemeMode.dark,
-              onChanged: (val) async {
-                themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
-                final p = await SharedPreferences.getInstance();
-                await p.setBool('dark_mode', val);
-              },
-              activeColor: const Color(0xFF2C7BE5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── BOTTOM NAV ─────────────────────────────────────────────────────────────
-
-  Widget _buildBottomNav() {
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-    // Couleurs exactes Figma : --nav-bg #ffffffb3 (blanc 70%), --nav-border #ede9e380 (50%)
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final navBg = isDark
-        ? const Color(0xFF1E1D2A).withValues(alpha: 0.92)
-        : Colors.white.withValues(alpha: 0.92);
-    final navBorder = isDark
-        ? const Color(0xFF2A2840).withValues(alpha: 0.50)
-        : const Color(0xFFEDE9E3).withValues(alpha: 0.50);
-
-    return Positioned(
-      bottom: 0, left: 0, right: 0,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            height: 114 + bottomPad,
-            decoration: BoxDecoration(
-              color: navBg,
-              border: Border(top: BorderSide(color: navBorder, width: 1)),
-            ),
-            padding: EdgeInsets.only(bottom: bottomPad + 14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _navItem(Icons.credit_card_outlined, 'Cartes', 0),
-                _navFab(),
-                _navItem(Icons.history_rounded, 'Historique', 2),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, int idx) {
-    final active = _tab == idx;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () { AppLogger.client('Onglet → ${["Cartes","Scan","Historique","Profil"][idx]}'); _setTab(idx); },
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: active ? const Color(0xFF2C7BE5) : context.qNavInactive, size: 28),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w600,
-              color: active ? const Color(0xFF2C7BE5) : context.qNavInactive,
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navFab() {
-    final active = _tab == 1;
-    final isDark = context.isDark;
-    final bgColor   = isDark ? const Color(0xFF428CE3) : const Color(0xFF061324);
-    final iconColor = isDark ? const Color(0xFF061324) : const Color(0xFF428CE3);
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _setTab(1),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 70, height: 70,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [BoxShadow(color: bgColor.withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(0, 4))],
-              ),
-              child: Icon(Icons.qr_code_scanner_rounded, color: iconColor, size: 32),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── NOTIF TAB ──────────────────────────────────────────────────────────────
-
-  Widget _buildNotifsTab() {
-    final filtered = _notifFilter == 'tout'
-        ? _notifs
-        : _notifs.where((n) => n['type'] == _notifFilter).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Divider(height: 1),
-        // Liste
-        Expanded(
-          child: filtered.isEmpty
-              ? Center(child: Text('Aucune notification', style: TextStyle(color: context.qSub, fontSize: 14)))
-              : ListView(
-                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 76),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text("Aujourd'hui", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFBBBBBB), letterSpacing: 0.06)),
-                    ),
-                    ...filtered.map((n) => _notifItem(n)),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _notifItem(Map n) {
-    final color = Color(n['color'] as int);
-    final unread = !(n['read'] as bool);
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          n['read'] = true;
-          _notifCount = _notifs.where((x) => !(x['read'] as bool)).length;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: context.qDivider),
-            left: unread ? BorderSide(color: color, width: 3) : BorderSide.none,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: CustomPaint(
-                  size: const Size(20, 20),
-                  painter: _NotifIconPainter(type: n['type'] as String, color: color),
-                ),
-              ),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(n['commerce'], style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.qText)),
-                      Text(n['time'], style: TextStyle(fontSize: 10, color: context.qSub)),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(n['title'], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.qText)),
-                  const SizedBox(height: 2),
-                  Text(n['body'], style: TextStyle(fontSize: 11, color: context.qSub, height: 1.4)),
-                ],
-              ),
-            ),
-            if (unread) ...[
-              const SizedBox(width: 8),
-              Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Painters ──────────────────────────────────────────────────────────────────
-
-/// Reproduit exactement les icônes SVG du Figma pour chaque type de notification
-class _NotifIconPainter extends CustomPainter {
-  final String type;
-  final Color color;
-  const _NotifIconPainter({required this.type, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 18; // facteur d'échelle (viewport Figma = 18×18)
-    switch (type) {
-      case 'tampon':
-      case 'stamp':
-        _drawStamp(canvas, s);
-        break;
-      case 'recompense':
-      case 'reward':
-        _drawReward(canvas, s);
-        break;
-      case 'promo':
-      case 'targeted':
-      case 'scheduled':
-        _drawPromo(canvas, s);
-        break;
-      default:
-        _drawReview(canvas, s);
-    }
-  }
-
-  // ── stamp: carré arrondi + coche ─────────────────────────────────────────
-  void _drawStamp(Canvas canvas, double s) {
-    final p = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5 * s
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // Rounded rect (rx=4)
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(2 * s, 2 * s, 14 * s, 14 * s),
-        Radius.circular(4 * s),
-      ),
-      p,
-    );
-    // Coche : M6 9 l2.5 2.5 l4 -4
-    final check = Path()
-      ..moveTo(6 * s, 9 * s)
-      ..lineTo(8.5 * s, 11.5 * s)
-      ..lineTo(12.5 * s, 7.5 * s);
-    canvas.drawPath(check, p);
-  }
-
-  // ── reward: cercle plein + étoile blanche ────────────────────────────────
-  void _drawReward(Canvas canvas, double s) {
-    // Cercle plein
-    canvas.drawCircle(
-      Offset(9 * s, 9 * s),
-      8.5 * s,
-      Paint()..color = color,
-    );
-    // Étoile 5 branches blanche centrée
-    final starPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    final path = Path();
-    const points = 5;
-    const outerR = 4.5;
-    const innerR = 2.0;
-    for (int i = 0; i < points * 2; i++) {
-      final r = i.isEven ? outerR : innerR;
-      final angle = -pi / 2 + (pi * i / points);
-      final x = 9 * s + r * s * cos(angle);
-      final y = 9 * s + r * s * sin(angle);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, starPaint);
-  }
-
-  // ── promo: % (2 petits cercles + diagonale) ──────────────────────────────
-  void _drawPromo(Canvas canvas, double s) {
-    final p = Paint()..color = color;
-    canvas.drawCircle(Offset(5 * s, 5 * s), 1.5 * s, p);
-    canvas.drawCircle(Offset(13 * s, 13 * s), 1.5 * s, p);
-    canvas.drawLine(
-      Offset(4 * s, 14 * s),
-      Offset(14 * s, 4 * s),
-      Paint()
-        ..color = color
-        ..strokeWidth = 1.8 * s
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  // ── review: bulle de commentaire avec étoile ─────────────────────────────
-  void _drawReview(Canvas canvas, double s) {
-    final p = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5 * s
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    // Bulle arrondie simplifiée
-    final bubble = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(1 * s, 1 * s, 14 * s, 11 * s),
-        Radius.circular(3 * s),
-      ));
-    canvas.drawPath(bubble, p);
-    // Pointe de bulle
-    canvas.drawLine(Offset(5 * s, 12 * s), Offset(3 * s, 16 * s), p);
-    // Petite étoile au centre
-    final starPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final star = Path();
-    const points = 5;
-    for (int i = 0; i < points * 2; i++) {
-      final r = i.isEven ? 3.0 : 1.3;
-      final angle = -pi / 2 + (pi * i / points);
-      final x = 9 * s + r * s * cos(angle);
-      final y = 6.5 * s + r * s * sin(angle);
-      if (i == 0) {
-        star.moveTo(x, y);
-      } else {
-        star.lineTo(x, y);
-      }
-    }
-    star.close();
-    canvas.drawPath(star, starPaint);
-  }
-
-  @override
-  bool shouldRepaint(_NotifIconPainter old) => old.type != type || old.color != color;
-}
-
-// ── Painters ──────────────────────────────────────────────────────────────────
-
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF3A82F6).withValues(alpha: 0.06)
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 24) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += 24) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-class _CornerPainter extends CustomPainter {
-  final bool isLeft;
-  final bool isTop;
-  const _CornerPainter({required this.isLeft, required this.isTop});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF2C7BE5)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final x = isLeft ? 0.0 : size.width;
-    final y = isTop ? 0.0 : size.height;
-    final dx = isLeft ? size.width : -size.width;
-    final dy = isTop ? size.height : -size.height;
-    canvas.drawLine(Offset(x, y), Offset(x + dx, y), paint);
-    canvas.drawLine(Offset(x, y), Offset(x, y + dy), paint);
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }
