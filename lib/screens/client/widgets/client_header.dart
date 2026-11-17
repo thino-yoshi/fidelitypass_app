@@ -673,10 +673,18 @@ class _DarkModeItem extends StatelessWidget {
               child: Text('Mode sombre',
                   style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9))),
             ),
-            CupertinoSwitch(
+            Switch(
               value: mode == ThemeMode.dark,
               activeTrackColor: kSuccess,
+              activeThumbColor: Colors.white,
+              inactiveThumbColor: Colors.white,
               inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
+              thumbIcon: WidgetStateProperty.resolveWith<Icon?>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return const Icon(Icons.check_rounded, size: 14, color: kSuccess);
+                }
+                return null;
+              }),
               onChanged: (val) async {
                 themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
                 final p = await SharedPreferences.getInstance();

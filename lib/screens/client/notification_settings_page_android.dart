@@ -269,10 +269,18 @@ class _SwitchTile extends StatelessWidget {
             Switch(
               value: value,
               onChanged: onChanged,
-              activeThumbColor: Colors.white,
               activeTrackColor: kPrimary,
+              activeThumbColor: Colors.white,
               inactiveThumbColor: Colors.white,
-              inactiveTrackColor: isDark ? Colors.white.withValues(alpha: 0.14) : const Color(0xFFD0D8E4),
+              inactiveTrackColor: isDark
+                  ? Colors.white.withValues(alpha: 0.14)
+                  : const Color(0xFFD0D8E4),
+              thumbIcon: WidgetStateProperty.resolveWith<Icon?>((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return const Icon(Icons.check_rounded, size: 14, color: kPrimary);
+                }
+                return null;
+              }),
             ),
           ]),
         ),
