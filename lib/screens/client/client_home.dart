@@ -42,6 +42,7 @@ import 'widgets/client_sheets_ios.dart';
 import 'widgets/client_settings_ios.dart';
 import 'personal_info_page_android.dart';
 import 'notification_settings_page_android.dart';
+import 'help_page_android.dart';
 import '../../config/demo_mode.dart';
 import 'scan_tab.dart';
 import 'scan_tab_ios.dart';
@@ -1405,9 +1406,9 @@ class _ClientHomeState extends State<ClientHome>
                         ),
                       ),
                       onNotifSettings: _openNotifSettingsIos,
-                      onHelp: () => Navigator.push(context, CupertinoPageRoute(
-                        builder: (_) => const HelpPageIos(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'),
-                      )),
+                      onHelp: () => Navigator.push(context, Platform.isIOS
+                        ? CupertinoPageRoute(builder: (_) => const HelpPageIos(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'))
+                        : MaterialPageRoute(builder: (_) => const HelpPageAndroid(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'))),
                       onLogout: _logout,
                       onDelete: _showDeleteAccount,
                       onClearData: () => setState(() => _previewEmpty = !_previewEmpty),
@@ -1512,9 +1513,9 @@ class _ClientHomeState extends State<ClientHome>
               ),
             ),
             onNotifSettings: _openNotifSettingsIos,
-            onHelp: () => Navigator.push(context, CupertinoPageRoute(
-              builder: (_) => const HelpPageIos(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'),
-            )),
+            onHelp: () => Navigator.push(context, Platform.isIOS
+              ? CupertinoPageRoute(builder: (_) => const HelpPageIos(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'))
+              : MaterialPageRoute(builder: (_) => const HelpPageAndroid(faqs: HelpSheet.faqs, email: 'qarta.contact@gmail.com'))),
             onLogout: _logout,
             onDelete: _showDeleteAccount,
             onClearData: () => setState(() => _previewEmpty = !_previewEmpty),
