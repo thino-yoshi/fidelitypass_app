@@ -41,6 +41,7 @@ import 'widgets/client_notifs_android.dart';
 import 'widgets/client_sheets_ios.dart';
 import 'widgets/client_settings_ios.dart';
 import 'personal_info_page_android.dart';
+import 'notification_settings_page_android.dart';
 import '../../config/demo_mode.dart';
 import 'scan_tab.dart';
 import 'scan_tab_ios.dart';
@@ -1525,29 +1526,41 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
-  // ── iOS : réglages des notifications (enregistrés à chaque interrupteur) ──
+  // ── Réglages des notifications (enregistrés à chaque interrupteur) ──
   Future<void> _openNotifSettingsIos() async {
     final p = await SharedPreferences.getInstance();
     if (!mounted) return;
-    Navigator.push(context, CupertinoPageRoute(builder: (_) => NotificationSettingsPageIos(
-      push: p.getBool('notif_push') ?? true,
-      offres: p.getBool('notif_offres') ?? true,
-      visites: p.getBool('notif_visites') ?? false,
-      onSave: (push, offres, visites) async {
-        await p.setBool('notif_push', push);
-        await p.setBool('notif_offres', offres);
-        await p.setBool('notif_visites', visites);
-        if (QartaDemo.enabled) return true;
-        try {
-          final res = await AuthService.authPut('/notifications/preferences', '', {
-            'notif_push': push, 'notif_offres': offres, 'notif_visites': visites,
-          });
-          return res.statusCode >= 200 && res.statusCode < 300;
-        } catch (_) {
-          return false;
-        }
-      },
-    )));
+
+    Future<bool> save(bool push, bool offres, bool visites) async {
+      await p.setBool('notif_push', push);
+      await p.setBool('notif_offres', offres);
+      await p.setBool('notif_visites', visites);
+      if (QartaDemo.enabled) return true;
+      try {
+        final res = await AuthService.authPut('/notifications/preferences', '', {
+          'notif_push': push, 'notif_offres': offres, 'notif_visites': visites,
+        });
+        return res.statusCode >= 200 && res.statusCode < 300;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    if (Platform.isIOS) {
+      Navigator.push(context, CupertinoPageRoute(builder: (_) => NotificationSettingsPageIos(
+        push: p.getBool('notif_push') ?? true,
+        offres: p.getBool('notif_offres') ?? true,
+        visites: p.getBool('notif_visites') ?? false,
+        onSave: save,
+      )));
+    } else {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationSettingsPageAndroid(
+        push: p.getBool('notif_push') ?? true,
+        offres: p.getBool('notif_offres') ?? true,
+        visites: p.getBool('notif_visites') ?? false,
+        onSave: save,
+      )));
+    }
   }
 
   // ── iOS : ouvrir une carte (depuis « Les plus proches ») ─────────────────
