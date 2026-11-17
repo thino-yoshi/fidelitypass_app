@@ -40,6 +40,7 @@ import 'widgets/client_profile_android.dart';
 import 'widgets/client_notifs_android.dart';
 import 'widgets/client_sheets_ios.dart';
 import 'widgets/client_settings_ios.dart';
+import 'personal_info_page_android.dart';
 import '../../config/demo_mode.dart';
 import 'scan_tab.dart';
 import 'scan_tab_ios.dart';
@@ -111,7 +112,7 @@ class _ClientHomeState extends State<ClientHome>
   String  _phone = '';
   bool    _isGoogle = false;
   bool    _isOAuth  = false; // true pour Google ET Apple (email non modifiable)
-  bool    _openingPersonalInfo = false;
+
 
   static const Map<String, Map<String, dynamic>> _notifStyle = {
     'recompense': {'icon': '⭐', 'color': 0xFFFBBF24},
@@ -436,7 +437,8 @@ class _ClientHomeState extends State<ClientHome>
   }
 
   Future<void> _showPersonalInfo() async {
-    if (kIsIOS) {
+    if (Platform.isIOS) {
+      // Vrai appareil iOS → page native iOS
       await Navigator.push(context, CupertinoPageRoute(builder: (_) => PersonalInfoPageIos(
         name: _userName,
         email: _userEmail,
@@ -447,310 +449,15 @@ class _ClientHomeState extends State<ClientHome>
       )));
       return;
     }
-    if (_openingPersonalInfo) return;
-    _openingPersonalInfo = true;
-    if (!mounted) { _openingPersonalInfo = false; return; }
-
-    // Champs éditables — utilise les données en cache (ouverture immédiate)
-    final nameCtrl  = TextEditingController(text: _userName);
-    final emailCtrl = TextEditingController(text: _userEmail);
-    bool _profileLoaded = false;
-    final phoneCtrl = TextEditingController(text: _phone);
-
-    // Pour déclencher un rebuild du bouton dès qu'un champ change
-    // (utiliser une variable dans le StatefulBuilder via setS)
-    void Function(void Function())? _setS;
-
-    // Quel champ est en cours d'édition ? null = aucun
-    String? editingField; // 'name' | 'email' | 'phone'
-    bool saving = false;
-
-    // Valeurs initiales pour détecter les modifications
-    final initName  = _userName;
-    final initEmail = _userEmail;
-    final initPhone = _phone;
-
-    bool hasChanges() =>
-        nameCtrl.text.trim() != initName ||
-        (!_isOAuth && emailCtrl.text.trim() != initEmail) ||
-        phoneCtrl.text.trim() != initPhone;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) {
-          // Listeners pour activer le bouton Enregistrer dès qu'un champ est modifié
-          if (_setS == null) {
-            _setS = setS;
-            void rebuild() { if (ctx.mounted) setS(() {}); }
-            nameCtrl.addListener(rebuild);
-            emailCtrl.addListener(rebuild);
-            phoneCtrl.addListener(rebuild);
-          }
-
-          // Rafraîchissement en arrière-plan au premier build (sans bloquer l'ouverture)
-          if (!_profileLoaded) {
-            _profileLoaded = true;
-            Future.microtask(() async {
-              try {
-                final res = await http.get(
-                  Uri.parse('$apiUrl/users/me'),
-                  headers: {'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}'},
-                );
-                if (res.statusCode == 200 && ctx.mounted) {
-                  final body        = jsonDecode(res.body) as Map<String, dynamic>;
-                  final serverEmail = body['email'] as String? ?? '';
-                  final serverName  = body['name']  as String? ?? '';
-                  final serverIsGoogle = body['is_google'] as bool? ?? false;
-                  final prefs = await SharedPreferences.getInstance();
-                  final localIsGoogle = prefs.getBool('is_google') ?? false;
-                  final freshEmail  = serverEmail.isNotEmpty ? serverEmail : _userEmail;
-                  final freshGoogle = serverIsGoogle || localIsGoogle || _isGoogle;
-                  final freshOAuth  = (body['is_oauth'] as bool? ?? false) || freshGoogle;
-                  if (freshEmail.isNotEmpty) await prefs.setString('email', freshEmail);
-                  await prefs.setBool('is_google', freshGoogle);
-                  await prefs.setBool('is_oauth', freshOAuth);
-                  if (mounted) setState(() {
-                    _userEmail = freshEmail;
-                    _isGoogle  = freshGoogle;
-                    _isOAuth   = freshOAuth;
-                    if (serverName.isNotEmpty) _userName = serverName;
-                  });
-                  if (ctx.mounted) setS(() {
-                    emailCtrl.text = freshEmail;
-                    if (serverName.isNotEmpty) nameCtrl.text = serverName;
-                  });
-                }
-              } catch (_) {}
-            });
-          }
-
-          final isDark     = Theme.of(context).brightness == Brightness.dark;
-          final bg         = isDark ? const Color(0xFF0F1923) : const Color(0xFFF5F7FA);
-          final cardBg     = isDark ? const Color(0xFF1A2535) : Colors.white;
-          final sub        = isDark ? Colors.white.withValues(alpha: 0.55) : const Color(0xFF4A6080);
-          final textMain   = isDark ? Colors.white : const Color(0xFF0D1B2A);
-          final borderNorm = isDark ? kBlueLight.withValues(alpha: 0.14) : const Color(0xFFBDD3F8);
-          final borderFoc  = isDark ? kBlueLight.withValues(alpha: 0.50) : kPrimary.withValues(alpha: 0.45);
-          final iconBg     = isDark ? kBlueLight.withValues(alpha: 0.14) : kPrimary.withValues(alpha: 0.10);
-          final iconColor  = isDark ? kBlueLight : kPrimary;
-
-          // ── champ éditable ─────────────────────────────────────────────
-          Widget editableRow({
-            required IconData icon,
-            required String fieldKey,
-            required String label,
-            required TextEditingController ctrl,
-            TextInputType keyboard = TextInputType.text,
-            bool readOnly = false,
-          }) {
-            final isEditing = editingField == fieldKey;
-            return Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: isEditing ? borderFoc : borderNorm),
-                boxShadow: [BoxShadow(color: kBlueLight.withValues(alpha: isDark ? 0.04 : 0.06), blurRadius: 8)],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
-                    child: Icon(icon, color: iconColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: isEditing
-                        ? TextField(
-                            controller: ctrl,
-                            autofocus: true,
-                            keyboardType: keyboard,
-                            cursorColor: iconColor,
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: textMain),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: label,
-                              hintStyle: TextStyle(color: sub),
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(label, style: TextStyle(fontSize: 11, color: sub)),
-                              Text(
-                                ctrl.text.isEmpty ? 'Non renseigné' : ctrl.text,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 15,
-                                  color: ctrl.text.isEmpty ? sub : textMain,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                  // Icône d'édition — masquée pour Google (sauf téléphone)
-                  if (!readOnly)
-                    isEditing
-                        ? IconButton(
-                            icon: Icon(Icons.check_rounded, color: iconColor, size: 20),
-                            onPressed: () => setS(() => editingField = null),
-                          )
-                        : IconButton(
-                            icon: Icon(Icons.edit_rounded, color: iconColor, size: 18),
-                            onPressed: () => setS(() => editingField = fieldKey),
-                          )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Icon(Icons.lock_outline_rounded, color: sub, size: 16),
-                    ),
-                ],
-              ),
-            );
-          }
-
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-            child: Container(
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40, height: 4,
-                      decoration: BoxDecoration(color: borderNorm, borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text('Informations personnelles', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textMain), overflow: TextOverflow.ellipsis),
-                      ),
-                      if (_isGoogle) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                          child: const Text('Compte Google', style: TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.w700)),
-                        ),
-                      ] else if (_isOAuth) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                          child: const Text('Compte Apple', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w700)),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (_isOAuth)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6, bottom: 4),
-                      child: Text('Email géré par ${_isGoogle ? "Google" : "Apple"}', style: TextStyle(fontSize: 12, color: sub)),
-                    ),
-                  const SizedBox(height: 16),
-
-                  // Nom (toujours éditable)
-                  editableRow(
-                    icon: Icons.person_rounded,
-                    fieldKey: 'name',
-                    label: 'Nom & Prénom',
-                    ctrl: nameCtrl,
-                    readOnly: false,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Email (bloqué pour les comptes OAuth)
-                  editableRow(
-                    icon: Icons.email_outlined,
-                    fieldKey: 'email',
-                    label: 'Email',
-                    ctrl: emailCtrl,
-                    keyboard: TextInputType.emailAddress,
-                    readOnly: _isOAuth,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Téléphone (toujours éditable, local)
-                  editableRow(
-                    icon: Icons.phone_outlined,
-                    fieldKey: 'phone',
-                    label: 'Téléphone',
-                    ctrl: phoneCtrl,
-                    keyboard: TextInputType.phone,
-                    readOnly: false,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Bouton Enregistrer — actif seulement si un champ a changé
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: saving || !hasChanges() ? null : () async {
-                        setS(() => saving = true);
-                        // Sauvegarder téléphone localement
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setString('user_phone', phoneCtrl.text.trim());
-
-                        // Mettre à jour nom (et email si non-OAuth) sur le serveur
-                        try {
-                          final reqBody = <String, dynamic>{'name': nameCtrl.text.trim()};
-                          if (!_isOAuth) reqBody['email'] = emailCtrl.text.trim();
-                          final res = await http.patch(
-                            Uri.parse('$apiUrl/users/me'),
-                            headers: {
-                              'Authorization': 'Bearer ${AuthService.currentToken ?? widget.token}',
-                              'Content-Type': 'application/json',
-                            },
-                            body: jsonEncode(reqBody),
-                          );
-                          if (res.statusCode == 200 && mounted) {
-                            final updated = jsonDecode(res.body);
-                            setState(() {
-                              _userEmail = updated['email'] ?? _userEmail;
-                              _userName  = updated['name']  ?? _userName;
-                            });
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('name',  _userName);
-                            await prefs.setString('email', _userEmail);
-                          }
-                        } catch (_) {}
-
-                        if (mounted) setState(() => _phone = phoneCtrl.text.trim());
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kPrimary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: isDark ? 0 : 2,
-                        shadowColor: kPrimary.withValues(alpha: 0.3),
-                      ),
-                      child: saving
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive())
-                          : const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    _openingPersonalInfo = false;
+    // Android → page glassmorphism Android
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => PersonalInfoPageAndroid(
+      name: _userName,
+      email: _userEmail,
+      phone: _phone,
+      emailLocked: _isOAuth,
+      lockedBy: _isGoogle ? 'Google' : 'Apple',
+      onSave: _savePersonalInfo,
+    )));
   }
 
   Widget _infoRow({required IconData icon, required String label, required String value, required Color sub}) {
