@@ -27,25 +27,28 @@ class ClientHistoryIos extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom + 110;
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
+        CupertinoSliverRefreshControl(onRefresh: onRefresh),
         SliverPadding(
           padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
               _hero(),
               const SizedBox(height: 18),
-              _SegPill<String>(
-                value: filter,
-                onChanged: onFilter,
-                children: const {
-                  'all': Text('Tout'),
-                  'stamp': Text('Tampons'),
-                  'reward': Text('Récompenses'),
-                },
+              SizedBox(
+                width: double.infinity,
+                child: CupertinoSlidingSegmentedControl<String>(
+                  groupValue: filter,
+                  padding: const EdgeInsets.all(2),
+                  children: {
+                    'all': _seg('Tout', context),
+                    'stamp': _seg('Tampons', context),
+                    'reward': _seg('Récompenses', context),
+                  },
+                  onValueChanged: (v) { if (v != null) onFilter(v); },
+                ),
               ),
               if (grouped.isEmpty) _empty(context),
               for (final e in grouped.entries) ...[
@@ -64,9 +67,13 @@ class ClientHistoryIos extends StatelessWidget {
           ),
         ),
       ],
-    ),
     );
   }
+
+  Widget _seg(String t, BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText)),
+      );
 
   // Bloc bleu nuit : les deux chiffres bien centrés chacun dans sa moitié.
   Widget _hero() {
@@ -143,49 +150,4 @@ class ClientHistoryIos extends StatelessWidget {
               textAlign: TextAlign.center, style: QText.caption.copyWith(color: context.cSub)),
         ]),
       );
-}
-
-class _SegPill<T> extends StatelessWidget {
-  final T value;
-  final Map<T, Widget> children;
-  final ValueChanged<T> onChanged;
-  const _SegPill({required this.value, required this.children, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(children: [
-        for (final e in children.entries)
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(e.key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: e.key == value
-                    ? (isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white)
-                    : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: e.key == value
-                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3, offset: const Offset(0, 1))]
-                    : [],
-                ),
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText),
-                  child: Center(child: e.value),
-                ),
-              ),
-            ),
-          ),
-      ]),
-    );
-  }
 }

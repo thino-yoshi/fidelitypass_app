@@ -48,7 +48,7 @@ class ClientProfileIos extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
     return ListView(
-      physics: const ClampingScrollPhysics(),
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, top + 8, 16, MediaQuery.of(context).padding.bottom + 30),
       children: [
         Align(alignment: Alignment.centerLeft, child: GlassBackButton(onTap: onBack)),
@@ -98,7 +98,7 @@ class ClientProfileIos extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        TextButton(
+        CupertinoButton(
           onPressed: onDelete,
           child: Text('Supprimer mon compte', style: QText.caption.copyWith(color: context.cSub)),
         ),

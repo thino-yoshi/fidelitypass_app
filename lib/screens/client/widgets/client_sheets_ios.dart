@@ -130,7 +130,8 @@ Widget _bigButton(String label, Color color, VoidCallback onTap) => SizedBox(
         borderRadius: BorderRadius.circular(14),
         color: color,
         onPressed: onTap,
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+        // Sur l'or, le blanc se lit mal (contraste 2,2) : texte bleu nuit (8,7), règle Apple ≥ 4,5.
+        child: Text(label, style: TextStyle(color: color == kGold ? kNavy : Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
       ),
     );
 
@@ -158,6 +159,12 @@ Future<bool?> showCardAddedIos(
 }) {
   HapticFeedback.mediumImpact();
   final name = merchant['business_name'] as String? ?? '';
+  // Carte déjà dans le portefeuille : un simple message Apple, sans image de carte.
+  if (alreadyMember) {
+    return showIosAlert(context, 'Déjà dans tes cartes',
+            name.isEmpty ? 'Tu as déjà cette carte.' : 'Tu as déjà la carte $name.')
+        .then((_) => true);
+  }
   final isPoints = (merchant['program_type'] as String? ?? 'stamps') == 'points';
   final req = isPoints ? (merchant['points_required'] as int? ?? 100) : (merchant['stamps_required'] as int? ?? 10);
   final reward = merchant['reward_description'] as String? ?? '';
@@ -402,7 +409,7 @@ class _RewardQrSheetIosState extends State<_RewardQrSheetIos> {
                   dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: kNavy),
                 ),
           const SizedBox(height: 10),
-          Text('Montre ce code au commerçant', style: QText.body.copyWith(fontSize: 17, color: const Color(0xFF9096A4))),
+          Text('Montre ce code au commerçant', style: QText.body.copyWith(fontSize: 17, color: const Color(0xFF656B7A))),
         ]),
       ),
       const SizedBox(height: 18),
@@ -453,6 +460,56 @@ Future<void> showIosAlert(BuildContext context, String title, String message) {
       title: Text(title),
       content: Text(message),
       actions: [CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+    ),
+  );
+}
+
+/// Menu Apple (feuille d'actions) pour la photo de profil.
+void showPhotoActionsIos(BuildContext context,
+    {required bool hasPhoto, required VoidCallback onChoose, required VoidCallback onDelete}) {
+  showCupertinoModalPopup<void>(
+    context: context,
+    builder: (ctx) => CupertinoActionSheet(
+      title: const Text('Photo de profil'),
+      actions: [
+        CupertinoActionSheetAction(
+          onPressed: () { Navigator.pop(ctx); onChoose(); },
+          child: const Text('Choisir une photo'),
+        ),
+        if (hasPhoto)
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () { Navigator.pop(ctx); onDelete(); },
+            child: const Text('Supprimer la photo'),
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        isDefaultAction: true,
+        onPressed: () => Navigator.pop(ctx),
+        child: const Text('Annuler'),
+      ),
+    ),
+  );
+}
+
+/// Confirmation Apple avant de se déconnecter.
+void showLogoutConfirmIos(BuildContext context, {required VoidCallback onLogout}) {
+  showCupertinoModalPopup<void>(
+    context: context,
+    builder: (ctx) => CupertinoActionSheet(
+      message: const Text('Tu pourras te reconnecter à tout moment. Tes cartes restent enregistrées.'),
+      actions: [
+        CupertinoActionSheetAction(
+          isDestructiveAction: true,
+          onPressed: () { Navigator.pop(ctx); onLogout(); },
+          child: const Text('Se déconnecter'),
+        ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        isDefaultAction: true,
+        onPressed: () => Navigator.pop(ctx),
+        child: const Text('Annuler'),
+      ),
     ),
   );
 }

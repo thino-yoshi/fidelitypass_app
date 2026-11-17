@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../screens/merchant/merchant_tokens.dart' show kIsIOS;
 
 // Fixed colors — same in light and dark
 const kPrimary   = Color(0xFF2C7BE5);
@@ -18,7 +19,9 @@ extension AppColors on BuildContext {
   Color get cSurface => isDark ? const Color(0xFF0D1F35) : Colors.white;
   Color get cBorder  => isDark ? const Color(0xFF1A2D45) : const Color(0xFFEDE9E3);
   Color get cText    => isDark ? const Color(0xFFEEF2FF) : const Color(0xFF1A1828);
-  Color get cSub     => isDark ? const Color(0xFF7B8DB0) : const Color(0xFF9096A4);
+  // iPhone : gris un peu plus foncé (#656B7A) pour la règle Apple de lisibilité
+  // (contraste 4,8 sur le fond, au lieu de 2,7). Android garde #9096A4.
+  Color get cSub     => isDark ? const Color(0xFF7B8DB0) : (kIsIOS ? const Color(0xFF656B7A) : const Color(0xFF9096A4));
   Color get cFill    => isDark ? const Color(0xFF0A1A2E) : const Color(0xFFF0F2F5);
 
   // q* — nouvelle convention (alias)

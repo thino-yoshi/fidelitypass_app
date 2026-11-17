@@ -106,25 +106,6 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
         }
       });
 
-  Widget _rewardsWarning(int lostRewards) => Container(
-    margin: const EdgeInsets.only(top: 10),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFEF3C7),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFFCD34D)),
-    ),
-    child: Row(children: [
-      const Icon(Icons.warning_amber_rounded, color: Color(0xFF92400E), size: 16),
-      const SizedBox(width: 8),
-      Expanded(child: Text(
-        '$lostRewards récompense${lostRewards > 1 ? 's' : ''} '
-        '${lostRewards > 1 ? 'seront perdues' : 'sera perdue'} définitivement.',
-        style: const TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.w600, height: 1.4),
-      )),
-    ]),
-  );
-
   Widget _buildDeleteDialog({
     required BuildContext ctx,
     required int n,
@@ -134,22 +115,21 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
     required VoidCallback? onConfirm,
   }) {
     final title = 'Supprimer $n carte${n > 1 ? 's' : ''} ?';
-    const body = 'Cette action est irréversible.\nTes tampons et ton historique seront perdus définitivement.';
-    final confirmLabel = countdown > 0 ? 'Supprimer ($countdown)' : 'Supprimer';
+    const body = 'Tes tampons et ton historique seront perdus. Tu ne pourras pas revenir en arrière.';
+    const confirmLabel = 'Supprimer';
 
-    return AlertDialog(
+    return CupertinoAlertDialog(
       title: Text(title),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const SizedBox(height: 4),
-        const Text(body),
-        if (lostRewards > 0) _rewardsWarning(lostRewards),
-      ]),
+      // Apple : une alerte ne contient que du texte (pas d'encadré coloré).
+      content: Text(lostRewards > 0
+          ? '$body Tu perdras aussi $lostRewards récompense${lostRewards > 1 ? 's' : ''} pas encore utilisée${lostRewards > 1 ? 's' : ''}.'
+          : body),
       actions: [
-        TextButton(onPressed: onCancel, child: const Text('Annuler')),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: kError),
+        CupertinoDialogAction(isDefaultAction: true, onPressed: onCancel, child: const Text('Annuler')),
+        CupertinoDialogAction(
+          isDestructiveAction: true,
           onPressed: onConfirm,
-          child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+          child: const Text(confirmLabel),
         ),
       ],
     );
@@ -166,11 +146,11 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
         .where((r) => selectedMerchantIds.contains(r['merchant_id'] as String?))
         .length;
 
-    final confirm = await showDialog<bool>(
+    final confirm = await showCupertinoDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        int countdown = 3;
+        int countdown = 0; // Apple : pas d'attente avant de pouvoir confirmer
         Timer? t;
         return StatefulBuilder(
           builder: (ctx, setSt) {
@@ -222,6 +202,10 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
     return (w.length >= 2 ? '${w[0][0]}${w[1][0]}' : w[0].substring(0, w[0].length < 2 ? w[0].length : 2)).toUpperCase();
   }
 
+  Widget _seg(String t) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText)),
+      );
 
   Widget _iosRow(Map card, int index) {
     final id = card['id'] as String? ?? '';
@@ -264,19 +248,12 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
       ),
     );
     if (_editing) return row;
-    return Dismissible(
+    return _IosSwipeRow(
       key: ValueKey('mc-$id'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        color: kError,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Text('Supprimer', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
-      ),
-      confirmDismiss: (_) async {
+      surface: context.cSurface,
+      onDelete: () async {
         setState(() { _selected..clear()..add(id); });
         await _deleteSelected();
-        return false;
       },
       child: row,
     );
@@ -295,7 +272,7 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
       backgroundColor: context.cBg,
       body: iosReadableWidth(Stack(children: [
         ListView(
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(16, top + 8, 16, bottom + (_editing ? 100 : 30)),
           children: [
@@ -303,8 +280,8 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
               GlassBackButton(onTap: () => Navigator.maybePop(context)),
               const Spacer(),
               if (_cards.isNotEmpty)
-                TextButton(
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
                   onPressed: () => setState(() { _editing = !_editing; _selected.clear(); }),
                   child: Text(_editing ? 'OK' : 'Modifier',
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kPrimary)),
@@ -314,28 +291,24 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
             Text('Mes cartes', style: QText.largeTitle(context).copyWith(color: context.cText)),
             Text('${_cards.length} carte${_cards.length > 1 ? 's' : ''}', style: QText.body.copyWith(fontSize: 17, color: context.cSub)),
             const SizedBox(height: 14),
-            TextField(
+            CupertinoSearchTextField(
+              placeholder: 'Rechercher une carte',
               onChanged: (v) => setState(() => _search = v),
               style: QText.body.copyWith(fontSize: 17, color: context.cText),
-              decoration: InputDecoration(
-                hintText: 'Rechercher une carte',
-                hintStyle: TextStyle(color: context.cSub),
-                prefixIcon: Icon(Icons.search, color: context.cSub, size: 20),
-                filled: true,
-                fillColor: context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
             ),
             const SizedBox(height: 12),
-            _SegPill<_SortModeIos>(
-              value: _sort == _SortModeIos.leastStamps ? _SortModeIos.mostStamps : _sort,
-              onChanged: (v) => setState(() => _sort = v),
-              children: const {
-                _SortModeIos.recent: Text('Récentes'),
-                _SortModeIos.oldest: Text('Anciennes'),
-                _SortModeIos.mostStamps: Text('Tampons'),
-              },
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoSlidingSegmentedControl<_SortModeIos>(
+                groupValue: _sort == _SortModeIos.leastStamps ? _SortModeIos.mostStamps : _sort,
+                padding: const EdgeInsets.all(2),
+                children: {
+                  _SortModeIos.recent:  _seg('Récentes'),
+                  _SortModeIos.oldest:  _seg('Anciennes'),
+                  _SortModeIos.mostStamps: _seg('Tampons'),
+                },
+                onValueChanged: (v) { if (v != null) setState(() => _sort = v); },
+              ),
             ),
             const SizedBox(height: 18),
             if (cards.isEmpty)
@@ -364,19 +337,14 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
         if (_editing)
           Positioned(
             left: 16, right: 16, bottom: bottom + 12,
-            child: ElevatedButton(
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              borderRadius: BorderRadius.circular(14),
+              color: kError,
+              disabledColor: context.cSub.withValues(alpha: 0.25),
               onPressed: _selected.isEmpty || _deleting ? null : _deleteSelected,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kError,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: context.cSub.withValues(alpha: 0.25),
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-                minimumSize: const Size(double.infinity, 0),
-              ),
               child: _deleting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                  ? const CupertinoActivityIndicator(color: Colors.white)
                   : Text(_selected.isEmpty ? 'Choisis des cartes' : 'Supprimer (${_selected.length})',
                       style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
             ),
@@ -386,47 +354,82 @@ class _ManageCardsScreenIosState extends State<ManageCardsScreenIos> {
   }
 }
 
-class _SegPill<T> extends StatelessWidget {
-  final T value;
-  final Map<T, Widget> children;
-  final ValueChanged<T> onChanged;
-  const _SegPill({required this.value, required this.children, required this.onChanged});
+
+/// Ligne qu'on glisse vers la gauche, comme dans les listes iPhone :
+/// la ligne se décale et laisse voir un bouton rouge « Supprimer » collé à droite.
+/// Glisser jusqu'au bout = supprimer directement (avec l'alerte de confirmation).
+class _IosSwipeRow extends StatefulWidget {
+  final Widget child;
+  final Color surface;
+  final Future<void> Function() onDelete;
+  const _IosSwipeRow({super.key, required this.child, required this.surface, required this.onDelete});
+
+  @override
+  State<_IosSwipeRow> createState() => _IosSwipeRowState();
+}
+
+class _IosSwipeRowState extends State<_IosSwipeRow> with SingleTickerProviderStateMixin {
+  static const double _btn = 96; // largeur du bouton rouge
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+  double _dx = 0;       // décalage actuel (négatif = vers la gauche)
+  double _width = 1;
+
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  void _animateTo(double target) {
+    final from = _dx;
+    final anim = Tween<double>(begin: from, end: target).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic));
+    void tick() => setState(() => _dx = anim.value);
+    anim.addListener(tick);
+    _c.forward(from: 0).whenComplete(() => anim.removeListener(tick));
+  }
+
+  Future<void> _delete() async {
+    _animateTo(0);
+    await widget.onDelete();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(children: [
-        for (final e in children.entries)
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(e.key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: e.key == value
-                    ? (isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white)
-                    : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: e.key == value
-                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3, offset: const Offset(0, 1))]
-                    : [],
-                ),
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.cText),
-                  child: Center(child: e.value),
+    return LayoutBuilder(builder: (context, c) {
+      _width = c.maxWidth;
+      final open = -_dx; // largeur visible du rouge
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _dx != 0 ? () => _animateTo(0) : null,
+        onHorizontalDragUpdate: (d) => setState(() => _dx = (_dx + d.delta.dx).clamp(-_width, 0)),
+        onHorizontalDragEnd: (d) {
+          final v = d.primaryVelocity ?? 0;
+          if (-_dx > _width * 0.6) { _delete(); return; }          // glissé jusqu'au bout
+          if (v < -300 || -_dx > _btn / 2) { _animateTo(-_btn); }   // reste ouvert
+          else { _animateTo(0); }                                   // se referme
+        },
+        child: Stack(children: [
+          if (open > 0)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: _delete,
+                  child: Container(
+                    width: open,
+                    color: kError,
+                    alignment: Alignment.center,
+                    child: open > 60
+                        ? const Text('Supprimer', maxLines: 1, overflow: TextOverflow.clip, softWrap: false,
+                            style: TextStyle(color: Colors.white, fontSize: 17))
+                        : null,
+                  ),
                 ),
               ),
             ),
+          Transform.translate(
+            offset: Offset(_dx, 0),
+            child: ColoredBox(color: widget.surface, child: widget.child),
           ),
-      ]),
-    );
+        ]),
+      );
+    });
   }
 }

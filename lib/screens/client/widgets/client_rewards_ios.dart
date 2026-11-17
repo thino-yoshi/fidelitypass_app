@@ -57,11 +57,10 @@ class ClientRewardsIos extends StatelessWidget {
     final groups = _byMerchant;
     final closest = _closest;
     final bottomPad = MediaQuery.of(context).padding.bottom + 110;
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
+        CupertinoSliverRefreshControl(onRefresh: onRefresh),
         SliverPadding(
           padding: EdgeInsets.fromLTRB(16, 18, 16, bottomPad),
           sliver: SliverList(
@@ -92,7 +91,6 @@ class ClientRewardsIos extends StatelessWidget {
           ),
         ),
       ],
-    ),
     );
   }
 
@@ -262,7 +260,7 @@ class RewardPassIos extends StatelessWidget {
     if (n <= 1) {
       return Container(
         width: size, height: size, decoration: box,
-        child: Icon(CupertinoIcons.gift, color: Colors.white, size: size * 0.52),
+        child: Icon(CupertinoIcons.gift, color: kNavy, size: size * 0.52),
       );
     }
     // Cadeau puis « ×2 » sur une ligne, comme sur les cartes rangées.
@@ -272,9 +270,9 @@ class RewardPassIos extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: box.copyWith(borderRadius: BorderRadius.circular(h * 0.3)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(CupertinoIcons.gift, color: Colors.white, size: h * 0.5),
+        Icon(CupertinoIcons.gift, color: kNavy, size: h * 0.5),
         const SizedBox(width: 5),
-        Text('×$n', style: TextStyle(color: Colors.white, fontSize: h >= 40 ? 15 : 13, fontWeight: FontWeight.w700)),
+        Text('×$n', style: TextStyle(color: kNavy, fontSize: h >= 40 ? 15 : 13, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -370,7 +368,7 @@ Future<void> showRewardGroupIos(
                     Container(
                       width: 34, height: 34,
                       decoration: BoxDecoration(color: kGold, borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(CupertinoIcons.gift, color: Colors.white, size: 18),
+                      child: const Icon(CupertinoIcons.gift, color: kNavy, size: 18),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -379,20 +377,16 @@ Future<void> showRewardGroupIos(
                         Text(_earned(rewards[i] as Map), style: QText.caption.copyWith(color: ctx.cSub)),
                       ]),
                     ),
-                    ElevatedButton(
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                      minimumSize: const Size(0, 34),
+                      color: kGold,
+                      borderRadius: BorderRadius.circular(999),
                       onPressed: () {
                         Navigator.pop(ctx);
                         onUse(rewards[i] as Map);
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kGold,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                        elevation: 0,
-                        minimumSize: const Size(0, 34),
-                      ),
-                      child: const Text('Utiliser', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                      child: const Text('Utiliser', style: TextStyle(color: kNavy, fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
                   ]),
                 ),

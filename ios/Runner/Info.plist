@@ -6,6 +6,12 @@
 		<true/>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>CFBundleLocalizations</key>
+		<array>
+			<string>fr</string>
+			<string>en</string>
+			<string>nl</string>
+		</array>
 		<key>CFBundleDisplayName</key>
 		<string>Qarta</string>
 		<key>CFBundleExecutable</key>
