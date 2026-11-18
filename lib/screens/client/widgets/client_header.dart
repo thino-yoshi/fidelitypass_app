@@ -120,6 +120,7 @@ class _ClientHeaderState extends State<ClientHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Row(
@@ -150,12 +151,15 @@ class _ClientHeaderState extends State<ClientHeader> {
               child: Container(
             key: _pillKey,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: isDark ? LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [kBlueLight.withValues(alpha: 0.28), kNavy.withValues(alpha: 0.55)],
+              ) : null,
+              color: isDark ? null : const Color(0xFFF0F1F5),
+              border: Border.all(
+                color: isDark ? kBlueLight.withValues(alpha: 0.22) : Colors.black.withValues(alpha: 0.08),
               ),
-              border: Border.all(color: kBlueLight.withValues(alpha: 0.22)),
               borderRadius: BorderRadius.circular(32),
             ),
             padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
@@ -186,7 +190,7 @@ class _ClientHeaderState extends State<ClientHeader> {
                 ),
                 Container(
                   width: 1, height: 18,
-                  color: Colors.white.withValues(alpha: 0.14),
+                  color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.10),
                   margin: const EdgeInsets.symmetric(horizontal: 6),
                 ),
                 GestureDetector(
