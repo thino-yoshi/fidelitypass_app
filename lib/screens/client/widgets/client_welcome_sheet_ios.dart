@@ -43,7 +43,7 @@ class _WelcomeSheet extends StatelessWidget {
   const _WelcomeSheet();
 
   static const _text = Color(0xFF1A1828);
-  static const _sub = Color(0xFF9096A4);
+  static const _sub = Color(0xFF656B7A); // gris lisible (règle Apple)
 
   Widget _row(String icon, Color color, String title, String sub) => Row(children: [
         SizedBox(width: 52, child: Center(child: SfIcon(icon, size: 36, color: color))),

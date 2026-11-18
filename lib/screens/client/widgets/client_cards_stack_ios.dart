@@ -90,21 +90,19 @@ class _ClientCardsStackIosState extends State<ClientCardsStackIos> {
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom + 110;
-    return RefreshIndicator(
-      onRefresh: widget.onRefresh,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate(
-                widget.hasAnyCard ? _withCards(context) : [ClientWelcomeCard(onScanTap: widget.onScanTap)],
-              ),
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              widget.hasAnyCard ? _withCards(context) : [ClientWelcomeCard(onScanTap: widget.onScanTap)],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -113,28 +111,20 @@ class _ClientCardsStackIosState extends State<ClientCardsStackIos> {
     return [
       Row(children: [
         Expanded(
-          child: TextField(
+          child: CupertinoSearchTextField(
             controller: _searchCtrl,
             focusNode: _searchFocus,
+            placeholder: 'Rechercher une carte',
             onChanged: widget.onSearch,
             style: QText.body.copyWith(fontSize: 17, color: context.cText),
-            decoration: InputDecoration(
-              hintText: 'Rechercher une carte',
-              hintStyle: TextStyle(color: context.cSub),
-              prefixIcon: Icon(Icons.search, color: context.cSub, size: 20),
-              filled: true,
-              fillColor: context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
           ),
         ),
         AnimatedSize(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
           child: _searching
-              ? TextButton(
-                  style: TextButton.styleFrom(padding: const EdgeInsets.only(left: 12)),
+              ? CupertinoButton(
+                  padding: const EdgeInsets.only(left: 12),
                   onPressed: _cancelSearch,
                   child: const Text('Annuler', style: TextStyle(fontSize: 17, color: kPrimary)),
                 )
@@ -152,17 +142,7 @@ class _ClientCardsStackIosState extends State<ClientCardsStackIos> {
           padding: const EdgeInsets.only(top: 40),
           child: Center(child: Text('Aucune carte trouvée', style: QText.body.copyWith(color: context.cSub))),
         ),
-      for (var i = 0; i < cards.length; i++) ...[
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => widget.onOpen(i),
-          child: SizedBox(
-            height: ClientCardsStackIos.cardHeight,
-            child: cards[i],
-          ),
-        ),
-        if (i < cards.length - 1) const SizedBox(height: 14),
-      ],
+      for (var i = 0; i < cards.length; i++) _stacked(i, cards[i], last: i == cards.length - 1),
     ];
   }
 
@@ -264,15 +244,11 @@ class ClientWelcomeCard extends StatelessWidget {
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              borderRadius: BorderRadius.circular(14),
+              color: kPrimary,
               onPressed: onScanTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
               child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(CupertinoIcons.qrcode_viewfinder, color: Colors.white, size: 22),
                 SizedBox(width: 8),

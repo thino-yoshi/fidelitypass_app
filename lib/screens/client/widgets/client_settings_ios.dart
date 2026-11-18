@@ -25,7 +25,7 @@ class IosSettingsPage extends StatelessWidget {
       child: Scaffold(
         backgroundColor: context.cBg,
         body: iosReadableWidth(ListView(
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(16, top + 8, 16, MediaQuery.of(context).padding.bottom + 30),
           children: [
@@ -54,9 +54,9 @@ class IosTextAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (busy) return const Padding(padding: EdgeInsets.all(10), child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)));
-    return TextButton(
-      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+    if (busy) return const Padding(padding: EdgeInsets.all(12), child: CupertinoActivityIndicator());
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       onPressed: onTap,
       child: Text(label,
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600,
@@ -420,8 +420,8 @@ class _HelpPageIosState extends State<HelpPageIos> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: SelectableText(widget.email, style: QText.body.copyWith(fontSize: 17, color: context.cText))),
-                TextButton(
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
                   onPressed: _copy,
                   child: Text(_copied ? 'Copié' : 'Copier',
                       style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: _copied ? kSuccess : kPrimary)),
@@ -466,6 +466,132 @@ class _HelpPageIosState extends State<HelpPageIos> {
           ),
         ]),
       ),
+    );
+  }
+}
+
+// ── Supprimer le compte ──────────────────────────────────────────────────────
+
+/// Page « Supprimer le compte » façon Réglages : ce qui sera effacé,
+/// mot de passe (comptes email), gros bouton rouge, puis confirmation Apple.
+class DeleteAccountPageIos extends StatefulWidget {
+  final int cardCount;
+  final bool needsPassword;   // false pour un compte Apple ou Google
+  final String? lockedBy;     // « Apple » | « Google »
+  /// Renvoie null si c'est bon, sinon le message d'erreur à afficher.
+  final Future<String?> Function(String password) onDelete;
+  const DeleteAccountPageIos({
+    super.key,
+    required this.cardCount,
+    required this.needsPassword,
+    required this.onDelete,
+    this.lockedBy,
+  });
+
+  @override
+  State<DeleteAccountPageIos> createState() => _DeleteAccountPageIosState();
+}
+
+class _DeleteAccountPageIosState extends State<DeleteAccountPageIos> {
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() => _error = null));
+  }
+
+  bool get _ready => !_busy && (!widget.needsPassword || _password.text.isNotEmpty);
+
+  Future<void> _confirm() async {
+    FocusScope.of(context).unfocus();
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Supprimer définitivement ?'),
+        content: const Text('Tes cartes, tes tampons et tes récompenses seront perdus. Tu ne pourras pas revenir en arrière.'),
+        actions: [
+          CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Supprimer')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final err = await widget.onDelete(_password.text);
+    if (!mounted) return;
+    if (err != null) setState(() { _busy = false; _error = err; });
+  }
+
+  Widget _row(IconData icon, Color color, String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+        child: Row(children: [
+          Container(
+            width: 30, height: 30,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(7)),
+            child: Icon(icon, color: Colors.white, size: 17),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Text(text, style: QText.body.copyWith(fontSize: 17, color: context.cText))),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.cardCount;
+    final cards = n <= 1 ? '$n carte de fidélité' : '$n cartes de fidélité';
+    return IosSettingsPage(
+      title: 'Supprimer le compte',
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          child: Text('Ton compte et toutes tes données personnelles seront effacés de Qarta. Cette action est définitive.',
+              style: QText.body.copyWith(fontSize: 17, color: context.cSub, height: 1.35)),
+        ),
+        IosGroup(
+          header: 'Ce qui sera supprimé',
+          footer: 'Conformément au RGPD (article 17, droit à l\'effacement), Qarta ne garde aucune donnée te concernant après la suppression.',
+          dividerInset: 60,
+          children: [
+            _row(CupertinoIcons.person_fill, kNavyCard, 'Ton nom, ton email, ton téléphone et ta photo'),
+            _row(CupertinoIcons.creditcard_fill, kPrimary, 'Tes $cards'),
+            _row(CupertinoIcons.gift_fill, kGold, 'Tes tampons et récompenses'),
+            _row(CupertinoIcons.clock_fill, kSuccess, 'Ton historique de passages'),
+          ],
+        ),
+        if (widget.needsPassword)
+          IosGroup(
+            header: 'Confirme avec ton mot de passe',
+            footer: _error,
+            footerColor: _error != null ? kError : null,
+            children: [
+              IosFieldRow(label: 'Mot de passe', controller: _password, placeholder: 'Requis', obscure: true, labelWidth: 120),
+            ],
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(_error ?? 'Ton compte est relié à ${widget.lockedBy ?? 'Apple'}. Aucun mot de passe à saisir.',
+                style: QText.label.copyWith(color: _error != null ? kError : context.cSub)),
+          ),
+        const SizedBox(height: 28),
+        SizedBox(
+          height: 52,
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            color: kError,
+            disabledColor: kError.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(14),
+            onPressed: _ready ? _confirm : null,
+            child: _busy
+                ? const CupertinoActivityIndicator(color: Colors.white)
+                : const Text('Supprimer mon compte',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
     );
   }
 }

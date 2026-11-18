@@ -39,7 +39,7 @@ import '../../utils/logger.dart';
 import '../../utils/platform_route.dart';
 import 'client_home_controller.dart';
 
-part 'client_home_ios.dart';
+import 'client_home_ios.dart'; // écran iPhone autonome (Yassine)
 
 class ClientHome extends StatefulWidget {
   final String token;
@@ -158,14 +158,12 @@ class _ClientHomeState extends State<ClientHome>
   void _onMerchantJoined(JoinMerchantResult result) {
     if (!mounted) return;
     if (result.status == JoinResult.added) {
-      if (kIsIOS) { _showJoinedIos(result.cardId); return; }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Carte ajoutée !'),
         backgroundColor: Color(0xFF2C7BE5),
         behavior: SnackBarBehavior.floating,
       ));
     } else if (result.status == JoinResult.alreadyMember) {
-      if (kIsIOS) { showIosAlert(context, 'Déjà dans tes cartes', 'Tu as déjà la carte de ce commerce.'); return; }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Tu as déjà cette carte !'),
         behavior: SnackBarBehavior.floating,
@@ -175,11 +173,6 @@ class _ClientHomeState extends State<ClientHome>
 
   // Appelé par le controller après avoir mis à jour les cartes
   void _handleStampEvent(StampEvent e) {
-    if (kIsIOS) {
-      if (e.reward) _onRewardUnlockedIos(e);
-      else if (!QartaDemo.enabled) _ctrl.refreshCard(e.cardId);
-      return;
-    }
     if (e.reward) setState(() => _lastStampEvent = e);
     _showStampPopup(e);
   }
@@ -648,12 +641,51 @@ class _ClientHomeState extends State<ClientHome>
     );
   }
 
+  // ── Récompenses (onglet Récompenses Android) ───────────────────────────────
+  // Avant dans client_home_ios.dart (part of) : recopié ici à l'identique.
+
+  void _openCard(Map card) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QRModal(
+        token: widget.token,
+        card: card,
+        style: CardStyle.fromDesign(card['card_design'],
+            merchantLogoUrl: card['merchants']?['logo_url'] as String?, fallbackColor: kNavyCard),
+        userName: _userName,
+        onStampAdded: _refreshManual,
+        onStampEvent: _onStampEvent,
+      ),
+    );
+  }
+
+  void _useReward(String merchantName, Map reward) {
+    showRewardQrIos(
+      context,
+      reward: reward,
+      merchantName: merchantName,
+      userName: _userName,
+      onRedeemed: () {
+        if (QartaDemo.enabled) {
+          setState(() {
+            _rewards = _rewards.where((r) => r['id'] != reward['id']).toList();
+            _rewardCount = _rewards.length;
+          });
+        } else {
+          _refreshManual();
+        }
+      },
+    );
+  }
+
   // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    if (kIsIOS && (_tab == 0 || _tab == 2)) return _buildIosHome();
-    if (kIsIOS && (_tab == 3 || _tab == 4)) return _buildIosPage();
+    // iPhone : écran autonome de Yassine, branché sur le même controller.
+    if (kIsIOS) return ClientHomeIos(controller: _ctrl, token: widget.token);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -713,8 +745,8 @@ class _ClientHomeState extends State<ClientHome>
             ClientRewardsIos(
               rewards: _previewEmpty ? [] : _rewards,
               cards:   _previewEmpty ? [] : _cards,
-              onUse: _useRewardIos,
-              onCardTap: _openCardIos,
+              onUse: _useReward,
+              onCardTap: _openCard,
               onRefresh: _refreshManual,
             ),
           ],

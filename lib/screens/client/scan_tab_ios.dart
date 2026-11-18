@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../utils/logger.dart';
@@ -29,6 +30,7 @@ class _ScanTabIosState extends State<ScanTabIos> with WidgetsBindingObserver, Si
   bool _loading  = false;
   bool _torch    = false;
   String? _error;
+  MobileScannerErrorCode? _camError; // caméra refusée ou indisponible
   late AnimationController _lineAnim;
 
   @override
@@ -152,7 +154,7 @@ class _ScanTabIosState extends State<ScanTabIos> with WidgetsBindingObserver, Si
     HapticFeedback.mediumImpact();
     setState(() => _scanning = false);
     final merchant = Map<String, dynamic>.from(fake['merchant'] as Map);
-    _showResult(success: true, alreadyMember: false,
+    _showResult(success: true, alreadyMember: fake['already_member'] == true,
         merchantName: merchant['business_name'] as String? ?? '',
         card: Map<String, dynamic>.from(fake['card'] as Map), merchant: merchant);
   }
@@ -175,13 +177,27 @@ class _ScanTabIosState extends State<ScanTabIos> with WidgetsBindingObserver, Si
         ),
       ),
       if (_controller != null && !QartaDemo.enabled)
-        MobileScanner(controller: _controller!, onDetect: _onDetect, scanWindow: rect),
-      _ScanOverlayIos(scanRect: rect, lineAnim: _lineAnim, corners: false),
+        MobileScanner(
+          controller: _controller!,
+          onDetect: _onDetect,
+          scanWindow: rect,
+          // Pas le message anglais du paquet : on affiche le nôtre dans le cadre.
+          errorBuilder: (_, e) {
+            if (_camError != e.errorCode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _camError = e.errorCode);
+              });
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+      _ScanOverlayIos(scanRect: rect, lineAnim: _lineAnim, corners: false, showLine: _camError == null),
       IgnorePointer(child: CustomPaint(size: MediaQuery.of(context).size, painter: _IosCornersPainter(rect.inflate(16)))),
       Positioned.fromRect(
         rect: rect,
         child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: QartaDemo.enabled ? _demoDetect : null),
       ),
+      if (_camError != null) Positioned.fromRect(rect: rect, child: _cameraMessage()),
       SafeArea(
         child: Column(children: [
           Padding(
@@ -215,7 +231,7 @@ class _ScanTabIosState extends State<ScanTabIos> with WidgetsBindingObserver, Si
                 ]),
               ),
             ),
-          if (_loading) const Padding(padding: EdgeInsets.only(bottom: 30), child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))),
+          if (_loading) const Padding(padding: EdgeInsets.only(bottom: 30), child: CupertinoActivityIndicator(color: Colors.white, radius: 14)),
           if (QartaDemo.enabled && _scanning)
             Padding(
               padding: const EdgeInsets.only(bottom: 30),
@@ -225,6 +241,39 @@ class _ScanTabIosState extends State<ScanTabIos> with WidgetsBindingObserver, Si
         ]),
       ),
     ]);
+  }
+
+  /// Caméra refusée ou indisponible : message en français + accès aux Réglages.
+  Widget _cameraMessage() {
+    final denied = _camError == MobileScannerErrorCode.permissionDenied;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(CupertinoIcons.camera, color: Colors.white.withValues(alpha: 0.85), size: 34),
+        const SizedBox(height: 12),
+        Text(denied ? 'Accès à la caméra refusé' : 'Caméra indisponible',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(
+            denied
+                ? 'Autorise la caméra dans les Réglages pour scanner le QR code du commerce.'
+                : "La caméra ne peut pas s'ouvrir sur cet appareil.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 15)),
+        if (denied) ...[
+          const SizedBox(height: 16),
+          CupertinoButton(
+            color: kPrimary,
+            borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            onPressed: () => launchUrl(Uri.parse('app-settings:')),
+            child: const Text('Ouvrir les Réglages',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ]),
+    );
   }
 
   Widget _glass(IconData icon, VoidCallback onTap) => GestureDetector(
@@ -250,7 +299,8 @@ class _ScanOverlayIos extends StatelessWidget {
   final Rect scanRect;
   final Animation<double> lineAnim;
   final bool corners;
-  const _ScanOverlayIos({required this.scanRect, required this.lineAnim, this.corners = true});
+  final bool showLine;
+  const _ScanOverlayIos({required this.scanRect, required this.lineAnim, this.corners = true, this.showLine = true});
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +311,7 @@ class _ScanOverlayIos extends StatelessWidget {
           size: Size(size.width, size.height),
           painter: _OverlayPainterIos(scanRect: scanRect, corners: corners),
         ),
-        AnimatedBuilder(
+        if (showLine) AnimatedBuilder(
           animation: lineAnim,
           builder: (_, __) {
             final y = scanRect.top + 8 + (scanRect.height - 16) * lineAnim.value;

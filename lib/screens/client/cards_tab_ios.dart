@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'cards_tab.dart' show CardStyle, StampEvent, QRModal, CardPopOut, OpenCardPage, LoyaltyCardFace;
+import 'cards_tab.dart' show CardStyle, StampEvent;
+import 'widgets/client_open_card_ios.dart';
 import 'widgets/client_cards_stack_ios.dart';
+import 'widgets/client_pass_face_ios.dart';
 
 class CardsTabIos extends StatefulWidget {
   final String token;
@@ -52,17 +54,67 @@ class _CardsTabIosState extends State<CardsTabIos> {
     );
   }
 
-  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);  // gardé pour Hero
+  static RectTween _straightRect(Rect? b, Rect? e) => RectTween(begin: b, end: e);
+
+  /// Carte en vol entre la pile et le milieu de l'écran (ou la carte ouverte).
+  /// Une carte rangée ne montre qu'une bande en haut (le reste est caché sous la
+  /// suivante) : pendant le vol, la carte se replie en douceur jusqu'à cette bande,
+  /// pour qu'à l'arrivée il n'y ait aucune coupure.
+  static Widget _passShuttle(Map card, CardStyle style, Animation<double> anim,
+      {required bool collapsedAtRest, bool lastAtRest = false}) {
+    final full = ClientPassFaceIos(card: card, style: style);
+    if (!collapsedAtRest) return Material(type: MaterialType.transparency, child: full);
+    final t = CurvedAnimation(parent: anim, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
+    final fold = CurvedAnimation(parent: anim, curve: Curves.easeInOutCubic);
+    // Hauteur visible au repos dans la pile (comme dans ClientCardsStackIos).
+    final rest = (lastAtRest ? ClientCardsStackIos.peek + 14 : ClientCardsStackIos.peek) / ClientCardsStackIos.cardHeight;
+    return Material(
+      type: MaterialType.transparency,
+      child: AnimatedBuilder(
+        animation: anim,
+        builder: (_, __) {
+          final face = t.value >= 1
+              ? full
+              : Stack(fit: StackFit.expand, children: [
+                  ClientPassFaceIos(card: card, style: style, collapsed: true),
+                  Opacity(opacity: t.value, child: full),
+                ]);
+          final visible = rest + (1 - rest) * fold.value;
+          final clip = lastAtRest || visible > 0.99
+              ? ClipRRect(borderRadius: BorderRadius.circular(18), child: _topPart(face, visible))
+              : ClipRRect(
+                  // Bas carré : la carte suivante se pose dessus, comme dans la pile.
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                  child: _topPart(face, visible));
+          // Align : le vol impose la taille entière ; on la relâche pour pouvoir replier.
+          return Align(alignment: Alignment.topCenter, child: clip);
+        },
+      ),
+    );
+  }
+
+  // Garde la carte à sa taille entière et n'en montre que le haut.
+  static Widget _topPart(Widget face, double visible) => LayoutBuilder(
+        builder: (_, c) => SizedBox(
+          width: c.maxWidth,
+          height: c.maxHeight * visible,
+          child: OverflowBox(
+            alignment: Alignment.topCenter,
+            minHeight: c.maxHeight, maxHeight: c.maxHeight,
+            child: face,
+          ),
+        ),
+      );
 
   void _popOutCard(Map card, CardStyle style) {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
       transitionDuration: const Duration(milliseconds: 380),
       reverseTransitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (ctx, anim, _) => CardPopOut(
+      pageBuilder: (ctx, anim, _) => CardPopOutIos(
         heroTag: 'card-${card['id']}',
         animation: anim,
-        face: LoyaltyCardFace(card: card, style: style, userName: widget.userName),
+        face: ClientPassFaceIos(card: card, style: style),
         onOpen: () {
           Navigator.of(ctx).pushReplacement(_openCardRoute(card, style));
         },
@@ -70,20 +122,23 @@ class _CardsTabIosState extends State<CardsTabIos> {
     ));
   }
 
-  Route<void> _openCardRoute(Map card, CardStyle style) => PageRouteBuilder(
+  Route<void> _openCardRoute(Map card, CardStyle style, {double restFraction = 1}) => PageRouteBuilder(
         opaque: false,
         transitionDuration: const Duration(milliseconds: 420),
         reverseTransitionDuration: const Duration(milliseconds: 340),
-        pageBuilder: (ctx, anim, _) => OpenCardPage(
+        pageBuilder: (ctx, anim, _) => OpenCardPageIos(
           animation: anim,
-          child: QRModal(
+          child: QRModalIos(
             token: widget.token,
             card: card,
             style: style,
             userName: widget.userName,
             onStampAdded: widget.onRefresh,
             onStampEvent: widget.onStampEvent,
+            // À l'ouverture, la carte vole depuis la pile et grandit. À la fermeture,
+            // elle redescend avec la page (voir OpenCardPageIos : vol coupé au retour).
             heroTag: 'card-${card['id']}',
+            heroRestFraction: restFraction,
           ),
         ),
       );
@@ -108,16 +163,25 @@ class _CardsTabIosState extends State<CardsTabIos> {
       cards: List.generate(cards.length, (i) {
         final card  = cards[i];
         final style = _styleFromCard(card, i);
-        return Hero(
+        final face = Hero(
           tag: 'card-${card['id']}',
           createRectTween: _straightRect,
-          child: LoyaltyCardFace(card: card, style: style, userName: widget.userName, decorPattern: i % 6),
+          // Pas de dessin de vol ici : à l'aller comme au retour, c'est celui de la
+          // carte ouverte (QRModalIos) qui sert, donc la carte ne se déforme jamais.
+          child: ClientPassFaceIos(card: card, style: style, collapsed: i != 0),
         );
+        return face;
       }),
       onOpen: (i) {
         final card = cards[i];
         if (card['id'] == widget.cardIdToAnimate) return;
-        _popOutCard(card, _styleFromCard(card, i));
+        // Une seule touche : la carte s'ouvre directement (comme Apple Wallet).
+        // Ancienne version en deux temps (carte au milieu, puis ouverte) :
+        //   _popOutCard(card, _styleFromCard(card, i));
+        final rest = i == 0
+            ? 1.0
+            : (i == cards.length - 1 ? ClientCardsStackIos.peek + 14 : ClientCardsStackIos.peek) / ClientCardsStackIos.cardHeight;
+        Navigator.of(context).push(_openCardRoute(card, _styleFromCard(card, i), restFraction: rest));
       },
     );
   }
